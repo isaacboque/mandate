@@ -8,6 +8,8 @@ The guardrails are plain code **outside the LLM**. A poisoned product listing ca
 
 ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-5-attack.png)
 
+**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys; the free instance can take about 30 s to wake up).
+
 Built for the PayPal AI Hackathon. Sandbox only: no real money moves.
 
 ## How it works
@@ -108,7 +110,7 @@ The trace, approval-queue pattern, PayPal OAuth refresh approach and the design 
 
 ## Deploy
 
-`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). Connect the repo in Render and apply the blueprint.
+`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint. The demo keeps one shared session in memory (everyone who opens it sees the same mandate and proposals); **Reset demo** clears the proposals.
 
 ## License
 
