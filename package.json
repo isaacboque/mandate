@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "smoke:channel3": "tsx scripts/smoke-channel3.ts",
+    "smoke:orders": "tsx scripts/smoke-orders.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
   "engines": { "node": ">=18" },
