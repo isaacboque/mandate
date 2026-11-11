@@ -14,6 +14,7 @@ export type ProposalLine = {
   /** Why the agent picked it. Free text from the agent: display only. */
   reason: string;
   url: string;
+  imageUrl?: string;
 };
 
 export type Proposal = {
@@ -29,6 +30,8 @@ export type Proposal = {
   currency: string;
   checks: CheckResult[];
   blocked: boolean;
+  /** Which agent picked this cart. */
+  agent?: "llm" | "rules";
   status: ProposalStatus;
   autoApproved: boolean;
   approvalId?: string;
