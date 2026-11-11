@@ -110,7 +110,11 @@ The trace, approval-queue pattern, PayPal OAuth refresh approach and the design 
 
 ## Deploy
 
-`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint. The demo keeps one shared session in memory (everyone who opens it sees the same mandate and proposals); **Reset demo** clears the proposals.
+`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint.
+
+Every visitor gets their own session (an HttpOnly cookie): their mandate, budget, proposals and trace are not visible to, or spent by, anyone else. Sessions are in memory and expire after 2 hours idle. **Reset demo** clears your own proposals.
+
+`render.live.yaml` defines a second service in **live mode** (real Channel3 catalog, PayPal sandbox, optional AI model). Keys are entered in the Render dashboard, never in the repo. To protect the free quotas it limits searches per visitor per hour and per day for the whole instance (`RATE_LIMIT_ASKS_PER_HOUR`, `DAILY_ASK_CAP`; 0 turns a limit off), and when a limit is hit the screen says so. PayPal sends the buyer back to the service's own URL (`APP_URL`, or Render's `RENDER_EXTERNAL_URL`).
 
 ## License
 

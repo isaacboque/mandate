@@ -1,6 +1,9 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { MandateService } from "../service/service.js";
+import type { RateLimiter } from "./limits.js";
+import { SessionStore } from "./sessions.js";
 
 export type Config = { demoMode: "mock" | "live"; currency: string };
 
@@ -23,43 +26,54 @@ export const MandateInput = z.object({
   ]),
 });
 
-export function createApp(service: MandateService, config: Config): Hono {
+const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
+
+/**
+ * `source` is one MandateService (tests, single-user use) or a SessionStore (the server: one service per visitor).
+ * `limiter` optionally caps searches per visitor and per day to protect free-tier quotas.
+ */
+export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter): Hono {
   const app = new Hono();
+  const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c) : source);
 
   app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
   app.get("/api/health", (c) => c.json({ ok: true }));
-  app.get("/api/config", (c) =>
-    c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), now: new Date().toISOString() }),
-  );
+  app.get("/api/config", (c) => {
+    const service = svc(c);
+    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), now: new Date().toISOString() });
+  });
 
   // 1. mandate
-  app.get("/api/mandate", (c) => c.json(service.mandate));
-  app.post("/api/mandate", async (c) => c.json(service.setMandate(MandateInput.parse(await c.req.json())), 201));
+  app.get("/api/mandate", (c) => c.json(svc(c).mandate));
+  app.post("/api/mandate", async (c) => c.json(svc(c).setMandate(MandateInput.parse(await c.req.json())), 201));
 
   // 2. ask → 3. proposals
   app.post("/api/ask", async (c) => {
     const { text } = z.object({ text: z.string().min(2).max(500) }).parse(await c.req.json());
+    const service = svc(c);
+    const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ error: hit.message }, 429);
     return c.json(await service.ask(text));
   });
-  app.get("/api/proposals", (c) => c.json(service.list()));
-  app.get("/api/proposals/:id", (c) => c.json(service.get(c.req.param("id"))));
+  app.get("/api/proposals", (c) => c.json(svc(c).list()));
+  app.get("/api/proposals/:id", (c) => c.json(svc(c).get(c.req.param("id"))));
 
   // 4. approve & pay
-  app.post("/api/proposals/:id/approve", async (c) => c.json(await service.approve(c.req.param("id"))));
-  app.post("/api/proposals/:id/reject", (c) => c.json(service.reject(c.req.param("id"))));
-  app.post("/api/proposals/:id/pay", async (c) => c.json(await service.pay(c.req.param("id"))));
+  app.post("/api/proposals/:id/approve", async (c) => c.json(await svc(c).approve(c.req.param("id"))));
+  app.post("/api/proposals/:id/reject", (c) => c.json(svc(c).reject(c.req.param("id"))));
+  app.post("/api/proposals/:id/pay", async (c) => c.json(await svc(c).pay(c.req.param("id"))));
 
-  // attack demo, trace, reset
-  app.post("/api/attack", async (c) => c.json(await service.attack(), 201));
+  // attack demo, audit, trace, reset
+  app.post("/api/attack", async (c) => c.json(await svc(c).attack(), 201));
   app.get("/api/proposals/:id/audit", (c) => {
     const id = c.req.param("id");
     c.header("content-disposition", `attachment; filename="mandate-audit-${id}.json"`);
-    return c.json(service.audit(id));
+    return c.json(svc(c).audit(id));
   });
-  app.get("/api/trace", (c) => c.json(service.trail()));
+  app.get("/api/trace", (c) => c.json(svc(c).trail()));
   app.post("/api/reset", (c) => {
-    service.reset();
+    svc(c).reset();
     return c.json({ ok: true });
   });
 
