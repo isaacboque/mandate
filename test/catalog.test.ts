@@ -95,3 +95,23 @@ describe("Channel3Catalog (mocked fetch)", () => {
     expect(() => new Channel3Catalog("")).toThrow(/CHANNEL3_API_KEY/);
   });
 });
+
+describe("Channel3Catalog variants and ask parsing", () => {
+  it("turns variant options into attributes listing every existing value", async () => {
+    const body = { products: [{
+      id: "v1", title: "Futsal Shoe", description: "", category: { slug: "athletic-shoes" },
+      variants: { options: [{ name: "Size", values: [{ label: "M8.0/W9.0", exists: true }, { label: "M9.5/W10.5", exists: true }, { label: "M13.0/W14.0", exists: false }] }] },
+      offers: [{ url: "https://x/1", domain: "x.example", price: { price: 89.99, currency: "USD" }, availability: "InStock" }],
+    }] };
+    const f = (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
+    const [p] = await new Channel3Catalog("k", { fetch: f }).search("futsal");
+    expect(p.attributes.size).toBe("M8.0/W9.0|M9.5/W10.5");
+    expect(p.priceCents).toBe(8999);
+  });
+  it("parseAsk understands $ and US size labels", async () => {
+    const { parseAsk } = await import("../src/agent/agent.js");
+    expect(parseAsk("Indoor futsal shoes for men, max $90")).toMatchObject({ maxPriceCents: 9000 });
+    expect(parseAsk("shoes size 9.5, under 90 usd")).toMatchObject({ size: "9.5", maxPriceCents: 9000 });
+    expect(parseAsk("shoes max 90 €")).toMatchObject({ maxPriceCents: 9000 });
+  });
+});

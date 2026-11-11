@@ -83,3 +83,20 @@ describe("signMandate", () => {
     expect(verifyMandate({ mandate: { ...mandate, totalBudgetCents: 99999 }, hash: a.hash })).toBe(false);
   });
 });
+
+describe("attributeMatches (size runs and US/EU style labels)", () => {
+  it("matches exact values, option lists and combined labels, and fails closed when missing", async () => {
+    const { attributeMatches } = await import("../src/mandate/check.js");
+    expect(attributeMatches("43", "43")).toBe(true);
+    expect(attributeMatches("M5.0/W6.0|M9.5/W10.5|M10.0/W11.5", "9.5")).toBe(true);
+    expect(attributeMatches("M5.0/W6.0|M9.5/W10.5", "10.5")).toBe(true);
+    expect(attributeMatches("M5.0/W6.0|M9.5/W10.5", "43")).toBe(false);
+    expect(attributeMatches("M9.5/W10.5", "9")).toBe(false);
+    expect(attributeMatches(undefined, "43")).toBe(false);
+  });
+  it("hard_attributes uses it", () => {
+    const c: Cart = { lines: [line({ attributes: { size: "M8.0/W9.0|M9.5/W10.5" } })], requiredAttributes: { size: "9.5" } };
+    expect(ok(mandate, c, "hard_attributes")).toBe(true);
+    expect(ok(mandate, { ...c, requiredAttributes: { size: "11" } }, "hard_attributes")).toBe(false);
+  });
+});
