@@ -44,3 +44,14 @@ export type ProposeInput = {
   requiredAttributes?: Record<string, string>;
   summary?: string;
 };
+
+/** Fields of a mandate that a person can change to let a product through. The agent can never do this. */
+export type MandatePatch = Partial<{ allowedCategories: string[]; allowedMerchants: string[]; perItemCapCents: number; totalBudgetCents: number }>;
+
+/** A product the agent found but could not propose, and why. */
+export type NearMiss = {
+  productId: string; title: string; merchant: string; category: string; priceCents: number; currency: string; url: string; imageUrl?: string;
+  failed: { name: string; reason: string }[];
+  /** Present only when every failure is a limit the person could raise or widen. */
+  fix?: { label: string; patch: MandatePatch };
+};

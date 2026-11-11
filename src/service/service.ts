@@ -8,7 +8,8 @@ import type { Cart, CartLine, Mandate } from "../mandate/types.js";
 import { MockPayments } from "../payments/MockPayments.js";
 import { orderIdempotencyKey, type PaymentGateway } from "../payments/types.js";
 import type { Tracer } from "../trace/trace.js";
-import type { Proposal, ProposeInput } from "./types.js";
+import { formatCents } from "../core/money.js";
+import type { MandatePatch, NearMiss, Proposal, ProposeInput } from "./types.js";
 
 export type ServiceDeps = {
   catalog: CatalogGateway;
@@ -73,6 +74,31 @@ export class MandateService {
   trail() {
     return this.d.tracer.read(this.d.runId);
   }
+  /**
+   * Money committed against the current mandate's budget: carts that were approved (order created) or paid.
+   * Pending proposals are not counted until a person approves them; the re-check at execution then
+   * sees everything approved in the meantime. `exceptId` leaves one proposal out (the one being executed).
+   */
+  spentCents(hash = this.signed?.hash, exceptId?: string): number {
+    return this.list()
+      .filter((p) => p.mandateHash === hash && p.id !== exceptId && ["auto_approved", "awaiting_buyer", "paid"].includes(p.status))
+      .reduce((s, p) => s + p.totalCents, 0);
+  }
+
+  /** Everything needed to audit one purchase: the signed mandate, the proposal with its checks and order, and its trace. */
+  audit(id: string) {
+    const p = this.get(id);
+    const needles = [p.id, p.order?.id, p.approvalId].filter((x): x is string => Boolean(x));
+    const events = this.trail().filter((e) => e.step === "mandate.signed" || needles.some((n) => JSON.stringify([e.args, e.result]).includes(n)));
+    return {
+      generatedAt: this.now().toISOString(),
+      note: "Mandate, guardrail checks, approval and payment trace for one purchase. Re-hash the mandate JSON (canonical, sorted keys, sha256, first 12 hex) to verify the signature.",
+      mandate: this.signed && this.signed.hash === p.mandateHash ? this.signed : { hash: p.mandateHash, note: "this mandate has since been replaced" },
+      proposal: p,
+      trace: events,
+    };
+  }
+
   reset(): void {
     if (!this.isMock) throw new Error("Reset only exists in demo mode");
     this.proposals.clear();
@@ -81,7 +107,7 @@ export class MandateService {
   }
 
   /** Step 2: the agent searches and proposes. Returns what it proposed (blocked proposals included). */
-  async ask(text: string): Promise<{ proposals: Proposal[]; run: AgentRun }> {
+  async ask(text: string): Promise<{ proposals: Proposal[]; run: AgentRun; nearMisses: NearMiss[] }> {
     const signed = this.requireMandate();
     const mine: Proposal[] = [];
     const seen = new Map<string, Product>();
@@ -115,7 +141,39 @@ export class MandateService {
         await this.executeOrder(p);
       }
     }
-    return { proposals: mine, run };
+    return { proposals: mine, run, nearMisses: this.nearMisses(signed, seen, mine) };
+  }
+
+  /**
+   * Products the agent saw but did not propose, with the first guardrails they would fail, and when every
+   * failure is something the person (not the agent) could change, the exact mandate change that would fix it.
+   */
+  private nearMisses(signed: SignedMandate, seen: Map<string, Product>, mine: Proposal[]): NearMiss[] {
+    const m = signed.mandate;
+    const spent = this.spentCents(signed.hash);
+    const proposed = new Set(mine.flatMap((p) => p.lines.map((l) => l.productId)));
+    const out: NearMiss[] = [];
+    for (const p of seen.values()) {
+      if (proposed.has(p.id) || p.injectionFlag || !p.inStock) continue;
+      const failed = checkCart(m, { lines: [toCartLine(p, 1)] }, this.now(), { spentCents: spent }).filter((c) => !c.ok);
+      if (failed.length === 0) continue;
+      const names = failed.map((c) => c.name);
+      const fixable = names.every((n) => n === "category" || n === "merchant" || n === "per_item_cap" || n === "total_budget");
+      const patch: MandatePatch = {};
+      const parts: string[] = [];
+      if (fixable) {
+        if (names.includes("category")) { patch.allowedCategories = [...m.allowedCategories, p.category]; parts.push(`allow "${p.category}"`); }
+        if (names.includes("merchant")) { patch.allowedMerchants = [...(m.allowedMerchants ?? []), p.merchant]; parts.push(`allow ${p.merchant}`); }
+        if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
+        if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
+      }
+      out.push({
+        productId: p.id, title: p.title, merchant: p.merchant, category: p.category, priceCents: p.priceCents, currency: p.currency, url: p.url, imageUrl: p.imageUrl,
+        failed: failed.map((c) => ({ name: c.name, reason: c.reason })),
+        fix: fixable ? { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch } : undefined,
+      });
+    }
+    return out.sort((a, b) => a.failed.length - b.failed.length || a.priceCents - b.priceCents).slice(0, 4);
   }
 
   /** The attack demo: a model fooled by a poisoned listing proposes buying 10. The guardrails must stop it. */
@@ -186,7 +244,7 @@ export class MandateService {
       return { prod, l };
     });
     const cart: Cart = { lines: products.map(({ prod, l }) => toCartLine(prod, l.quantity)), requiredAttributes: input.requiredAttributes };
-    const checks = checkCart(signed.mandate, cart, this.now());
+    const checks = checkCart(signed.mandate, cart, this.now(), { spentCents: this.spentCents(signed.hash) });
     const blocked = !allPass(checks);
     const totalCents = cart.lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
     const p: Proposal = {
@@ -215,7 +273,7 @@ export class MandateService {
       else live.push({ product: prod, quantity: l.quantity });
     }
     if (this.signed) {
-      const checks = checkCart(this.signed.mandate, { lines: live.map((x) => toCartLine(x.product, x.quantity)), requiredAttributes: p.cart.requiredAttributes }, this.now());
+      const checks = checkCart(this.signed.mandate, { lines: live.map((x) => toCartLine(x.product, x.quantity)), requiredAttributes: p.cart.requiredAttributes }, this.now(), { spentCents: this.spentCents(p.mandateHash, p.id) });
       for (const c of checks) if (!c.ok) problems.push(`${c.name}: ${c.reason}`);
     }
     const liveTotal = live.reduce((s, x) => s + x.product.priceCents * x.quantity, 0);

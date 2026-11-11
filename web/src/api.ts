@@ -4,7 +4,13 @@ export type Mandate = {
   maxQuantityPerItem: number; expiresAt: string; autonomy: Autonomy;
 };
 export type SignedMandate = { mandate: Mandate; hash: string };
-export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; resettable: boolean; mandate: SignedMandate | null; now: string };
+export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; resettable: boolean; mandate: SignedMandate | null; spentCents: number; now: string };
+export type MandatePatch = Partial<{ allowedCategories: string[]; allowedMerchants: string[]; perItemCapCents: number; totalBudgetCents: number }>;
+export type NearMiss = {
+  productId: string; title: string; merchant: string; category: string; priceCents: number; currency: string; url: string; imageUrl?: string;
+  failed: { name: CheckName; reason: string }[];
+  fix?: { label: string; patch: MandatePatch };
+};
 
 export type CheckName = "total_budget" | "per_item_cap" | "category" | "merchant" | "quantity" | "expiry" | "currency" | "hard_attributes" | "price_freshness" | "injection_flag";
 export type Check = { name: CheckName; ok: boolean; reason: string };
@@ -15,7 +21,7 @@ export type Proposal = {
   id: string; source: "agent" | "attack"; mandateHash: string; ask: string; summary: string; createdAt: string; lines: ProposalLine[];
   totalCents: number; currency: string; checks: Check[]; blocked: boolean; agent?: "llm" | "rules"; status: ProposalStatus; autoApproved: boolean; order?: Order; error?: string;
 };
-export type AskResult = { proposals: Proposal[]; run: { summary: string; mode: "llm" | "rules"; refused: string[] } };
+export type AskResult = { proposals: Proposal[]; run: { summary: string; mode: "llm" | "rules"; refused: string[] }; nearMisses: NearMiss[] };
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
 
 async function req<T>(path: string, json?: unknown): Promise<T> {

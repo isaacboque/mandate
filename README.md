@@ -37,6 +37,9 @@ flowchart LR
 - **Untrusted text** (`src/catalog`): product titles and descriptions are never put in the system prompt. They reach the model only as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them.
 - **Approval queue** (`src/approval`): a person approves, or the mandate's autonomy rule does (`ask_always`, or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval.
 - **Payments** (`src/payments`): PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules.
+- **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
+- **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the mandate. The agent can never do this itself.
+- **Audit**: each purchase can be downloaded as JSON (signed mandate, checks, approval and payment trace).
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
 
 ## Run it in 2 minutes (demo mode, no keys)
@@ -80,13 +83,13 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 
 ## Evaluation
 
-`npm run eval` runs 40 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
+`npm run eval` runs 43 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 40/40 |
-| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 22/22 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 43/43 |
+| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 25/25 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 11/11 |
 <!-- eval:end -->
