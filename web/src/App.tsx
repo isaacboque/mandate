@@ -30,8 +30,17 @@ export default function App() {
     Promise.all([api.config(), api.proposals()])
       .then(([c, ps]) => {
         setConfig(c);
-        setProposals(ps.slice().reverse());
-        if (c.mandate) setStep(ps.length ? 2 : 1);
+        const list = ps.slice().reverse();
+        setProposals(list);
+        // The buyer comes back from PayPal to /?paypal=return (or cancel): open the purchase that is waiting.
+        const back = new URLSearchParams(window.location.search).get("paypal");
+        if (back) window.history.replaceState({}, "", window.location.pathname);
+        const waiting = list.find((p) => p.status === "awaiting_buyer");
+        if (back && waiting) {
+          setSelectedId(waiting.id);
+          setStep(3);
+          if (back === "cancel") setError("You cancelled in PayPal. The order is still waiting: open the PayPal link again to approve it.");
+        } else if (c.mandate) setStep(ps.length ? 2 : 1);
       })
       .catch((e) => setError(e.message));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

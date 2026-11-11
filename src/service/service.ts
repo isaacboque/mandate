@@ -21,6 +21,8 @@ export type ServiceDeps = {
   runId: string;
   now?: () => Date;
   model?: LanguageModel;
+  /** Makes proposal ids unique across visitors, so PayPal idempotency keys never collide. */
+  idPrefix?: string;
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
@@ -248,7 +250,7 @@ export class MandateService {
     const blocked = !allPass(checks);
     const totalCents = cart.lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
     const p: Proposal = {
-      id: `prop_${++this.seq}`, source, mandateHash: signed.hash, ask, summary: input.summary ?? summary, createdAt: this.now().toISOString(),
+      id: `prop_${this.d.idPrefix ? this.d.idPrefix + "_" : ""}${++this.seq}`, source, mandateHash: signed.hash, ask, summary: input.summary ?? summary, createdAt: this.now().toISOString(),
       lines: products.map(({ prod, l }) => ({ productId: prod.id, title: prod.title, merchant: prod.merchant, priceCents: prod.priceCents, quantity: l.quantity, currency: prod.currency, reason: l.reason, url: prod.url, imageUrl: prod.imageUrl })),
       cart, totalCents, currency: signed.mandate.currency, checks, blocked, status: blocked ? "blocked" : "pending", autoApproved: false,
     };

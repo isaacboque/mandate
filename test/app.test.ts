@@ -9,7 +9,7 @@ describe("config", () => {
     expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD" });
   });
   it("mock mode needs no keys and uses the rules agent", () => {
-    const { service } = serviceFromEnv({});
+    const service = serviceFromEnv({}).makeService("t");
     expect(service.isMock).toBe(true);
     expect(service.agentMode).toBe("rules");
   });

@@ -1,0 +1,36 @@
+# Second Render service: the same app in LIVE mode (real Channel3 catalog, PayPal sandbox, optional AI model).
+# Not used by the default blueprint on purpose. Create it with: Render dashboard > New > Blueprint > pick this
+# repo and set the blueprint file path to render.live.yaml. Render asks for the secret values on creation;
+# they live only in Render, never in the repo.
+#
+# Protection for the free quotas: each visitor gets their own session, and searches are limited per visitor
+# per hour and per day for the whole instance (when a limit is hit the API answers with a readable message).
+services:
+  - type: web
+    name: mandate-live
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEMO_MODE
+        value: live
+      - key: CURRENCY
+        value: USD
+      - key: NODE_VERSION
+        value: "20"
+      - key: RATE_LIMIT_ASKS_PER_HOUR
+        value: "12"
+      - key: DAILY_ASK_CAP
+        value: "300"
+      - key: LLM_PROVIDER
+        value: google
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
