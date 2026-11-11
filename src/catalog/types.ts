@@ -15,6 +15,8 @@ export type Product = {
   attributes: Record<string, string>;
   inStock: boolean;
   url: string;
+  /** Main product image (https only), when the catalog has one. */
+  imageUrl?: string;
   /** ISO timestamp of when this price was read. */
   priceCheckedAt: string;
   /** True when title/description looks like a prompt injection. Enforced by the guardrails. */

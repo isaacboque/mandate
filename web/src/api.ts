@@ -10,10 +10,10 @@ export type CheckName = "total_budget" | "per_item_cap" | "category" | "merchant
 export type Check = { name: CheckName; ok: boolean; reason: string };
 export type Order = { id: string; status: string; approveUrl?: string; captureId?: string; amountCents: number; currency: string };
 export type ProposalStatus = "blocked" | "pending" | "auto_approved" | "awaiting_buyer" | "paid" | "rejected" | "failed";
-export type ProposalLine = { productId: string; title: string; merchant: string; priceCents: number; quantity: number; currency: string; reason: string; url: string };
+export type ProposalLine = { productId: string; title: string; merchant: string; priceCents: number; quantity: number; currency: string; reason: string; url: string; imageUrl?: string };
 export type Proposal = {
   id: string; source: "agent" | "attack"; mandateHash: string; ask: string; summary: string; createdAt: string; lines: ProposalLine[];
-  totalCents: number; currency: string; checks: Check[]; blocked: boolean; status: ProposalStatus; autoApproved: boolean; order?: Order; error?: string;
+  totalCents: number; currency: string; checks: Check[]; blocked: boolean; agent?: "llm" | "rules"; status: ProposalStatus; autoApproved: boolean; order?: Order; error?: string;
 };
 export type AskResult = { proposals: Proposal[]; run: { summary: string; mode: "llm" | "rules"; refused: string[] } };
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
@@ -32,6 +32,7 @@ export const api = {
   approve: (id: string) => req<Proposal>(`/api/proposals/${id}/approve`, {}),
   reject: (id: string) => req<Proposal>(`/api/proposals/${id}/reject`, {}),
   pay: (id: string) => req<Proposal>(`/api/proposals/${id}/pay`, {}),
+  proposals: () => fetch("/api/proposals").then((r) => r.json() as Promise<Proposal[]>),
   attack: () => req<Proposal>("/api/attack", {}),
   trace: () => req<TraceEvent[]>("/api/trace"),
   reset: () => req<{ ok: boolean }>("/api/reset", {}),

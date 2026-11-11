@@ -203,3 +203,17 @@ describe("HTTP API", () => {
     expect((await post(app, "/api/reset")).status).toBe(200);
   });
 });
+
+describe("LLM failure falls back to the rules agent", () => {
+  it("a 429 from the model does not stop the demo: the rules agent answers and says so", async () => {
+    const { MockLanguageModelV4 } = await import("ai/test");
+    const model = new MockLanguageModelV4({ doGenerate: async () => { throw new Error("429 RESOURCE_EXHAUSTED: quota exceeded"); } });
+    const { service, tracer } = setup({}, { model: model as never });
+    const { proposals, run } = await service.ask(ASK);
+    expect(run.mode).toBe("rules");
+    expect(run.summary).toMatch(/AI model was unavailable \(usage limit reached\)/);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ agent: "rules", blocked: false });
+    expect(tracer.events.some((e) => e.step === "agent.llm_failed")).toBe(true);
+  });
+});

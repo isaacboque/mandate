@@ -115,3 +115,39 @@ describe("Channel3Catalog variants and ask parsing", () => {
     expect(parseAsk("shoes max 90 €")).toMatchObject({ maxPriceCents: 9000 });
   });
 });
+
+describe("Channel3Catalog cache and images", () => {
+  const body = { products: [{
+    id: "i1", title: "Shoe", description: "", category: { slug: "sneakers" },
+    images: [{ url: "http://insecure/x.jpg" }, { url: "https://cdn.example/main.jpg", is_main_image: true }],
+    offers: [{ url: "https://x/1", domain: "x.example", price: { price: 10, currency: "USD" }, availability: "InStock" }],
+  }] };
+  const counting = () => {
+    let n = 0;
+    const f = (async () => { n++; return new Response(JSON.stringify(body), { status: 200 }); }) as unknown as typeof fetch;
+    return { f, calls: () => n };
+  };
+  it("serves an identical search from the cache (one API call) and never caches getProduct", async () => {
+    const c = counting();
+    const cat = new Channel3Catalog("k", { fetch: c.f });
+    await cat.search("Futsal shoes", { limit: 5 });
+    await cat.search("  futsal SHOES ", { limit: 5 });
+    expect(c.calls()).toBe(1);
+    await cat.search("futsal shoes", { limit: 6 });
+    expect(c.calls()).toBe(2);
+    await cat.getProduct("i1");
+    await cat.getProduct("i1");
+    expect(c.calls()).toBe(4);
+  });
+  it("cacheMs 0 disables the cache", async () => {
+    const c = counting();
+    const cat = new Channel3Catalog("k", { fetch: c.f, cacheMs: 0 });
+    await cat.search("a");
+    await cat.search("a");
+    expect(c.calls()).toBe(2);
+  });
+  it("keeps the main https image only", async () => {
+    const [p] = await new Channel3Catalog("k", { fetch: counting().f }).search("a");
+    expect(p.imageUrl).toBe("https://cdn.example/main.jpg");
+  });
+});

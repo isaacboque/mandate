@@ -11,6 +11,7 @@ type C3Product = {
   category?: { slug?: string; title?: string } | null;
   offers?: C3Offer[];
   structured_attributes?: Record<string, string[]> | null;
+  images?: { url?: string; is_main_image?: boolean }[] | null;
   variants?: { options?: { name?: string; values?: { label?: string; exists?: boolean }[] }[] } | null;
 };
 
@@ -20,10 +21,12 @@ type C3Product = {
  */
 export class Channel3Catalog implements CatalogGateway {
   readonly name = "channel3";
+  /** Identical searches within `cacheMs` (default 5 min) reuse the last answer: saves free-tier quota. getProduct is never cached. */
+  private cache = new Map<string, { at: number; products: Product[] }>();
 
   constructor(
     private apiKey: string,
-    private opts: { fetch?: typeof fetch; now?: () => Date; currency?: string } = {},
+    private opts: { fetch?: typeof fetch; now?: () => Date; currency?: string; cacheMs?: number } = {},
   ) {
     if (!apiKey) throw new Error("CHANNEL3_API_KEY is not set");
   }
@@ -40,10 +43,16 @@ export class Channel3Catalog implements CatalogGateway {
   }
 
   async search(query: string, opts: SearchOptions = {}): Promise<Product[]> {
+    const ttl = this.opts.cacheMs ?? 5 * 60 * 1000;
+    const key = JSON.stringify([query.trim().toLowerCase(), opts.limit ?? 10, opts.maxPriceCents ?? null]);
+    const hit = this.cache.get(key);
+    if (hit && Date.now() - hit.at < ttl) return hit.products;
     const body: Record<string, unknown> = { query, limit: opts.limit ?? 10 };
     if (opts.maxPriceCents !== undefined) body.filters = { price: { max_price: opts.maxPriceCents / 100 } };
     const json = (await this.call("/v1/search", { method: "POST", body: JSON.stringify(body) })) as { products?: C3Product[] } | null;
-    return (json?.products ?? []).map((p) => this.map(p)).filter((p): p is Product => p !== null);
+    const products = (json?.products ?? []).map((p) => this.map(p)).filter((p): p is Product => p !== null);
+    if (ttl > 0) this.cache.set(key, { at: Date.now(), products });
+    return products;
   }
 
   async getProduct(id: string): Promise<Product | null> {
@@ -76,8 +85,16 @@ export class Channel3Catalog implements CatalogGateway {
       attributes,
       inStock: true,
       url: best.url ?? "",
+      imageUrl: imageOf(p),
       priceCheckedAt: (this.opts.now ?? (() => new Date()))().toISOString(),
       injectionFlag: productLooksPoisoned({ title, description }),
     };
   }
+}
+
+/** Main image if the catalog has one. Only https URLs are kept; the UI renders them without a referrer. */
+function imageOf(p: C3Product): string | undefined {
+  const imgs = p.images ?? [];
+  const url = (imgs.find((i) => i.is_main_image) ?? imgs[0])?.url;
+  return url && url.startsWith("https://") ? url : undefined;
 }

@@ -94,8 +94,18 @@ export class MandateService {
       },
     };
     this.trace("ask", "decision", { args: { text } });
-    const run = this.d.model ? await runLlmAgent(text, this.d.model, ctx) : await runRulesAgent(text, ctx);
+    let run: AgentRun;
+    try {
+      run = this.d.model ? await runLlmAgent(text, this.d.model, ctx) : await runRulesAgent(text, ctx);
+    } catch (e) {
+      if (!this.d.model) throw e;
+      const why = (e as Error).message.slice(0, 160);
+      this.trace("agent.llm_failed", "error", { args: { text }, error: why });
+      run = await runRulesAgent(text, ctx);
+      run.summary = `The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : "error"}), so the built-in rules agent answered. ${run.summary}`;
+    }
     for (const p of mine) {
+      p.agent = run.mode;
       p.summary = run.summary;
       const a = signed.mandate.autonomy;
       if (!p.blocked && a.mode === "auto_under" && p.totalCents <= a.thresholdCents && p.approvalId) {
@@ -181,7 +191,7 @@ export class MandateService {
     const totalCents = cart.lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
     const p: Proposal = {
       id: `prop_${++this.seq}`, source, mandateHash: signed.hash, ask, summary: input.summary ?? summary, createdAt: this.now().toISOString(),
-      lines: products.map(({ prod, l }) => ({ productId: prod.id, title: prod.title, merchant: prod.merchant, priceCents: prod.priceCents, quantity: l.quantity, currency: prod.currency, reason: l.reason, url: prod.url })),
+      lines: products.map(({ prod, l }) => ({ productId: prod.id, title: prod.title, merchant: prod.merchant, priceCents: prod.priceCents, quantity: l.quantity, currency: prod.currency, reason: l.reason, url: prod.url, imageUrl: prod.imageUrl })),
       cart, totalCents, currency: signed.mandate.currency, checks, blocked, status: blocked ? "blocked" : "pending", autoApproved: false,
     };
     this.trace("guardrails.checkCart", blocked ? "error" : "decision", { args: { proposalId: p.id, source }, result: { blocked, checks } });
