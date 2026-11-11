@@ -8,6 +8,18 @@ export const MAX_PRICE_AGE_MS = 10 * 60 * 1000;
  * Pure, deterministic guardrails. Always returns one result per check name, in a fixed order.
  * Nothing here calls a model: a poisoned listing cannot talk its way past these.
  */
+/**
+ * Does a product attribute satisfy a required value? The attribute may hold several options joined by "|"
+ * (a size run), and an option may be a combined label like "M9.5/W10.5". Missing attributes never match.
+ */
+export function attributeMatches(have: string | undefined, need: string): boolean {
+  if (have === undefined) return false;
+  const want = need.trim().toLowerCase();
+  return have.split("|").some((opt) =>
+    opt.trim().toLowerCase() === want ||
+    opt.split("/").some((part) => part.trim().toLowerCase().replace(/^[a-z]+/, "") === want));
+}
+
 export function checkCart(mandate: Mandate, cart: Cart, now: Date): CheckResult[] {
   const out: CheckResult[] = [];
   const add = (name: CheckName, bad: string[], good: string) =>
@@ -40,7 +52,7 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date): CheckResult[
     `all prices in ${mandate.currency}`);
 
   const required = Object.entries(cart.requiredAttributes ?? {});
-  add("hard_attributes", lines.flatMap((l) => required.filter(([k, v]) => l.attributes[k] !== v)
+  add("hard_attributes", lines.flatMap((l) => required.filter(([k, v]) => !attributeMatches(l.attributes[k], v))
     .map(([k, v]) => `${l.productId} has ${k}=${l.attributes[k] ?? "missing"}, need ${v}`)), "required attributes match");
 
   add("price_freshness", lines.filter((l) => {

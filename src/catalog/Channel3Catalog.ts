@@ -11,6 +11,7 @@ type C3Product = {
   category?: { slug?: string; title?: string } | null;
   offers?: C3Offer[];
   structured_attributes?: Record<string, string[]> | null;
+  variants?: { options?: { name?: string; values?: { label?: string; exists?: boolean }[] }[] } | null;
 };
 
 /**
@@ -57,6 +58,11 @@ export class Channel3Catalog implements CatalogGateway {
     const best = offers.reduce((a, b) => (b.price!.price! < a.price!.price! ? b : a));
     const attributes: Record<string, string> = {};
     for (const [k, v] of Object.entries(p.structured_attributes ?? {})) if (v?.[0]) attributes[k] = v[0];
+    // Variant options (size, colour...) list every value the product comes in, joined by "|".
+    for (const o of p.variants?.options ?? []) {
+      const labels = (o.values ?? []).filter((v) => v.label && v.exists !== false).map((v) => v.label!);
+      if (o.name && labels.length) attributes[o.name.toLowerCase()] = labels.join("|");
+    }
     const title = p.title ?? "";
     const description = p.description ?? "";
     return {
