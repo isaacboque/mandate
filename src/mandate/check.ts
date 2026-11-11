@@ -20,7 +20,7 @@ export function attributeMatches(have: string | undefined, need: string): boolea
     opt.split("/").some((part) => part.trim().toLowerCase().replace(/^[a-z]+/, "") === want));
 }
 
-export function checkCart(mandate: Mandate, cart: Cart, now: Date): CheckResult[] {
+export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spentCents?: number } = {}): CheckResult[] {
   const out: CheckResult[] = [];
   const add = (name: CheckName, bad: string[], good: string) =>
     out.push({ name, ok: bad.length === 0, reason: bad.length === 0 ? good : bad.join("; ") });
@@ -28,8 +28,13 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date): CheckResult[
   const fmt = (c: number) => formatCents(c, mandate.currency);
 
   const total = lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
-  add("total_budget", total > mandate.totalBudgetCents ? [`total ${fmt(total)} is over the budget ${fmt(mandate.totalBudgetCents)}`] : [],
-    `total ${fmt(total)} within budget ${fmt(mandate.totalBudgetCents)}`);
+  // The budget is for the whole mandate, not per cart: what was already approved or paid counts against it.
+  const spent = opts.spentCents ?? 0;
+  const left = mandate.totalBudgetCents - spent;
+  add("total_budget", total > left
+      ? [spent > 0 ? `total ${fmt(total)} is over what is left of the budget (${fmt(Math.max(left, 0))} of ${fmt(mandate.totalBudgetCents)}; ${fmt(spent)} already committed)` : `total ${fmt(total)} is over the budget ${fmt(mandate.totalBudgetCents)}`]
+      : [],
+    `total ${fmt(total)} within budget (${fmt(left)} left)`);
 
   add("per_item_cap", lines.filter((l) => l.unitPriceCents > mandate.perItemCapCents)
     .map((l) => `${l.productId} costs ${fmt(l.unitPriceCents)}, cap is ${fmt(mandate.perItemCapCents)}`), "every item within the per-item cap");

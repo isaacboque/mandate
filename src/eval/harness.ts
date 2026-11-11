@@ -60,6 +60,12 @@ export async function spendViolations(h: Harness): Promise<string[]> {
   const orders = (await h.payments.list()).filter((o) => o.status === "completed");
   const executed = h.approvals.list("executed").length;
   if (orders.length > executed) out.push(`${orders.length} captured orders but only ${executed} consumed approvals`);
+  const byMandate = new Map<string, number>();
+  for (const o of orders) byMandate.set(o.mandateHash, (byMandate.get(o.mandateHash) ?? 0) + o.amountCents);
+  for (const [hash, total] of byMandate) {
+    const m = h.mandates.get(hash);
+    if (m && total > m.totalBudgetCents) out.push(`mandate ${hash}: ${total} captured in total, budget ${m.totalBudgetCents}`);
+  }
   for (const o of orders) {
     const m = h.mandates.get(o.mandateHash);
     if (!m) { out.push(`order ${o.id}: unknown mandate ${o.mandateHash}`); continue; }

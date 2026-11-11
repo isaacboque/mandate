@@ -140,3 +140,16 @@ details.passed[open] .checks li { animation: tick .42s cubic-bezier(.16, 1, .3, 
   .spinner { animation-duration: 3s; }
   details.passed[open] .checks li { animation: none; }
 }
+
+/* ----- budget left, near misses, audit ----- */
+.seal .left { color: var(--good); font-weight: 650; }
+.near { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--line); }
+.near h3 { margin: 16px 0 4px; }
+.near > ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 14px; }
+.near > ul > li { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: start; }
+.whyblocked { list-style: none; padding: 0; margin: 6px 0 4px; display: grid; gap: 4px; font-size: 13px; color: var(--bad); }
+.whyblocked li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; align-items: start; }
+.whyblocked b { font-weight: 650; }
+.fix { justify-self: start; margin-top: 4px; border-color: var(--brand); color: var(--brand); text-align: left; }
+.auditlink { display: inline-block; text-decoration: none; color: var(--muted); }
+@media (max-width: 560px) { .near > ul > li { grid-template-columns: 52px 1fr; } }

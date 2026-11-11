@@ -30,7 +30,7 @@ export function createApp(service: MandateService, config: Config): Hono {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.get("/api/config", (c) =>
-    c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, now: new Date().toISOString() }),
+    c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), now: new Date().toISOString() }),
   );
 
   // 1. mandate
@@ -52,6 +52,11 @@ export function createApp(service: MandateService, config: Config): Hono {
 
   // attack demo, trace, reset
   app.post("/api/attack", async (c) => c.json(await service.attack(), 201));
+  app.get("/api/proposals/:id/audit", (c) => {
+    const id = c.req.param("id");
+    c.header("content-disposition", `attachment; filename="mandate-audit-${id}.json"`);
+    return c.json(service.audit(id));
+  });
   app.get("/api/trace", (c) => c.json(service.trail()));
   app.post("/api/reset", (c) => {
     service.reset();

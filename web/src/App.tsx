@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRun, type RunFn } from "./useRun";
-import { api, money, toCents, type Check, type Config, type Mandate, type Proposal, type SignedMandate, type TraceEvent } from "./api";
+import { api, money, toCents, type Check, type Config, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
 import { Icon } from "./icons";
 
 type Step = 0 | 1 | 2 | 3;
@@ -20,6 +20,7 @@ export default function App() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [note, setNote] = useState<string>();
+  const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
   const [traceOpen, setTraceOpen] = useState(true);
   const { busy, error, setError, run } = useRun();
 
@@ -37,6 +38,7 @@ export default function App() {
 
   const signed = config?.mandate ?? null;
   const selected = proposals.find((p) => p.id === selectedId);
+  const change = (p: Proposal) => { upsert(p); refresh(); };
   const upsert = (p: Proposal) => setProposals((all) => (all.some((x) => x.id === p.id) ? all.map((x) => (x.id === p.id ? p : x)) : [p, ...all]));
   const maxStep = !signed ? 0 : proposals.length === 0 ? 1 : selected ? 3 : 2;
 
@@ -71,17 +73,17 @@ export default function App() {
         {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={refresh} onNext={() => setStep(1)} />}
         {step === 1 && signed && config && (
           <AskStep
-            config={config} busy={busy} run={run} note={note}
-            onResult={(ps, summary) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); if (ps.length) setStep(2); }}
+            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={refresh}
+            onResult={(ps, summary, misses) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); setNearMisses(misses); refresh(); if (ps.length) setStep(2); }}
             onAttack={(p) => { upsert(p); setStep(2); }}
           />
         )}
         {step === 2 && signed && <ProposalStep proposals={proposals} busy={busy} run={run} onReview={(id) => { setSelectedId(id); setStep(3); }} onAttack={upsert} onAskAgain={() => setStep(1)} />}
-        {step === 3 && selected && config && <PayStep p={selected} config={config} busy={busy} run={run} onChange={upsert} onAskAgain={() => setStep(1)} />}
+        {step === 3 && selected && config && <PayStep p={selected} config={config} busy={busy} run={run} onChange={change} onAskAgain={() => setStep(1)} />}
 
         {config?.resettable && (
           <footer className="foot">
-            <button className="linklike" disabled={busy} onClick={() => run(() => api.reset()).then((r) => { if (r) { setProposals([]); setSelectedId(undefined); setNote(undefined); setStep(signed ? 1 : 0); } })}>
+            <button className="linklike" disabled={busy} onClick={() => run(() => api.reset()).then((r) => { if (r) { setProposals([]); setSelectedId(undefined); setNote(undefined); setNearMisses([]); refresh(); setStep(signed ? 1 : 0); } })}>
               Reset demo
             </button>
           </footer>
@@ -192,7 +194,7 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
       {hints.map((h) => <p key={h} className="hintline">{h}</p>)}
       <p className="sentence" aria-live="polite">{problems.length ? problems[0] : describeMandate(m)}</p>
 
-      {signed && <Seal signed={signed} />}
+      {signed && <Seal signed={signed} spentCents={config.spentCents} />}
 
       <div className="actions">
         {signed && <button className="ghost" onClick={onNext} disabled={busy}>Keep the signed mandate</button>}
@@ -205,13 +207,13 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
 }
 
 /** The signed mandate, drawn as the document it is. */
-function Seal({ signed }: { signed: SignedMandate }) {
+function Seal({ signed, spentCents = 0 }: { signed: SignedMandate; spentCents?: number }) {
   const m = signed.mandate;
   return (
     <div className="seal" aria-label="Signed mandate">
       <div className="seal-hash"><span className="seal-title"><Icon name="shield" size={16} /> Signed mandate</span><b className="mono">{signed.hash}</b></div>
       <dl>
-        <dt>Budget</dt><dd>{money(m.totalBudgetCents, m.currency)}</dd>
+        <dt>Budget</dt><dd>{money(m.totalBudgetCents, m.currency)}{spentCents > 0 && <span className="left"> · {money(Math.max(m.totalBudgetCents - spentCents, 0), m.currency)} left</span>}</dd>
         <dt>Per item</dt><dd>{money(m.perItemCapCents, m.currency)}</dd>
         <dt>Categories</dt><dd>{m.allowedCategories.join(", ")}</dd>
         {m.allowedMerchants?.length ? <><dt>Shops</dt><dd>{m.allowedMerchants.join(", ")}</dd></> : null}
@@ -224,7 +226,7 @@ function Seal({ signed }: { signed: SignedMandate }) {
 }
 
 /* ---------- 2. Ask ---------- */
-function AskStep({ config, busy, run, note, onResult, onAttack }: { config: Config; busy: boolean; run: RunFn; note?: string; onResult: (ps: Proposal[], summary: string) => void; onAttack: (p: Proposal) => void }) {
+function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[]) => void; onAttack: (p: Proposal) => void }) {
   const sym = symbol(config.currency);
   const live = config.demoMode === "live";
   const examples = live
@@ -239,7 +241,14 @@ function AskStep({ config, busy, run, note, onResult, onAttack }: { config: Conf
         { text: "A futsal ball, size 4", hint: "Needs balls in the mandate" },
       ];
   const [text, setText] = useState(examples[0].text);
-  const submit = () => run(() => api.ask(text.trim())).then((r) => r && onResult(r.proposals, r.run.summary));
+  const submit = () => run(() => api.ask(text.trim())).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses));
+  /** The person widens their own mandate (it is re-signed, with a new hash) and the search runs again. */
+  const applyFix = (n: NearMiss) => run(async () => {
+    if (!n.fix) return undefined;
+    await api.setMandate({ ...signed.mandate, ...n.fix.patch });
+    onSigned();
+    return api.ask(text.trim());
+  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses));
   return (
     <section className="card">
       <h2>What should it buy?</h2>
@@ -255,6 +264,7 @@ function AskStep({ config, busy, run, note, onResult, onAttack }: { config: Conf
       </div>
       {busy && <Working live={live && config.agent === "llm"} />}
       {note && !busy && <div className="alert warn" role="status">{note}</div>}
+      {!busy && nearMisses.length > 0 && <NearMisses items={nearMisses} onFix={applyFix} />}
       <div className="actions">
         <AttackButton busy={busy} run={run} onAttack={onAttack} />
         <button className="primary" disabled={busy || text.trim().length < 2} onClick={submit}>Find options</button>
@@ -431,7 +441,10 @@ function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; 
               <dt>Capture</dt><dd className="mono">{p.order?.captureId ?? "n/a"}</dd>
               <dt>Mandate</dt><dd className="mono">{p.mandateHash}</dd>
             </dl>
-            <div className="actions"><button className="primary" onClick={onAskAgain}>Buy something else</button></div>
+            <div className="actions">
+              <a className="ghost auditlink" href={`/api/proposals/${p.id}/audit`} download>Download audit (JSON)</a>
+              <button className="primary" onClick={onAskAgain}>Buy something else</button>
+            </div>
           </div>
         )}
         {p.status === "failed" && (
@@ -520,5 +533,28 @@ function TracePanel({ active }: { active: boolean }) {
         {active && shown.length === 0 && <li className="muted">Nothing yet.</li>}
       </ol>
     </aside>
+  );
+}
+
+/** "Why nothing?": what the agent found, which guardrail stopped each product, and the change the person could make. */
+function NearMisses({ items, onFix }: { items: NearMiss[]; onFix: (n: NearMiss) => void }) {
+  return (
+    <div className="near" role="region" aria-label="Found but outside your mandate">
+      <h3>Found, but outside your mandate</h3>
+      <p className="muted small">The agent cannot widen the mandate. You can, and it is signed again.</p>
+      <ul>
+        {items.map((n) => (
+          <li key={n.productId}>
+            <Thumb src={n.imageUrl} title={n.title} />
+            <div className="ltext">
+              <b>{n.title}</b>
+              <span className="muted small">{n.merchant} · {n.category} · {money(n.priceCents, n.currency)}</span>
+              <ul className="whyblocked">{n.failed.map((f) => <li key={f.name}><Icon name="cross" size={14} /> <span><b>{CHECK_LABEL[f.name]}:</b> {f.reason}</span></li>)}</ul>
+              {n.fix && <button className="ghost small fix" onClick={() => onFix(n)}>{n.fix.label}, then search again</button>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -19,7 +19,7 @@ function setup(over: Partial<Mandate> = {}, opts: { model?: ReturnType<typeof sc
   const now = () => new Date(t);
   const tracer = new MemoryTracer(now);
   const approvals = new ApprovalQueue(tracer, "run", now);
-  const payments = new MockPayments(approvals, tracer, { now });
+  const payments = new MockPayments(approvals, tracer, { now, traceId: "run" });
   const service = new MandateService({
     catalog: new FixtureCatalog({ now }), attackCatalog: new FixtureCatalog({ now }), payments, approvals, tracer, runId: "run", now, model: opts.model,
   });
@@ -215,5 +215,75 @@ describe("LLM failure falls back to the rules agent", () => {
     expect(proposals).toHaveLength(1);
     expect(proposals[0]).toMatchObject({ agent: "rules", blocked: false });
     expect(tracer.events.some((e) => e.step === "agent.llm_failed")).toBe(true);
+  });
+});
+
+describe("cumulative budget", () => {
+  it("a second purchase is checked against what is left, not the full budget", async () => {
+    const { service } = setup({ totalBudgetCents: 15000 });
+    const first = (await service.ask(ASK)).proposals[0];
+    await service.approve(first.id);
+    await service.pay(first.id);
+    expect(service.spentCents()).toBe(7900);
+    const second = (await service.ask(ASK)).proposals[0];
+    expect(second.blocked).toBe(true);
+    const c = second.checks.find((x) => x.name === "total_budget")!;
+    expect(c.ok).toBe(false);
+    expect(c.reason).toMatch(/already committed/);
+  });
+  it("two pending proposals cannot both be approved past the budget", async () => {
+    const { service, payments } = setup({ totalBudgetCents: 15000 });
+    const a = (await service.ask(ASK)).proposals[0];
+    const b = (await service.ask(ASK)).proposals[0];
+    expect([a.status, b.status]).toEqual(["pending", "pending"]);
+    expect((await service.approve(a.id)).status).toBe("awaiting_buyer");
+    const second = await service.approve(b.id);
+    expect(second.status).toBe("failed");
+    expect(second.error).toMatch(/total_budget/);
+    expect(await payments.list()).toHaveLength(1);
+  });
+  it("a rejected proposal does not use up budget", async () => {
+    const { service } = setup({ totalBudgetCents: 9000 });
+    const a = (await service.ask(ASK)).proposals[0];
+    service.reject(a.id);
+    expect(service.spentCents()).toBe(0);
+    expect((await service.ask(ASK)).proposals[0].blocked).toBe(false);
+  });
+});
+
+describe("near misses", () => {
+  it("when nothing fits, says what was found, why it was blocked, and the mandate change that would allow it", async () => {
+    const { service } = setup(); // shoes only
+    const r = await service.ask("Grip socks, max 15 €");
+    expect(r.proposals).toHaveLength(0);
+    const sock = r.nearMisses.find((n) => n.productId === "sock-1")!;
+    expect(sock.failed.map((f) => f.name)).toEqual(["category"]);
+    expect(sock.fix?.patch).toEqual({ allowedCategories: ["shoes", "socks"] });
+    expect(sock.fix?.label).toMatch(/allow "socks"/i);
+    // the person applies the fix; the agent could not
+    service.setMandate({ ...baseMandate, allowedCategories: ["shoes", "socks"] });
+    expect((await service.ask("Grip socks, max 15 €")).proposals).toHaveLength(1);
+  });
+  it("offers no fix when a failure is not something the person can raise (currency)", async () => {
+    const { service } = setup();
+    const r = await service.ask("AmeriCourt Indoor Shoe");
+    const usd = r.nearMisses.find((n) => n.productId === "shoe-usd");
+    expect(usd?.failed.map((f) => f.name)).toContain("currency");
+    expect(usd?.fix).toBeUndefined();
+  });
+});
+
+describe("audit", () => {
+  it("bundles the mandate, the proposal with checks and order, and its trace", async () => {
+    const { service } = setup();
+    const p = (await service.ask(ASK)).proposals[0];
+    await service.approve(p.id);
+    await service.pay(p.id);
+    const a = service.audit(p.id);
+    expect(a.mandate).toMatchObject({ hash: p.mandateHash });
+    expect(a.proposal.checks).toHaveLength(10);
+    expect(a.proposal.order?.captureId).toBeTruthy();
+    const steps = a.trace.map((e) => e.step);
+    expect(steps).toEqual(expect.arrayContaining(["mandate.signed", "guardrails.checkCart", "execution.recheck", "payments.capture"]));
   });
 });
