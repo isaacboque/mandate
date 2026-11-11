@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: mandate
+    runtime: node
+    plan: free
+    # --include=dev: the build needs typescript and vite, which are devDependencies.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEMO_MODE
+        value: mock
+      - key: NODE_VERSION
+        value: "20"
