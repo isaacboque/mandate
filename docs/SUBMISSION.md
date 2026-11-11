@@ -4,12 +4,12 @@
 
 - [ ] `npm run smoke:channel3` with your key: confirms the price units (decimal euros assumed) and the response mapping.
 - [ ] `npm run smoke:orders` once: creates a 1.00 EUR sandbox order, approve it with the sandbox buyer, check it prints `completed`.
-- [ ] Deploy on Render from `render.yaml` (demo mode) and put the URL below.
+- [x] Deploy on Render from `render.yaml` (demo mode): https://mandate-gb6t.onrender.com (done 2026-11-11).
 - [ ] Record the video (script below), upload it, put the link below.
 - [ ] Devpost rules: can one person submit two projects (Even Steven and Mandate)? If not, submit only the one that wins the Thursday 15:00 go/no-go.
 - [ ] Submit before Thursday 12 Nov 2026, 21:00 Madrid (12:00 PT).
 
-Links to paste: GitHub `https://github.com/isaacboque/mandate` · Live demo `[Render URL]` · Video `[video URL]`
+Links to paste: GitHub `https://github.com/isaacboque/mandate` · Live demo `https://mandate-gb6t.onrender.com` · Video `[video URL]`
 
 ---
 
