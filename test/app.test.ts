@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/server/app.js";
 import { formatCents, parseCents } from "../src/core/money.js";
+import { configFromEnv } from "../src/server/app.js";
+import { serviceFromEnv } from "../src/server/deps.js";
 
-describe("api", () => {
-  it("health and config", async () => {
-    const app = createApp({ demoMode: "mock", currency: "EUR" });
-    expect(await (await app.request("/api/health")).json()).toEqual({ ok: true });
-    expect(await (await app.request("/api/config")).json()).toEqual({ demoMode: "mock", currency: "EUR" });
+describe("config", () => {
+  it("defaults to mock mode and EUR", () => {
+    expect(configFromEnv({})).toEqual({ demoMode: "mock", currency: "EUR" });
+    expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD" });
+  });
+  it("mock mode needs no keys and uses the rules agent", () => {
+    const { service } = serviceFromEnv({});
+    expect(service.isMock).toBe(true);
+    expect(service.agentMode).toBe("rules");
   });
 });
 
