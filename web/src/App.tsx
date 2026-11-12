@@ -5,7 +5,7 @@ import { Icon } from "./icons";
 import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
 
 type Step = 0 | 1 | 2 | 3;
-const STEPS = ["Mandate", "Ask", "Proposal", "Approve & pay"];
+const STEPS = ["Request & limits", "Ask", "Proposal", "Approve & pay"];
 const CHECK_LABEL: Record<Check["name"], string> = {
   total_budget: "Total budget", per_item_cap: "Per-item cap", category: "Category", merchant: "Merchant", quantity: "Quantity",
   expiry: "Mandate still valid", currency: "Currency", hard_attributes: "Required attributes", price_freshness: "Price is fresh", injection_flag: "Listing is clean",
@@ -21,6 +21,7 @@ export default function App() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [note, setNote] = useState<string>();
+  const [lastAsk, setLastAsk] = useState<string>();
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
   const [traceOpen, setTraceOpen] = useState(true);
   const { busy, error, setError, run } = useRun();
@@ -49,6 +50,7 @@ export default function App() {
   const signed = config?.mandate ?? null;
   const selected = proposals.find((p) => p.id === selectedId);
   const change = (p: Proposal) => { upsert(p); refresh(); };
+  const gotResult = (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); setNearMisses(misses); setLastAsk(text); refresh(); setStep(ps.length ? 2 : 1); };
   const upsert = (p: Proposal) => setProposals((all) => (all.some((x) => x.id === p.id) ? all.map((x) => (x.id === p.id ? p : x)) : [p, ...all]));
   const maxStep = !signed ? 0 : proposals.length === 0 ? 1 : selected ? 3 : 2;
 
@@ -80,11 +82,11 @@ export default function App() {
 
         {error && <div className="alert" role="alert">{error}</div>}
 
-        {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={refresh} onNext={() => setStep(1)} />}
+        {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={refresh} onNext={() => setStep(1)} onResult={gotResult} />}
         {step === 1 && signed && config && (
           <AskStep
-            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={refresh}
-            onResult={(ps, summary, misses) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); setNearMisses(misses); refresh(); if (ps.length) setStep(2); }}
+            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={refresh} initialText={lastAsk}
+            onResult={gotResult}
             onAttack={(p) => { upsert(p); setStep(2); }}
           />
         )}
@@ -115,7 +117,7 @@ function describeMandate(m: Mandate): string {
   return `Up to ${money(m.totalBudgetCents, cur)} in total, ${money(m.perItemCapCents, cur)} per item, at most ${m.maxQuantityPerItem} of each. Only ${m.allowedCategories.join(", ")}, ${where}. ${alone}`;
 }
 
-function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: Config; signed: SignedMandate | null; busy: boolean; run: RunFn; onSigned: () => void; onNext: () => void }) {
+function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: { config: Config; signed: SignedMandate | null; busy: boolean; run: RunFn; onSigned: () => void; onNext: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void }) {
   const live = config.demoMode === "live";
   const sym = symbol(config.currency);
   const shoeCats = live ? ["athletic-shoes", "soccer-shoes", "sneakers"] : ["shoes"];
@@ -146,14 +148,18 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
   const [threshold, setThreshold] = useState(cur?.autonomy.mode === "auto_under" ? eur(cur.autonomy.thresholdCents) : "50");
   const [describe, setDescribe] = useState("");
   const [draft, setDraft] = useState<Draft>();
-  const examples = [
-    `One pair of indoor futsal shoes, up to ${sym}100, from any shop. Ask me before paying anything.`,
-    `Small things like socks and balls, ${sym}60 in total, up to 2 of each. It may buy alone when the cart is under ${sym}30.`,
-    // The demo catalog has shoes, socks, balls, bags and clothing; the live catalog has everything, including earbuds.
-    live
-      ? `Wireless earbuds, ${sym}80 at most, only from bestbuy.com, valid for 4 hours.`
-      : `A futsal ball, ${sym}40 at most, only from sportdirect.example, valid for 4 hours.`,
-  ];
+  // Requests, not limits: the limits are drafted from them. The demo catalog has shoes, socks, balls, bags and clothing; the live one has everything.
+  const examples = live
+    ? [
+        `Indoor futsal shoes for men, max ${sym}90`,
+        `Running shoes for men, max ${sym}70, only from shoebacca.com`,
+        `Wireless earbuds under ${sym}60. It may buy alone if the cart is under ${sym}40.`,
+      ]
+    : [
+        `Indoor futsal shoes, size 43, non-marking sole, max 90 ${sym}`,
+        `Grip socks, max 15 ${sym}`,
+        `A futsal ball, max 40 ${sym}, only from sportdirect.example`,
+      ];
   /** Fills the form from a draft. Nothing is signed: the person reviews every field and signs. */
   const applyDraft = (d: Draft) => {
     const m = d.mandate;
@@ -167,6 +173,13 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
     setDraft(d);
     window.setTimeout(() => document.getElementById("mandate-form")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 50);
   };
+
+  /** Sign the reviewed mandate, then search for what was asked: the agent only starts after the person signed. */
+  const signAndSearch = () => run(async () => {
+    await api.setMandate(m);
+    onSigned();
+    return api.ask(describe.trim());
+  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, describe.trim()));
 
   const mandate = (): Mandate => ({
     currency: config.currency,
@@ -198,11 +211,11 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
 
   return (
     <section className="card">
-      <h2>Set the mandate</h2>
-      <p className="muted hint">What the agent may spend, on what, and what it may do without asking. Anything outside it waits for you.</p>
+      <h2>What should it buy?</h2>
+      <p className="muted hint">Say it in your words, with how much you can spend. I draft the limits for you to review. Nothing is searched or bought until you sign.</p>
 
       <div className="describe">
-        <label htmlFor="describe">Describe it in your words</label>
+        <label htmlFor="describe" className="sr-only">What should it buy?</label>
         <textarea
           id="describe" className="ask" rows={3} value={describe} onChange={(e) => setDescribe(e.target.value)}
           placeholder={examples[0]}
@@ -213,8 +226,8 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
         </div>
         {busy && <Working live={config.agent === "llm"} />}
         <div className="actions tight">
-          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>Draft the mandate</button>
-          <span className="muted small">The assistant only drafts. Nothing is signed until you press Sign.</span>
+          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>Draft the limits</button>
+          <span className="muted small">The assistant only drafts. You review and sign; the agent does not search before that.</span>
         </div>
         {draft && !busy && (
           <div className="understood" role="status">
@@ -226,7 +239,7 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
         )}
       </div>
 
-      <h3 id="mandate-form" className="orhand">Or set it by hand</h3>
+      <h3 id="mandate-form" className="orhand">{draft ? "Review the limits" : "Or set the limits by hand"}</h3>
       <div className="presets" role="group" aria-label="Start from a preset">
         {presets.map((p) => (
           <button key={p.name} type="button" className="preset" onClick={p.set}><b>{p.name}</b><span>{p.note}</span></button>
@@ -278,9 +291,16 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
 
       <div className="actions">
         {signed && <button className="ghost" onClick={onNext} disabled={busy}>Keep the signed mandate</button>}
-        <button className="primary" disabled={busy || problems.length > 0} onClick={() => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } })}>
-          {signed ? "Sign a new mandate" : "Sign mandate"}
-        </button>
+        {draft && describe.trim().length >= 3 ? (
+          <>
+            <button className="ghost" disabled={busy || problems.length > 0} onClick={() => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } })}>Sign only</button>
+            <button className="primary" disabled={busy || problems.length > 0} onClick={signAndSearch}>Sign and search</button>
+          </>
+        ) : (
+          <button className="primary" disabled={busy || problems.length > 0} onClick={() => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } })}>
+            {signed ? "Sign a new mandate" : "Sign mandate"}
+          </button>
+        )}
       </div>
     </section>
   );
@@ -306,7 +326,7 @@ function Seal({ signed, spentCents = 0 }: { signed: SignedMandate; spentCents?: 
 }
 
 /* ---------- 2. Ask ---------- */
-function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[]) => void; onAttack: (p: Proposal) => void }) {
+function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack, initialText }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void; onAttack: (p: Proposal) => void; initialText?: string }) {
   const sym = symbol(config.currency);
   const live = config.demoMode === "live";
   const examples = live
@@ -320,15 +340,15 @@ function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResu
         { text: "Grip socks, max 15 €", hint: "Needs socks in the mandate" },
         { text: "A futsal ball, size 4", hint: "Needs balls in the mandate" },
       ];
-  const [text, setText] = useState(examples[0].text);
-  const submit = () => run(() => api.ask(text.trim())).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses));
+  const [text, setText] = useState(initialText ?? examples[0].text);
+  const submit = () => run(() => api.ask(text.trim())).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, text.trim()));
   /** The person widens their own mandate (it is re-signed, with a new hash) and the search runs again. */
   const applyFix = (n: NearMiss) => run(async () => {
     if (!n.fix) return undefined;
     await api.setMandate({ ...signed.mandate, ...n.fix.patch });
     onSigned();
     return api.ask(text.trim());
-  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses));
+  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, text.trim()));
   return (
     <section className="card">
       <h2>What should it buy?</h2>
