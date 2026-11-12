@@ -5,19 +5,19 @@
 - [ ] `npm run smoke:channel3` with your key: confirms the price units (decimal euros assumed) and the response mapping.
 - [ ] `npm run smoke:orders` once: creates a 1.00 EUR sandbox order, approve it with the sandbox buyer, check it prints `completed`.
 - [x] Deploy on Render from `render.yaml` (demo mode): https://mandate-gb6t.onrender.com (done 2026-11-11).
-- [ ] After the video is recorded: deploy `render.live.yaml` (New > Blueprint, blueprint file `render.live.yaml`), fill the three or four secrets in Render, test one full purchase, then paste the live URL and the sandbox buyer into the "Testing instructions" below.
+- [x] Live service deployed (2026-11-12): https://mandate-live-7q2i.onrender.com (from `render.live.yaml`). Still to do: one full test purchase with the sandbox buyer, then fill the buyer in "Testing instructions" below.
 - [ ] Record the video (script below), upload it, put the link below.
 - [ ] Devpost rules: can one person submit two projects (Even Steven and Mandate)? If not, submit only the one that wins the Thursday 15:00 go/no-go.
 - [ ] Submit before Thursday 12 Nov 2026, 21:00 Madrid (12:00 PT).
 
-Links to paste: GitHub `https://github.com/isaacboque/mandate` · Live demo `https://mandate-gb6t.onrender.com` · Video `[video URL]`
+Links to paste: GitHub `https://github.com/isaacboque/mandate` · Live demo `https://mandate-gb6t.onrender.com` · Live mode `https://mandate-live-7q2i.onrender.com` · Video `[video URL]`
 
 ---
 
 ## Testing instructions (paste into Devpost)
 
 - **Demo, no setup:** https://mandate-gb6t.onrender.com is the demo mode (fixture catalog, simulated PayPal, rules agent). Each visitor has their own session. Sign a mandate, ask, approve, and use **Try an attack**.
-- **Live, real services:** [LIVE URL: Isaac to fill after deploying render.live.yaml] uses the real Channel3 catalog and PayPal sandbox. To complete the payment you need a PayPal **sandbox buyer**: [Isaac: sandbox buyer email and password, a throwaway sandbox account]. The page shows an "Approve in PayPal sandbox" link; approve with that buyer, come back, and press **Capture payment**. The live instance limits searches per visitor and per day to protect free quotas.
+- **Live, real services:** https://mandate-live-7q2i.onrender.com uses the real Channel3 catalog and PayPal sandbox. To complete the payment you need a PayPal **sandbox buyer**: [Isaac: sandbox buyer email and password, a throwaway sandbox account]. The page shows an "Approve in PayPal sandbox" link; approve with that buyer, come back, and press **Capture payment**. The live instance limits searches per visitor and per day to protect free quotas.
 - **Run it yourself:** see the README ("Run it in 2 minutes" and "Run it live").
 
 ---
