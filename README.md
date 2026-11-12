@@ -39,7 +39,7 @@ flowchart LR
 - **Untrusted text** (`src/catalog`): product titles and descriptions are never put in the system prompt. They reach the model only as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them.
 - **Approval queue** (`src/approval`): a person approves, or the mandate's autonomy rule does (`ask_always`, or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval.
 - **Payments** (`src/payments`): PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules.
-- **Describe the mandate in words**: write one sentence ("one pair of futsal shoes, up to $100, ask me before paying") and the assistant drafts the mandate into the form: budget, caps, categories (resolved against the catalog's own tree, not guessed by the model), shops, validity and what it may do alone. It only drafts: nothing is signed until you press Sign, and the signed mandate goes through the same validation as one typed by hand. Without an AI model, or if it fails, a simple rules reader does a plainer version and says so.
+- **One sentence is enough**: write what you want with how much you can spend ("indoor futsal shoes, max $90") and the assistant drafts the limits into a form for you to review, then **Sign and search** signs them and runs the search. The agent does not search before you sign. The draft covers budget, caps, categories (resolved against the catalog's own tree, not guessed by the model), shops, validity and what it may do alone. It only drafts: nothing is signed until you press Sign, and the signed mandate goes through the same validation as one typed by hand. Without an AI model, or if it fails, a simple rules reader does a plainer version and says so.
 - **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
 - **Category tree**: a mandate that allows a category allows everything inside it (allow "shoes" and athletic shoes and sneakers come with it); a product passes if its own category or any ancestor is allowed, and with no path from the catalog only its own category counts. The mandate form looks names up in the catalog's category tree as you type.
 - **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the mandate. The agent can never do this itself.
@@ -59,7 +59,7 @@ npm run build && npm start      # http://localhost:8787
 
 Or for development: `npm run dev` (API on :8787, UI on :5173).
 
-Then: **Sign mandate** → **Find options** (the default ask is "Indoor futsal shoes, size 43, non-marking sole, max 90 €") → **Review** → **Approve** → **Simulate buyer and pay**. Click **Try an attack** to see a poisoned listing blocked.
+Then: type a request such as "Grip socks, max 15 €" → **Draft the limits** (review them) → **Sign and search** → **Review** → **Approve** → **Simulate buyer and pay**. Click **Try an attack** to see a poisoned listing blocked.
 
 Demo mode uses a fixture catalog (16 products, 3 of them poisoned, 1 with a price that rises at checkout) and mock payments. If you set an LLM key (below) the agent is the LLM instead of the rules agent.
 
