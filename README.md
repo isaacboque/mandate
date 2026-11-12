@@ -87,7 +87,7 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 
 ## Evaluation
 
-`npm run eval` runs 43 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
+`npm run eval` runs 46 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
