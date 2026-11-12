@@ -170,3 +170,14 @@ details.passed[open] .checks li { animation: tick .42s cubic-bezier(.16, 1, .3, 
 .catnote { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); max-width: 62ch; }
 
 .tagwarn { margin: 0; font-size: 13px; color: var(--warn); }
+
+/* ----- describe the mandate in words ----- */
+.describe { display: grid; gap: 10px; margin: 8px 0 6px; padding: 16px; background: var(--paper); border-radius: 14px; }
+.describe > label { font-weight: 650; font-size: 15px; }
+.describe textarea.ask { margin-bottom: 0; }
+.understood { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.understood h3 { margin: 0 0 8px; font-size: 15px; }
+.understood ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
+.understood li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; }
+.understood li .icon { color: var(--good); margin-top: 3px; }
+.orhand { margin: 24px 0 8px; font-size: 15px; color: var(--muted); font-weight: 650; scroll-margin-top: 16px; }

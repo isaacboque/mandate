@@ -3,6 +3,7 @@ import { runLlmAgent, runRulesAgent, type AgentCtx, type AgentRun } from "../age
 import type { ApprovalQueue } from "../approval/queue.js";
 import type { CatalogGateway, CategoryHit, Product } from "../catalog/types.js";
 import { allPass, checkCart } from "../mandate/check.js";
+import { draftMandate, type Draft } from "../mandate/draft.js";
 import { signMandate, type SignedMandate } from "../mandate/sign.js";
 import type { Cart, CartLine, Mandate } from "../mandate/types.js";
 import { MockPayments } from "../payments/MockPayments.js";
@@ -58,6 +59,13 @@ export class MandateService {
     return this.d.model ? "llm" : "rules";
   }
   /** Category lookup for the mandate form (the whole branch under a name). Empty when the catalog cannot do it. */
+  /** Drafts a mandate from plain words. It never signs: the person reviews the draft and signs it themselves. */
+  async draftMandate(text: string, currency: string): Promise<Draft> {
+    const draft = await draftMandate({ text, currency, model: this.d.model, catalog: this.d.catalog, now: this.now() });
+    this.trace("mandate.drafted", "decision", { args: { chars: text.length }, result: { mode: draft.mode, warnings: draft.warnings.length, signed: false } });
+    return draft;
+  }
+
   async searchCategories(query: string): Promise<CategoryHit[]> {
     return (await this.d.catalog.categories?.(query, 8)) ?? [];
   }

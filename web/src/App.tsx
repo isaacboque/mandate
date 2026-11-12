@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRun, type RunFn } from "./useRun";
-import { api, money, toCents, type Check, type Config, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
+import { api, money, toCents, type Check, type Config, type Draft, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
 import { Icon } from "./icons";
 import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
 
@@ -105,7 +105,7 @@ export default function App() {
 }
 
 /* ---------- 1. Mandate ---------- */
-const HOURS = [{ label: "1 hour", h: 1 }, { label: "4 hours", h: 4 }, { label: "24 hours", h: 24 }];
+const HOURS = [{ label: "1 hour", h: 1 }, { label: "4 hours", h: 4 }, { label: "24 hours", h: 24 }, { label: "3 days", h: 72 }, { label: "7 days", h: 168 }];
 
 /** The mandate in one plain sentence, for people who do not read JSON. */
 function describeMandate(m: Mandate): string {
@@ -144,6 +144,26 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
   const [hours, setHours] = useState(24);
   const [auto, setAuto] = useState(cur?.autonomy.mode === "auto_under");
   const [threshold, setThreshold] = useState(cur?.autonomy.mode === "auto_under" ? eur(cur.autonomy.thresholdCents) : "50");
+  const [describe, setDescribe] = useState("");
+  const [draft, setDraft] = useState<Draft>();
+  const examples = [
+    `One pair of indoor futsal shoes, up to ${sym}100, from any shop. Ask me before paying anything.`,
+    `Small things like socks and balls, ${sym}60 in total, up to 2 of each. It may buy alone when the cart is under ${sym}30.`,
+    `Wireless earbuds, ${sym}80 at most, only from bestbuy.com, valid for 4 hours.`,
+  ];
+  /** Fills the form from a draft. Nothing is signed: the person reviews every field and signs. */
+  const applyDraft = (d: Draft) => {
+    const m = d.mandate;
+    setBudget(String(m.totalBudgetCents / 100));
+    setCap(String(m.perItemCapCents / 100));
+    setCats(m.allowedCategories);
+    setMerchants(m.allowedMerchants ?? []);
+    setQty(String(m.maxQuantityPerItem));
+    setHours(d.hours);
+    if (m.autonomy.mode === "auto_under") { setAuto(true); setThreshold(String(m.autonomy.thresholdCents / 100)); } else setAuto(false);
+    setDraft(d);
+    window.setTimeout(() => document.getElementById("mandate-form")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 50);
+  };
 
   const mandate = (): Mandate => ({
     currency: config.currency,
@@ -178,6 +198,32 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
       <h2>Set the mandate</h2>
       <p className="muted hint">What the agent may spend, on what, and what it may do without asking. Anything outside it waits for you.</p>
 
+      <div className="describe">
+        <label htmlFor="describe">Describe it in your words</label>
+        <textarea
+          id="describe" className="ask" rows={3} value={describe} onChange={(e) => setDescribe(e.target.value)}
+          placeholder={examples[0]}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && describe.trim().length >= 3) run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d)); }}
+        />
+        <div className="examples" role="group" aria-label="Examples">
+          {examples.map((x) => <button key={x} type="button" className="example" onClick={() => setDescribe(x)}><b>{x}</b></button>)}
+        </div>
+        {busy && <Working live={config.agent === "llm"} />}
+        <div className="actions tight">
+          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>Draft the mandate</button>
+          <span className="muted small">The assistant only drafts. Nothing is signed until you press Sign.</span>
+        </div>
+        {draft && !busy && (
+          <div className="understood" role="status">
+            <h3>Here is what I understood</h3>
+            <ul>{draft.understood.map((u) => <li key={u}><Icon name="check" size={14} /> {u}</li>)}</ul>
+            {draft.warnings.map((w) => <p key={w} className="hintline">{w}</p>)}
+            <p className="muted small">Drafted by the {draft.mode === "llm" ? "AI model" : "rules reader"}. Review and change anything below.</p>
+          </div>
+        )}
+      </div>
+
+      <h3 id="mandate-form" className="orhand">Or set it by hand</h3>
       <div className="presets" role="group" aria-label="Start from a preset">
         {presets.map((p) => (
           <button key={p.name} type="button" className="preset" onClick={p.set}><b>{p.name}</b><span>{p.note}</span></button>
