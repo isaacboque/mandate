@@ -39,6 +39,8 @@ export class MandateService {
   private signed: SignedMandate | null = null;
   private proposals = new Map<string, Proposal>();
   private seq = 0;
+  /** Every in-stock, clean product this visitor's searches returned: the source of category and shop suggestions. */
+  private seenProducts = new Map<string, { category: string; merchant: string }>();
 
   constructor(private d: ServiceDeps) {}
 
@@ -87,6 +89,19 @@ export class MandateService {
       .reduce((s, p) => s + p.totalCents, 0);
   }
 
+  /** Categories and shops the catalog has actually returned in this session, most common first. Used to suggest what to allow. */
+  facets(): { categories: { value: string; count: number }[]; merchants: { value: string; count: number }[] } {
+    const tally = (pick: (p: { category: string; merchant: string }) => string) => {
+      const m = new Map<string, number>();
+      for (const p of this.seenProducts.values()) {
+        const v = pick(p);
+        if (v) m.set(v, (m.get(v) ?? 0) + 1);
+      }
+      return [...m.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    };
+    return { categories: tally((p) => p.category), merchants: tally((p) => p.merchant) };
+  }
+
   /** Everything needed to audit one purchase: the signed mandate, the proposal with its checks and order, and its trace. */
   audit(id: string) {
     const p = this.get(id);
@@ -132,6 +147,7 @@ export class MandateService {
       run = await runRulesAgent(text, ctx);
       run.summary = `The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : "error"}), so the built-in rules agent answered. ${run.summary}`;
     }
+    for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     for (const p of mine) {
       p.agent = run.mode;
       p.summary = run.summary;
