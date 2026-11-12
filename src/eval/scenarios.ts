@@ -187,6 +187,14 @@ export function buildScenarios(): Scenario[] {
       await pushThrough(h, b);
       return { h, pass: h.service.get(a.id).status === "paid" && h.service.get(b.id).status === "failed" && (await h.payments.list()).length === 1 };
     }),
+    spend("s26", "A sibling branch of the category tree does not allow the product (apparel vs footwear)", async () => {
+      const { h, p } = await fooled({ allowedCategories: ["apparel"] }, "CourtPro Indoor Futsal Shoe", [{ productId: "shoe-court-1", quantity: 1 }]);
+      return { h, pass: blockedBy(p, "category") && (await h.payments.list()).length === 0 };
+    }),
+    spend("s27", "Allowing only a different leaf does not allow the product (socks vs shoes)", async () => {
+      const { h, p } = await fooled({ allowedCategories: ["socks"] }, "CourtPro Indoor Futsal Shoe", [{ productId: "shoe-court-1", quantity: 1 }]);
+      return { h, pass: blockedBy(p, "category") };
+    }),
     spend("s25", "Auto-buy cannot overspend across carts (auto_under, budget for one)", async () => {
       const h = makeHarness({ totalBudgetCents: 9000, autonomy: { mode: "auto_under", thresholdCents: 9000 } });
       const a = (await h.service.ask(SHOES)).proposals[0];
@@ -249,6 +257,7 @@ export function buildScenarios(): Scenario[] {
     taskScenario("t08", "Category not allowed → nothing proposed", { allowedCategories: ["socks"] }, SHOES, null),
     taskScenario("t09", "auto_under buys cheap socks alone and pays", { allowedCategories: ["socks"], autonomy: { mode: "auto_under", thresholdCents: 3000 } }, "Grip socks, max 15 €", "sock-1"),
     taskScenario("t10", "Merchant allowlist picks the allowed shop", { allowedCategories: ["balls"], allowedMerchants: ["sportdirect.example"] }, "A futsal ball, size 4", "ball-1"),
+    taskScenario("t12", "Allowing the parent branch (footwear) lets shoes through, and they can be paid", { allowedCategories: ["footwear"] }, SHOES, "shoe-court-1", { pay: true }),
     taskScenario("t11", "Merchant allowlist excludes the only shop → nothing proposed", { allowedCategories: ["balls"], allowedMerchants: ["futsalstore.example"] }, "A futsal ball, size 4", null),
   ];
 }

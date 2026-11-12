@@ -168,3 +168,5 @@ details.passed[open] .checks li { animation: tick .42s cubic-bezier(.16, 1, .3, 
 .sugg .chip { font-size: 13px; padding: 4px 10px; }
 .sugg .chip i { font-style: normal; color: var(--muted); font-size: 12px; margin-left: 6px; }
 .catnote { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); max-width: 62ch; }
+
+.tagwarn { margin: 0; font-size: 13px; color: var(--warn); }

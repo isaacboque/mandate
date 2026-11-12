@@ -12,6 +12,7 @@ export type NearMiss = {
   fix?: { label: string; patch: MandatePatch };
 };
 
+export type CategoryHit = { slug: string; title: string; path: { slug: string; title: string }[]; hasChildren: boolean };
 export type CheckName = "total_budget" | "per_item_cap" | "category" | "merchant" | "quantity" | "expiry" | "currency" | "hard_attributes" | "price_freshness" | "injection_flag";
 export type Check = { name: CheckName; ok: boolean; reason: string };
 export type Order = { id: string; status: string; approveUrl?: string; captureId?: string; amountCents: number; currency: string };
@@ -39,6 +40,7 @@ export const api = {
   reject: (id: string) => req<Proposal>(`/api/proposals/${id}/reject`, {}),
   pay: (id: string) => req<Proposal>(`/api/proposals/${id}/pay`, {}),
   proposals: () => fetch("/api/proposals").then((r) => r.json() as Promise<Proposal[]>),
+  categories: (q: string) => fetch(`/api/categories?q=${encodeURIComponent(q)}`).then((r) => r.json() as Promise<{ categories: CategoryHit[] }>),
   attack: () => req<Proposal>("/api/attack", {}),
   trace: () => req<TraceEvent[]>("/api/trace"),
   reset: () => req<{ ok: boolean }>("/api/reset", {}),

@@ -40,6 +40,7 @@ flowchart LR
 - **Approval queue** (`src/approval`): a person approves, or the mandate's autonomy rule does (`ask_always`, or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval.
 - **Payments** (`src/payments`): PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules.
 - **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
+- **Category tree**: a mandate that allows a category allows everything inside it (allow "shoes" and athletic shoes and sneakers come with it); a product passes if its own category or any ancestor is allowed, and with no path from the catalog only its own category counts. The mandate form looks names up in the catalog's category tree as you type.
 - **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the mandate. The agent can never do this itself.
 - **Audit**: each purchase can be downloaded as JSON (signed mandate, checks, approval and payment trace).
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
@@ -90,10 +91,10 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 43/43 |
-| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 25/25 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 46/46 |
+| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 27/27 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
-| Task success (a valid item exists → a valid cart is proposed) | 100% | 11/11 |
+| Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
 <!-- eval:end -->
 
 ## Limits

@@ -39,8 +39,10 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spent
   add("per_item_cap", lines.filter((l) => l.unitPriceCents > mandate.perItemCapCents)
     .map((l) => `${l.productId} costs ${fmt(l.unitPriceCents)}, cap is ${fmt(mandate.perItemCapCents)}`), "every item within the per-item cap");
 
-  add("category", lines.filter((l) => !mandate.allowedCategories.includes(l.category))
-    .map((l) => `${l.productId} is in category "${l.category}", not allowed`), "all categories allowed");
+  // Allowing a category allows everything inside it: a product passes if its own category or any ancestor is allowed.
+  const inAllowedCategory = (l: Cart["lines"][number]) => [l.category, ...(l.categoryPath ?? [])].some((c) => mandate.allowedCategories.includes(c));
+  add("category", lines.filter((l) => !inAllowedCategory(l))
+    .map((l) => `${l.productId} is in category "${l.category}"${l.categoryPath && l.categoryPath.length > 1 ? ` (${l.categoryPath.join(" > ")})` : ""}, not allowed`), "all categories allowed");
 
   const merchants = mandate.allowedMerchants ?? [];
   add("merchant", merchants.length === 0 ? [] : lines.filter((l) => !merchants.includes(l.merchant))

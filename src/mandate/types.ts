@@ -20,6 +20,8 @@ export type CartLine = {
   title: string;
   merchant: string;
   category: string;
+  /** Categories from the root down to `category` (slugs). Allowing any of them allows the product. */
+  categoryPath?: string[];
   unitPriceCents: Cents;
   quantity: number;
   currency: string;

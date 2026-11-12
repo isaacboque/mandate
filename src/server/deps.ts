@@ -42,5 +42,6 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
 
   const sessions = new SessionStore(makeService, { ttlMs: num(env.SESSION_TTL_MINUTES, 120) * 60 * 1000, max: num(env.MAX_SESSIONS, 300) });
   const limiter = new RateLimiter(num(env.RATE_LIMIT_ASKS_PER_HOUR, live ? 12 : 0), num(env.DAILY_ASK_CAP, live ? 300 : 0));
-  return { sessions, makeService, limiter, config, agentMode: model ? ("llm" as const) : ("rules" as const) };
+  const categoryLimiter = new RateLimiter(num(env.RATE_LIMIT_CATEGORIES_PER_HOUR, live ? 120 : 0), 0);
+  return { sessions, makeService, limiter, categoryLimiter, config, agentMode: model ? ("llm" as const) : ("rules" as const) };
 }

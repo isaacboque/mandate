@@ -126,6 +126,13 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
     ...seenCats.map((c) => ({ value: c.value, note: `${c.count} found` })),
     ...knownCats.filter((k) => !seenCats.some((c) => c.value === k)).map((k) => ({ value: k })),
   ];
+  /** Live lookup in the catalog's category tree: a name finds the category and where it sits. */
+  const searchCategories = async (q: string) =>
+    (await api.categories(q)).categories.map((c) => ({
+      value: c.slug,
+      label: c.title,
+      note: [c.path.length > 1 ? c.path.slice(0, -1).map((n) => n.title).join(" › ") : "", c.hasChildren ? "includes subcategories" : ""].filter(Boolean).join(" · "),
+    }));
   const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
   const cur = signed?.mandate;
   const eur = (c: number) => String(c / 100);
@@ -194,9 +201,10 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
             id="cats" label="Categories" hint="(what kind of thing)" values={cats} onChange={setCats}
             normalize={normalizeCategory} format={humanize} placeholder="Type a category and press Enter"
             suggestions={catSuggestions} suggestionsLabel={seenCats.length ? "Seen in your searches and known:" : "Known categories:"}
+            search={searchCategories}
             groups={live ? [{ label: "All shoes", values: shoeCats }] : []}
           />
-          <p className="catnote">Anything outside these categories is blocked, even if it is cheap. Not sure of the name? Search first: the categories the catalog returns show up here, and a blocked product can be allowed with one click.</p>
+          <p className="catnote">Allowing a category allows everything inside it: allow "Shoes" and its subcategories (athletic shoes, sneakers...) come with it. Anything outside is blocked, even if it is cheap. Type a name to see the catalog's categories; a blocked product can also be allowed with one click.</p>
           <TagInput
             id="shops" label="Shops" hint="(optional: any shop if empty)" values={merchants} onChange={setMerchants}
             normalize={normalizeShop} placeholder={live ? "e.g. shoebacca.com" : "e.g. futsalstore.example"}

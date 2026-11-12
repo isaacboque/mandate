@@ -151,3 +151,49 @@ describe("Channel3Catalog cache and images", () => {
     expect(p.imageUrl).toBe("https://cdn.example/main.jpg");
   });
 });
+
+describe("Channel3Catalog category tree", () => {
+  const offer = [{ url: "https://x/1", domain: "x.example", price: { price: 10, currency: "USD" }, availability: "InStock" }];
+  const respond = (body: unknown, status = 200) => {
+    const calls: string[] = [];
+    const f = (async (url: string) => { calls.push(url); return new Response(JSON.stringify(body), { status }); }) as unknown as typeof fetch;
+    return { f, calls };
+  };
+  it("maps a product's category path (objects or plain strings) to slugs from the root down", async () => {
+    const a = respond({ products: [{ id: "p", title: "Shoe", category: { slug: "Athletic-Shoes", path: [{ slug: "Footwear", title: "Footwear" }, { slug: "shoes", title: "Shoes" }, { slug: "athletic-shoes", title: "Athletic shoes" }] }, offers: offer }] });
+    const [p] = await new Channel3Catalog("k", { fetch: a.f }).search("x");
+    expect(p.category).toBe("athletic-shoes");
+    expect(p.categoryPath).toEqual(["footwear", "shoes", "athletic-shoes"]);
+    const b = respond({ products: [{ id: "p", title: "Shoe", category: { slug: "sneakers", path: ["Footwear", "sneakers"] }, offers: offer }] });
+    expect((await new Channel3Catalog("k", { fetch: b.f }).search("x"))[0].categoryPath).toEqual(["footwear", "sneakers"]);
+    const c = respond({ products: [{ id: "p", title: "Shoe", category: { slug: "sneakers" }, offers: offer }] });
+    expect((await new Channel3Catalog("k", { fetch: c.f }).search("x"))[0].categoryPath).toBeUndefined();
+  });
+  it("looks categories up with their tree position, caches a day, ignores short queries and survives an API error", async () => {
+    const r = respond({ categories: [{ slug: "shoes", title: "Shoes", path: [{ slug: "footwear", title: "Footwear" }, { slug: "shoes", title: "Shoes" }], has_children: true }] });
+    const cat = new Channel3Catalog("secret-key", { fetch: r.f });
+    const hits = await cat.categories("Shoes", 8);
+    expect(r.calls[0]).toBe("https://api.trychannel3.com/v1/categories/search?query=shoes&limit=8");
+    expect(hits).toEqual([{ slug: "shoes", title: "Shoes", path: [{ slug: "footwear", title: "Footwear" }, { slug: "shoes", title: "Shoes" }], hasChildren: true }]);
+    await cat.categories(" shoes ", 8);
+    expect(r.calls).toHaveLength(1);
+    expect(await cat.categories("s")).toEqual([]);
+    expect(r.calls).toHaveLength(1);
+    const broke = new Channel3Catalog("k", { fetch: respond({}, 402).f });
+    expect(await broke.categories("shoes")).toEqual([]);
+  });
+});
+
+describe("FixtureCatalog category tree", () => {
+  it("finds leaves and their ancestors by part of the name, with hasChildren", async () => {
+    const cat = new FixtureCatalog({ now: NOW });
+    const hits = await cat.categories("foot");
+    expect(hits[0]).toMatchObject({ slug: "footwear", hasChildren: true });
+    const shoes = (await cat.categories("shoes")).find((c) => c.slug === "shoes")!;
+    expect(shoes.path.map((n) => n.slug)).toEqual(["footwear", "shoes"]);
+    expect(shoes.hasChildren).toBe(false);
+    expect(await cat.categories("x")).toEqual([]);
+    const p = await cat.getProduct("shoe-court-1");
+    expect(p?.categoryPath).toEqual(["footwear", "shoes"]);
+  });
+});

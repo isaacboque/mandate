@@ -32,7 +32,7 @@ const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?
  * `source` is one MandateService (tests, single-user use) or a SessionStore (the server: one service per visitor).
  * `limiter` optionally caps searches per visitor and per day to protect free-tier quotas.
  */
-export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter): Hono {
+export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter): Hono {
   const app = new Hono();
   const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c) : source);
 
@@ -58,6 +58,15 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   });
   app.get("/api/proposals", (c) => c.json(svc(c).list()));
   app.get("/api/proposals/:id", (c) => c.json(svc(c).get(c.req.param("id"))));
+
+  // category lookup for the mandate form: a name finds the category and where it sits in the tree
+  app.get("/api/categories", async (c) => {
+    const q = (c.req.query("q") ?? "").slice(0, 60);
+    const service = svc(c);
+    const hit = categoryLimiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ categories: [] });
+    return c.json({ categories: q.trim().length >= 2 ? await service.searchCategories(q) : [] });
+  });
 
   // 4. approve & pay
   app.post("/api/proposals/:id/approve", async (c) => c.json(await svc(c).approve(c.req.param("id"))));
