@@ -13,6 +13,7 @@ export type NearMiss = {
 };
 
 export type CategoryHit = { slug: string; title: string; path: { slug: string; title: string }[]; hasChildren: boolean };
+export type Draft = { mandate: Mandate; hours: number; understood: string[]; warnings: string[]; mode: "llm" | "rules" };
 export type CheckName = "total_budget" | "per_item_cap" | "category" | "merchant" | "quantity" | "expiry" | "currency" | "hard_attributes" | "price_freshness" | "injection_flag";
 export type Check = { name: CheckName; ok: boolean; reason: string };
 export type Order = { id: string; status: string; approveUrl?: string; captureId?: string; amountCents: number; currency: string };
@@ -35,6 +36,7 @@ async function req<T>(path: string, json?: unknown): Promise<T> {
 export const api = {
   config: () => req<Config>("/api/config"),
   setMandate: (m: Mandate) => req<SignedMandate>("/api/mandate", m),
+  draftMandate: (text: string) => req<Draft>("/api/mandate/draft", { text }),
   ask: (text: string) => req<AskResult>("/api/ask", { text }),
   approve: (id: string) => req<Proposal>(`/api/proposals/${id}/approve`, {}),
   reject: (id: string) => req<Proposal>(`/api/proposals/${id}/reject`, {}),

@@ -46,6 +46,14 @@ export function createApp(source: MandateService | SessionStore, config: Config,
 
   // 1. mandate
   app.get("/api/mandate", (c) => c.json(svc(c).mandate));
+  // Plain words in, a draft out. It signs nothing; the person reviews the form and signs it.
+  app.post("/api/mandate/draft", async (c) => {
+    const { text } = z.object({ text: z.string().min(3).max(800) }).parse(await c.req.json());
+    const service = svc(c);
+    const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ error: hit.message }, 429);
+    return c.json(await service.draftMandate(text, config.currency));
+  });
   app.post("/api/mandate", async (c) => c.json(svc(c).setMandate(MandateInput.parse(await c.req.json())), 201));
 
   // 2. ask → 3. proposals
