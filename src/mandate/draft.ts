@@ -61,7 +61,7 @@ async function specFromModel(model: LanguageModel, text: string, currency: strin
 const STOP = new Set(["want", "buy", "with", "from", "that", "this", "than", "only", "should", "would", "could", "have", "will", "just", "into", "when", "ask", "first", "before", "paying", "pay", "anything", "total", "most", "much", "each", "every", "item", "items", "pair", "pairs", "unit", "units", "shop", "shops", "valid", "hour", "hours", "days", "day", "week", "alone", "automatically", "without", "asking", "under", "over", "about", "agent", "please", "some", "kind", "kinds", "stuff", "things", "thing", "like", "also", "same", "such", "dollar", "dollars", "euro", "euros", "money", "spend", "spent", "allow", "allowed", "mandate", "cart", "least", "more", "less", "many", "need", "wants", "make", "give", "tell"]);
 
 /** A plain-rules reading, used when there is no AI model or it failed. Deliberately simple and conservative. */
-function specFromRules(text: string): Spec {
+function specFromRules(text: string): Spec & { fallbackCategory?: string } {
   const money = [...text.matchAll(/(?:[$€£]\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*(?:[$€£]|usd\b|eur\b|euros?\b|dollars?\b|bucks\b))/gi)]
     .map((m) => ({ v: Number((m[1] ?? m[2]).replace(",", ".")), at: m.index ?? 0 }));
   if (money.length === 0) throw new Error('I could not find a budget in that text. Say how much it can spend, for example "up to $100".');
@@ -83,7 +83,10 @@ function specFromRules(text: string): Spec {
   const shops = lower.match(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|es|co|io|shop|store|example)\b/g) ?? [];
   const withoutShops = shops.reduce((t, sh) => t.replace(sh, " "), lower);
   const words = [...new Set((withoutShops.match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w)))].slice(0, 6);
+  // If the catalog recognises none of the words, fall back to the main noun of the first phrase ("wireless earbuds, $80..." -> "earbuds").
+  const lead = (withoutShops.split(/[,.;:]|\d/)[0].match(/[a-z]{3,}/g) ?? []).filter((w) => !STOP.has(w));
   return {
+    fallbackCategory: lead.length ? lead[lead.length - 1] : undefined,
     totalBudget, perItemCap: cap, maxQuantityPerItem: qty ? Math.min(Math.max(Number(qty[1]), 1), 100) : 1, validForHours,
     categories: words.length ? words : ["unknown"], shops: [...new Set(shops)],
     autonomy: threshold ? { mode: "auto_under", threshold } : { mode: "ask_always" },
@@ -97,14 +100,14 @@ const shopOf = (raw: string) => raw.trim().toLowerCase().replace(/^https?:\/\//,
 export async function draftMandate(opts: { text: string; currency: string; model?: LanguageModel; catalog: CatalogGateway; now: Date }): Promise<Draft> {
   const text = opts.text.trim().slice(0, 800);
   const warnings: string[] = [];
-  let spec: Spec | undefined;
+  let spec: (Spec & { fallbackCategory?: string }) | undefined;
   let mode: Draft["mode"] = "rules";
   if (opts.model) {
     try {
       spec = await specFromModel(opts.model, text, opts.currency);
       mode = "llm";
     } catch (e) {
-      const why = (e as Error).message.replace(/s+/g, " ").slice(0, 120);
+      const why = (e as Error).message.replace(/\s+/g, " ").slice(0, 120);
       warnings.push(`The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : why}), so a simple rule-based reading was used. Check every field.`);
     }
   }
@@ -156,6 +159,13 @@ export async function draftMandate(opts: { text: string; currency: string; model
       if (!categories.includes(s)) { categories.push(s); labels.push(`${word} (not found in the catalog)`); }
       warnings.push(`I could not find "${word}" in the catalog, so it was added as typed and may match nothing. Try the category box below.`);
     }
+  }
+  // The catalog recognised nothing: keep the main noun the person used, as typed, so the field is not empty. It may match nothing; the warning says so.
+  if (categories.length === 0 && mode === "rules" && spec.fallbackCategory && slugOf(spec.fallbackCategory)) {
+    const s = slugOf(spec.fallbackCategory);
+    categories.push(s);
+    labels.push(`${spec.fallbackCategory} (not found in the catalog)`);
+    warnings.push(`I could not find "${spec.fallbackCategory}" in the catalog, so it was added as typed and may match nothing. Change it in the category box below.`);
   }
   if (categories.length === 0) warnings.push("No category was recognised. Add at least one in the box below.");
 
