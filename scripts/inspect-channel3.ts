@@ -24,6 +24,6 @@ for (const p of json.products ?? []) {
 }
 
 // The category tree for the first word of the query: what the mandate form's category lookup receives (one more API call).
-const word = query.split(/s+/).find((w) => w.length > 2) ?? query;
+const word = query.split(" ").find((w) => w.length > 2) ?? query;
 const cats = await fetch("https://api.trychannel3.com/v1/categories/search?query=" + encodeURIComponent(word) + "&limit=5", { headers: { "x-api-key": key } });
 console.log("categories for", word, "->", cats.ok ? JSON.stringify(await cats.json(), null, 1).slice(0, 2500) : "HTTP " + cats.status);
