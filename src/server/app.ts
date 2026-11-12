@@ -41,7 +41,7 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.get("/api/config", (c) => {
     const service = svc(c);
-    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), now: new Date().toISOString() });
+    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
   });
 
   // 1. mandate

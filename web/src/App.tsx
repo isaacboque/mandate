@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRun, type RunFn } from "./useRun";
 import { api, money, toCents, type Check, type Config, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
 import { Icon } from "./icons";
+import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
 
 type Step = 0 | 1 | 2 | 3;
 const STEPS = ["Mandate", "Ask", "Proposal", "Approve & pay"];
@@ -117,25 +118,32 @@ function describeMandate(m: Mandate): string {
 function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: Config; signed: SignedMandate | null; busy: boolean; run: RunFn; onSigned: () => void; onNext: () => void }) {
   const live = config.demoMode === "live";
   const sym = symbol(config.currency);
-  const shoeCats = live ? "athletic-shoes, soccer-shoes, sneakers" : "shoes";
+  const shoeCats = live ? ["athletic-shoes", "soccer-shoes", "sneakers"] : ["shoes"];
+  // What a person can pick without knowing the catalog: what it returned in this session, then what we know of it.
+  const knownCats = live ? ["athletic-shoes", "soccer-shoes", "sneakers", "in-ear-headphones"] : ["shoes", "socks", "balls", "bags", "clothing", "protection"];
+  const seenCats = config.seen?.categories ?? [];
+  const catSuggestions = [
+    ...seenCats.map((c) => ({ value: c.value, note: `${c.count} found` })),
+    ...knownCats.filter((k) => !seenCats.some((c) => c.value === k)).map((k) => ({ value: k })),
+  ];
+  const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
   const cur = signed?.mandate;
   const eur = (c: number) => String(c / 100);
   const [budget, setBudget] = useState(cur ? eur(cur.totalBudgetCents) : "100");
   const [cap, setCap] = useState(cur ? eur(cur.perItemCapCents) : "100");
-  const [cats, setCats] = useState(cur ? cur.allowedCategories.join(", ") : shoeCats);
-  const [merchants, setMerchants] = useState(cur?.allowedMerchants?.join(", ") ?? "");
+  const [cats, setCats] = useState<string[]>(cur ? cur.allowedCategories : shoeCats);
+  const [merchants, setMerchants] = useState<string[]>(cur?.allowedMerchants ?? []);
   const [qty, setQty] = useState(String(cur?.maxQuantityPerItem ?? 1));
   const [hours, setHours] = useState(24);
   const [auto, setAuto] = useState(cur?.autonomy.mode === "auto_under");
   const [threshold, setThreshold] = useState(cur?.autonomy.mode === "auto_under" ? eur(cur.autonomy.thresholdCents) : "50");
 
-  const list = (s: string) => s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
   const mandate = (): Mandate => ({
     currency: config.currency,
     totalBudgetCents: toCents(budget),
     perItemCapCents: toCents(cap),
-    allowedCategories: list(cats),
-    ...(list(merchants).length ? { allowedMerchants: list(merchants) } : {}),
+    allowedCategories: cats,
+    ...(merchants.length ? { allowedMerchants: merchants } : {}),
     maxQuantityPerItem: Number(qty),
     expiresAt: new Date(Date.now() + hours * 3600 * 1000).toISOString(),
     autonomy: auto ? { mode: "auto_under", thresholdCents: toCents(threshold) } : { mode: "ask_always" },
@@ -152,10 +160,10 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
   if (auto && toCents(threshold) > m.totalBudgetCents) hints.push("The auto-buy amount is above the total budget.");
 
   const presets = [
-    { name: "One pair of shoes", note: `Up to ${sym}100. Asks you first.`, set: () => { setBudget("100"); setCap("100"); setQty("1"); setCats(shoeCats); setMerchants(""); setAuto(false); } },
+    { name: "One pair of shoes", note: `Up to ${sym}100. Asks you first.`, set: () => { setBudget("100"); setCap("100"); setQty("1"); setCats(shoeCats); setMerchants([]); setAuto(false); } },
     live
-      ? { name: "A cheap pair, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}50.`, set: () => { setBudget("60"); setCap("60"); setQty("1"); setCats(shoeCats); setMerchants(""); setAuto(true); setThreshold("50"); } }
-      : { name: "Small extras, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}30.`, set: () => { setBudget("60"); setCap("40"); setQty("2"); setCats("socks, balls"); setMerchants(""); setAuto(true); setThreshold("30"); } },
+      ? { name: "A cheap pair, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}50.`, set: () => { setBudget("60"); setCap("60"); setQty("1"); setCats(shoeCats); setMerchants([]); setAuto(true); setThreshold("50"); } }
+      : { name: "Small extras, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}30.`, set: () => { setBudget("60"); setCap("40"); setQty("2"); setCats(["socks", "balls"]); setMerchants([]); setAuto(true); setThreshold("30"); } },
   ];
 
   return (
@@ -182,12 +190,18 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
 
         <fieldset className="fgroup">
           <legend>What it may buy</legend>
-          <label className="wide"><span>Categories <span className="muted">(comma separated)</span></span>
-            <input value={cats} onChange={(e) => setCats(e.target.value)} placeholder={shoeCats} />
-          </label>
-          <label className="wide"><span>Shops <span className="muted">(optional, any shop if empty)</span></span>
-            <input value={merchants} onChange={(e) => setMerchants(e.target.value)} placeholder={live ? "shoebacca.com, dickssportinggoods.com" : "futsalstore.example"} />
-          </label>
+          <TagInput
+            id="cats" label="Categories" hint="(what kind of thing)" values={cats} onChange={setCats}
+            normalize={normalizeCategory} format={humanize} placeholder="Type a category and press Enter"
+            suggestions={catSuggestions} suggestionsLabel={seenCats.length ? "Seen in your searches and known:" : "Known categories:"}
+            groups={live ? [{ label: "All shoes", values: shoeCats }] : []}
+          />
+          <p className="catnote">Anything outside these categories is blocked, even if it is cheap. Not sure of the name? Search first: the categories the catalog returns show up here, and a blocked product can be allowed with one click.</p>
+          <TagInput
+            id="shops" label="Shops" hint="(optional: any shop if empty)" values={merchants} onChange={setMerchants}
+            normalize={normalizeShop} placeholder={live ? "e.g. shoebacca.com" : "e.g. futsalstore.example"}
+            suggestions={shopSuggestions} suggestionsLabel="Seen in your searches:"
+          />
         </fieldset>
 
         <fieldset className="fgroup autonomy">

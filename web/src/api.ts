@@ -4,7 +4,7 @@ export type Mandate = {
   maxQuantityPerItem: number; expiresAt: string; autonomy: Autonomy;
 };
 export type SignedMandate = { mandate: Mandate; hash: string };
-export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; resettable: boolean; mandate: SignedMandate | null; spentCents: number; now: string };
+export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; resettable: boolean; mandate: SignedMandate | null; spentCents: number; seen: { categories: { value: string; count: number }[]; merchants: { value: string; count: number }[] }; now: string };
 export type MandatePatch = Partial<{ allowedCategories: string[]; allowedMerchants: string[]; perItemCapCents: number; totalBudgetCents: number }>;
 export type NearMiss = {
   productId: string; title: string; merchant: string; category: string; priceCents: number; currency: string; url: string; imageUrl?: string;

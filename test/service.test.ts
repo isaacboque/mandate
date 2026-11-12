@@ -287,3 +287,18 @@ describe("audit", () => {
     expect(steps).toEqual(expect.arrayContaining(["mandate.signed", "guardrails.checkCart", "execution.recheck", "payments.capture"]));
   });
 });
+
+describe("catalog facets (what to suggest in the mandate)", () => {
+  it("lists the categories and shops the searches returned, most common first, without flagged or out-of-stock products", async () => {
+    const { service } = setup();
+    expect(service.facets()).toEqual({ categories: [], merchants: [] });
+    await service.ask("Indoor futsal shoes");
+    const f = service.facets();
+    expect(f.categories[0]).toMatchObject({ value: "shoes" });
+    expect(f.categories[0].count).toBeGreaterThan(1);
+    const ids = f.merchants.map((m) => m.value);
+    expect(ids).toContain("futsalstore.example");
+    expect(ids).not.toContain("bestbuyz.example"); // only the poisoned listings come from this shop
+    expect(ids).not.toContain("retroboots.example"); // only an out-of-stock product
+  });
+});
