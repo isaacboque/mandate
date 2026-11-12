@@ -1,5 +1,5 @@
 import { productLooksPoisoned } from "./injection.js";
-import type { CatalogGateway, Product, SearchOptions } from "./types.js";
+import type { CatalogGateway, CategoryHit, Product, SearchOptions } from "./types.js";
 
 const BASE = "https://api.trychannel3.com";
 
@@ -8,7 +8,7 @@ type C3Product = {
   id: string;
   title?: string;
   description?: string | null;
-  category?: { slug?: string; title?: string } | null;
+  category?: { slug?: string; title?: string; path?: ({ slug?: string; title?: string } | string)[] } | null;
   offers?: C3Offer[];
   structured_attributes?: Record<string, string[]> | null;
   images?: { url?: string; is_main_image?: boolean }[] | null;
@@ -23,6 +23,7 @@ export class Channel3Catalog implements CatalogGateway {
   readonly name = "channel3";
   /** Identical searches within `cacheMs` (default 5 min) reuse the last answer: saves free-tier quota. getProduct is never cached. */
   private cache = new Map<string, { at: number; products: Product[] }>();
+  private catCache = new Map<string, { at: number; hits: CategoryHit[] }>();
 
   constructor(
     private apiKey: string,
@@ -55,6 +56,29 @@ export class Channel3Catalog implements CatalogGateway {
     return products;
   }
 
+  /** GET /v1/categories/search. Cached a day per query; a failed lookup (credits, outage) returns nothing instead of breaking the form. */
+  async categories(query: string, limit = 8): Promise<CategoryHit[]> {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const key = `${q}|${limit}`;
+    const hit = this.catCache.get(key);
+    if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return hit.hits;
+    let json: { categories?: { slug?: string; title?: string; path?: ({ slug?: string; title?: string } | string)[]; has_children?: boolean }[] } | null;
+    try {
+      json = (await this.call(`/v1/categories/search?query=${encodeURIComponent(q)}&limit=${Math.min(Math.max(limit, 1), 20)}`, { method: "GET" })) as typeof json;
+    } catch {
+      return [];
+    }
+    const hits = (json?.categories ?? []).filter((c) => c.slug).map((c) => ({
+      slug: c.slug!.toLowerCase(),
+      title: c.title ?? c.slug!,
+      path: (c.path ?? []).map((e) => (typeof e === "string" ? { slug: e.toLowerCase(), title: e } : { slug: (e.slug ?? "").toLowerCase(), title: e.title ?? e.slug ?? "" })).filter((e) => e.slug),
+      hasChildren: Boolean(c.has_children),
+    }));
+    this.catCache.set(key, { at: Date.now(), hits });
+    return hits;
+  }
+
   async getProduct(id: string): Promise<Product | null> {
     const cur = this.opts.currency ? `?currency=${encodeURIComponent(this.opts.currency)}` : "";
     const json = (await this.call(`/v1/products/${encodeURIComponent(id)}${cur}`, { method: "GET" })) as C3Product | null;
@@ -80,6 +104,7 @@ export class Channel3Catalog implements CatalogGateway {
       description,
       merchant: best.domain ?? "unknown",
       category: (p.category?.slug ?? p.category?.title ?? "").toLowerCase(),
+      categoryPath: pathOf(p),
       priceCents: Math.round(best.price!.price! * 100),
       currency: (best.price!.currency ?? "").toUpperCase(),
       attributes,
@@ -97,4 +122,11 @@ function imageOf(p: C3Product): string | undefined {
   const imgs = p.images ?? [];
   const url = (imgs.find((i) => i.is_main_image) ?? imgs[0])?.url;
   return url && url.startsWith("https://") ? url : undefined;
+}
+
+/** Root-to-leaf category slugs from a product's category path (objects or plain strings). */
+function pathOf(p: C3Product): string[] | undefined {
+  const raw = p.category?.path ?? [];
+  const slugs = raw.map((e) => (typeof e === "string" ? e : e?.slug ?? "")).map((s) => s.toLowerCase()).filter(Boolean);
+  return slugs.length ? slugs : undefined;
 }

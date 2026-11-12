@@ -302,3 +302,29 @@ describe("catalog facets (what to suggest in the mandate)", () => {
     expect(ids).not.toContain("retroboots.example"); // only an out-of-stock product
   });
 });
+
+describe("category tree through the whole flow", () => {
+  it("a mandate that allows the parent branch accepts products inside it", async () => {
+    const { service } = setup({ allowedCategories: ["footwear"] });
+    const p = (await service.ask(ASK)).proposals[0];
+    expect(p).toMatchObject({ blocked: false, status: "pending" });
+    await service.approve(p.id);
+    expect((await service.pay(p.id)).status).toBe("paid");
+  });
+  it("allowing a sibling branch does not", async () => {
+    const { service } = setup({ allowedCategories: ["apparel"] });
+    const r = await service.ask(ASK);
+    expect(r.proposals).toHaveLength(0);
+    expect(r.nearMisses.some((n) => n.failed.some((f) => f.name === "category"))).toBe(true);
+  });
+  it("the category lookup endpoint returns the tree position and is limited per visitor", async () => {
+    const { RateLimiter } = await import("../src/server/limits.js");
+    const { service } = setup();
+    const app = createApp(service, { demoMode: "mock", currency: "EUR" }, undefined, new RateLimiter(2, 0));
+    const r = await (await app.request("/api/categories?q=foot")).json();
+    expect(r.categories[0]).toMatchObject({ slug: "footwear", hasChildren: true });
+    expect((await (await app.request("/api/categories?q=f")).json()).categories).toEqual([]);
+    await app.request("/api/categories?q=shoes");
+    expect((await (await app.request("/api/categories?q=shoes")).json()).categories).toEqual([]);
+  });
+});

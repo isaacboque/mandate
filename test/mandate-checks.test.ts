@@ -100,3 +100,28 @@ describe("attributeMatches (size runs and US/EU style labels)", () => {
     expect(ok(mandate, { ...c, requiredAttributes: { size: "11" } }, "hard_attributes")).toBe(false);
   });
 });
+
+describe("category tree: allowing a branch allows what is inside it", () => {
+  const withPath = (path: string[] | undefined, category = "athletic-shoes") => line({ category, categoryPath: path });
+  it("passes when the product's own category or any ancestor is allowed", () => {
+    const path = ["footwear", "shoes", "athletic-shoes"];
+    expect(ok({ ...mandate, allowedCategories: ["athletic-shoes"] }, cart(withPath(path)), "category")).toBe(true);
+    expect(ok({ ...mandate, allowedCategories: ["shoes"] }, cart(withPath(path)), "category")).toBe(true);
+    expect(ok({ ...mandate, allowedCategories: ["footwear"] }, cart(withPath(path)), "category")).toBe(true);
+  });
+  it("blocks a sibling branch, a different leaf and a name that only looks similar", () => {
+    const path = ["footwear", "shoes", "athletic-shoes"];
+    expect(ok({ ...mandate, allowedCategories: ["apparel"] }, cart(withPath(path)), "category")).toBe(false);
+    expect(ok({ ...mandate, allowedCategories: ["sneakers"] }, cart(withPath(path)), "category")).toBe(false);
+    expect(ok({ ...mandate, allowedCategories: ["shoe"] }, cart(withPath(path)), "category")).toBe(false);
+  });
+  it("fails closed when the catalog gives no path: only the product's own category counts", () => {
+    expect(ok({ ...mandate, allowedCategories: ["shoes"] }, cart(withPath(undefined)), "category")).toBe(false);
+    expect(ok({ ...mandate, allowedCategories: ["athletic-shoes"] }, cart(withPath(undefined)), "category")).toBe(true);
+  });
+  it("says where the product sits when it is blocked", () => {
+    const r = checkCart({ ...mandate, allowedCategories: ["apparel"] }, cart(withPath(["footwear", "shoes", "athletic-shoes"])), NOW).find((x) => x.name === "category")!;
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain("footwear > shoes > athletic-shoes");
+  });
+});

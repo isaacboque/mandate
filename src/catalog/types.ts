@@ -10,6 +10,8 @@ export type Product = {
   description: string;
   merchant: string;
   category: string;
+  /** Slugs from the root category down to `category`; missing when the catalog has no hierarchy. */
+  categoryPath?: string[];
   priceCents: Cents;
   currency: string;
   attributes: Record<string, string>;
@@ -25,9 +27,14 @@ export type Product = {
 
 export type SearchOptions = { maxPriceCents?: Cents; limit?: number };
 
+/** A catalog category with its place in the tree. `path` runs from the root to the category itself. */
+export type CategoryHit = { slug: string; title: string; path: { slug: string; title: string }[]; hasChildren: boolean };
+
 export interface CatalogGateway {
   readonly name: string;
   search(query: string, opts?: SearchOptions): Promise<Product[]>;
   /** Live read of one product (used at execution time to re-check the price). */
   getProduct(id: string): Promise<Product | null>;
+  /** Looks categories up by name, with their tree position, so a person can allow a whole branch. Optional. */
+  categories?(query: string, limit?: number): Promise<CategoryHit[]>;
 }

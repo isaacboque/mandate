@@ -5,8 +5,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./server/app.js";
 import { serviceFromEnv } from "./server/deps.js";
 
-const { sessions, config, limiter, agentMode } = serviceFromEnv();
-const app = createApp(sessions, config, limiter);
+const { sessions, config, limiter, categoryLimiter, agentMode } = serviceFromEnv();
+const app = createApp(sessions, config, limiter, categoryLimiter);
 if (existsSync("web/dist")) {
   app.use("/*", serveStatic({ root: "./web/dist" }));
   app.get("*", serveStatic({ path: "./web/dist/index.html" }));

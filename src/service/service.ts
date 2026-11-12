@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import { runLlmAgent, runRulesAgent, type AgentCtx, type AgentRun } from "../agent/agent.js";
 import type { ApprovalQueue } from "../approval/queue.js";
-import type { CatalogGateway, Product } from "../catalog/types.js";
+import type { CatalogGateway, CategoryHit, Product } from "../catalog/types.js";
 import { allPass, checkCart } from "../mandate/check.js";
 import { signMandate, type SignedMandate } from "../mandate/sign.js";
 import type { Cart, CartLine, Mandate } from "../mandate/types.js";
@@ -26,7 +26,7 @@ export type ServiceDeps = {
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
-  productId: p.id, title: p.title, merchant: p.merchant, category: p.category, unitPriceCents: p.priceCents, quantity,
+  productId: p.id, title: p.title, merchant: p.merchant, category: p.category, categoryPath: p.categoryPath, unitPriceCents: p.priceCents, quantity,
   currency: p.currency, attributes: p.attributes, priceCheckedAt: p.priceCheckedAt, injectionFlag: p.injectionFlag,
 });
 
@@ -56,6 +56,10 @@ export class MandateService {
   }
   get agentMode(): "llm" | "rules" {
     return this.d.model ? "llm" : "rules";
+  }
+  /** Category lookup for the mandate form (the whole branch under a name). Empty when the catalog cannot do it. */
+  async searchCategories(query: string): Promise<CategoryHit[]> {
+    return (await this.d.catalog.categories?.(query, 8)) ?? [];
   }
   get isMock(): boolean {
     return this.d.payments instanceof MockPayments;

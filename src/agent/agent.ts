@@ -130,7 +130,7 @@ export async function runRulesAgent(ask: string, ctx: AgentCtx): Promise<AgentRu
   const merchants = m.allowedMerchants ?? [];
   const fits = found.find((p) =>
     p.inStock && !p.injectionFlag && p.currency === m.currency && p.priceCents <= cap &&
-    m.allowedCategories.includes(p.category) && (merchants.length === 0 || merchants.includes(p.merchant)) &&
+    [p.category, ...(p.categoryPath ?? [])].some((c) => m.allowedCategories.includes(c)) && (merchants.length === 0 || merchants.includes(p.merchant)) &&
     (want.size === undefined || attributeMatches(p.attributes.size, want.size)),
   );
   if (!fits) {
