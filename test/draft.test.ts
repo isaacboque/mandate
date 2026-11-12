@@ -110,3 +110,22 @@ describe("a draft is never a signed mandate", () => {
     expect((await post("/api/mandate", d.mandate)).status).toBe(201);
   });
 });
+
+describe("rules reader keeps a category even when the catalog does not know it", () => {
+  it("adds the main noun as typed, with a warning, instead of leaving the field empty", async () => {
+    const d = await draft("Wireless earbuds, €80 at most, only from bestbuy.com, valid for 4 hours.");
+    expect(d.mandate).toMatchObject({ totalBudgetCents: 8000, allowedMerchants: ["bestbuy.com"], allowedCategories: ["earbuds"] });
+    expect(d.hours).toBe(4);
+    expect(d.warnings.join(" ")).toMatch(/could not find "earbuds" in the catalog/);
+    expect(d.understood.join(" ")).toContain("earbuds (not found in the catalog)");
+  });
+  it("does not add the fallback when the catalog recognised a category", async () => {
+    const d = await draft("A futsal ball, €40 at most, only from sportdirect.example, valid for 4 hours.");
+    expect(d.mandate.allowedCategories).toEqual(["balls"]);
+  });
+  it("a model failure message keeps its letters (regression: s was replaced by a space)", async () => {
+    const broken = new MockLanguageModelV4({ doGenerate: async () => { throw new Error("connection reset by peer"); } });
+    const d = await draftMandate({ text: "Shoes, up to $50", currency: "EUR", model: broken as never, catalog, now: NOW });
+    expect(d.warnings.join(" ")).toContain("connection reset by peer");
+  });
+});

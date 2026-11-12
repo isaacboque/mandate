@@ -149,7 +149,10 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext }: { config: 
   const examples = [
     `One pair of indoor futsal shoes, up to ${sym}100, from any shop. Ask me before paying anything.`,
     `Small things like socks and balls, ${sym}60 in total, up to 2 of each. It may buy alone when the cart is under ${sym}30.`,
-    `Wireless earbuds, ${sym}80 at most, only from bestbuy.com, valid for 4 hours.`,
+    // The demo catalog has shoes, socks, balls, bags and clothing; the live catalog has everything, including earbuds.
+    live
+      ? `Wireless earbuds, ${sym}80 at most, only from bestbuy.com, valid for 4 hours.`
+      : `A futsal ball, ${sym}40 at most, only from sportdirect.example, valid for 4 hours.`,
   ];
   /** Fills the form from a draft. Nothing is signed: the person reviews every field and signs. */
   const applyDraft = (d: Draft) => {
