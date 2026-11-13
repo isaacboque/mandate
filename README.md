@@ -2,15 +2,17 @@
 
 > Agents shouldn't be trusted with money. They should be trusted with a mandate.
 
+**In 30 seconds:** you sign a spending mandate (budget, caps, categories, shops, expiry). A shopping agent searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model; it cannot move money. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
+
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
 
 The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but it cannot move money: the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout.
 
 ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-5-attack.png)
 
-**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; needs a sandbox buyer to pay, see docs/SUBMISSION.md). The free instances can take about 30 s to wake up.
+**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; needs a sandbox buyer to pay, paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
 
-Built for the PayPal AI Hackathon. Sandbox only: no real money moves.
+Started as a PayPal AI Hackathon project. Sandbox only: no real money moves. More: [case study](docs/CASE-STUDY.md) · [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT-MODEL.md) · [60-second demo script](docs/DEMO.md).
 
 ## How it works
 
@@ -85,6 +87,22 @@ npm run smoke:orders             # creates a 1.00 EUR sandbox order, prints the 
 
 Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal order and shows the link; approve it with your sandbox personal (buyer) account, then press **Capture payment**.
 
+## What is proven
+
+On the fixture catalog, with a simulated clock and mock payments (no keys):
+
+- **Spend safety 46/46**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
+- **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
+- **Guardrails 27/27** and **task success 12/12**.
+
+What this does not prove: it is not a test of a real LLM (see below), not a real-money test, and not a security review of the hosting. See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
+
+## PayPal and AI in this project
+
+- **PayPal:** Orders v2 in the sandbox is the only way money moves (create, buyer approves, capture), idempotent, behind the approval queue and a checkout re-check. The toolkit's `create_order` only accepts USD, so the code calls the Orders REST API behind the same tool-shaped interface.
+- **AI at runtime:** an optional LLM (Gemini by default; OpenAI or Anthropic by `LLM_PROVIDER`) drafts the mandate form and acts as the shopping agent, with propose-only tools. No AI is involved in the guardrails, the approval queue or the payment logic.
+- **AI in development:** most of the code was written with Claude Code under the author's direction; the author reviewed the pull requests and CI results.
+
 ## Evaluation
 
 `npm run eval` runs 46 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
@@ -98,10 +116,14 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
 <!-- eval:end -->
 
+### Try it against a real model (optional, paid calls)
+
+`npm run eval:real` runs 9 scenarios (6 task, 3 poisoned-listing) with a real LLM as the agent, on the same fixture catalog and the same independent oracle. Put your own key in your own `.env` (copy `.env.example`; `.env` is gitignored): `LLM_PROVIDER` plus `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. The script never prints or stores keys; it writes its report to `traces/real-model-eval.md` (gitignored). The exit code fails only if money moved outside a mandate; task and injection outcomes are reported, not gated, and cases answered by the fallback rules agent (quota, error) are flagged. CI keeps using the scripted model.
+
 ## Limits
 
 - **Sandbox only.** The merchant of record in the demo is my PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a real merchant handoff) is the next step, not built.
-- **The eval does not test a real LLM.** It uses the rules agent and scripted models. The guardrails hold whatever the model does, but how well a given LLM chooses products is not measured.
+- **The main eval does not test a real LLM.** It uses the rules agent and scripted models. The guardrails hold whatever the model does, but how well a given LLM chooses products is only measured by the opt-in `npm run eval:real`.
 - **Injection detection is regex-based and conservative.** It is one layer. The ones that matter are structural: the agent cannot pay, product text never reaches the system prompt, and guardrails run in code at proposal and at checkout.
 - **Price units from Channel3** are assumed to be decimal major units (e.g. 49.99); `npm run smoke:channel3` prints prices so you can confirm with your key.
 - State (proposals, approvals) is in memory and resets on restart. No accounts, shipping addresses, multi-currency or refunds.

@@ -13,6 +13,7 @@
     "smoke:channel3": "tsx scripts/smoke-channel3.ts",
     "smoke:orders": "tsx scripts/smoke-orders.ts",
     "eval": "tsx scripts/eval.ts",
+    "eval:real": "tsx scripts/eval-real-model.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
   "engines": {
