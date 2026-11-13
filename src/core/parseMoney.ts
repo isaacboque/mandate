@@ -1,14 +1,17 @@
 /**
  * Forgiving money input (Postel's law: accept what people type, show back one clean value).
  * Reads "90", "90€", "€90", "90 eur", "90,00", "1.234,56", "1,234.56" into integer cents.
- * Returns NaN when the text is not an amount. Never guesses between two readings that change
- * the value: a lone "1,234" is a thousand, "1,23" is one euro and 23 cents.
+ * Returns NaN when the text is not an amount. One documented guess: three digits after a lone separator
+ * ("1,234", "1.234") read as thousands, two or fewer ("1,23") as decimals. The form shows the clean value back on blur,
+ * so a wrong guess is visible before signing. Spaces count only as thousands groups of exactly three digits ("1 234,50").
  */
 const CURRENCY_WORDS = /euros?|eur|usd|gbp|dollars?|pounds?/gi;
 const GROUPED = /^\d{1,3}$/;
 
 export function parseMoney(text: string): number {
-  const t = text.replace(CURRENCY_WORDS, "").replace(/[€$£\s\u00a0\u202f]/g, "");
+  const stripped = text.replace(CURRENCY_WORDS, " ").replace(/[€$£]/g, " ").trim();
+  // A space between digits is a thousands separator only before a group of exactly three digits ("1 234"); "9 0" or "90 50" is not an amount.
+  const t = stripped.replace(/(?<=\d)[   ](?=\d{3}(?!\d))/g, "");
   if (!/^[\d.,]+$/.test(t) || !/\d/.test(t)) return NaN;
 
   const thousands = (parts: string[]) => GROUPED.test(parts[0]) && parts.slice(1).every((p) => p.length === 3);

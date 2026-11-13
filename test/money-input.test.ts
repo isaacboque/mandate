@@ -10,7 +10,7 @@ describe("forgiving money input (Postel)", () => {
     expect(parseMoney(typed)).toBe(cents);
   });
 
-  it.each(["", "   ", "abc", "€", "-5", "9 0 0x", "1,2,3", "90,00,00", "NaN", "Infinity", "1e3"])("rejects %j", (typed) => {
+  it.each(["", "   ", "abc", "€", "-5", "9 0 0x", "1,2,3", "90,00,00", "9 0", "1 2", "90 eur 50", "10 100x", "NaN", "Infinity", "1e3"])("rejects %j", (typed) => {
     expect(Number.isNaN(parseMoney(typed))).toBe(true);
   });
 

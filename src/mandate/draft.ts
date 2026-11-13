@@ -59,8 +59,8 @@ async function specFromModel(model: LanguageModel, text: string, currency: strin
   return got;
 }
 
-// An amount with a currency mark: "90€", "€ 90", "90,00 eur", "$1,000", "1.000 €", "1 000 €". Thousands groups are exactly three digits.
-const NUM = String.raw`(?:\d{1,3}(?:[ ., ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
+// An amount with a currency mark: "90€", "€ 90", "90,00 eur", "$1,000", "1.000 €". Thousands groups are exactly three digits; a plain space is not a separator here ("size 10 100€").
+const NUM = String.raw`(?:\d{1,3}(?:[., ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
 const MONEY = new RegExp(String.raw`(?:[$€£]\s*(${NUM})|(${NUM})\s*(?:[$€£]|usd\b|eur\b|euros?\b|dollars?\b|bucks\b))`, "gi");
 
 const STOP = new Set(["want", "buy", "with", "from", "that", "this", "than", "only", "should", "would", "could", "have", "will", "just", "into", "when", "ask", "first", "before", "paying", "pay", "anything", "total", "most", "much", "each", "every", "item", "items", "pair", "pairs", "unit", "units", "shop", "shops", "valid", "hour", "hours", "days", "day", "week", "alone", "automatically", "without", "asking", "under", "over", "about", "agent", "please", "some", "kind", "kinds", "stuff", "things", "thing", "like", "also", "same", "such", "dollar", "dollars", "euro", "euros", "money", "spend", "spent", "allow", "allowed", "mandate", "cart", "least", "more", "less", "many", "need", "wants", "make", "give", "tell"]);

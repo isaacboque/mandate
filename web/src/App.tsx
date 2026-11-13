@@ -271,7 +271,7 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
         ))}
       </div>
 
-      <div className="mform" onKeyDown={(e) => { if (e.key === "Enter" && !e.defaultPrevented && e.target instanceof HTMLInputElement && e.target.type !== "radio" && !busy && problems.length === 0) { e.preventDefault(); submitPrimary(); } }}>
+      <div className="mform" onKeyDown={(e) => { if (e.key === "Enter" && !e.defaultPrevented && !e.nativeEvent.isComposing && e.target instanceof HTMLInputElement && e.target.type === "text" && !busy && problems.length === 0) { e.preventDefault(); submitPrimary(); } }}>
         <fieldset className="fgroup">
           <legend>Spending limits</legend>
           <label>Total budget<MoneyInput sym={sym} value={budget} onChange={setBudget} /></label>
