@@ -13,6 +13,7 @@
     "smoke:channel3": "tsx scripts/smoke-channel3.ts",
     "smoke:orders": "tsx scripts/smoke-orders.ts",
     "eval": "tsx scripts/eval.ts",
+    "screenshots": "tsx scripts/screenshots.ts",
     "eval:real": "tsx scripts/eval-real-model.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
@@ -25,6 +26,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^10.0.7",
+    "playwright-core": "^1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tsx": "^4.23.15",
