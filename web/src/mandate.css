@@ -54,7 +54,7 @@ textarea.ask { font-size: 16px; resize: vertical; margin-bottom: 10px; line-heig
 .example.on { border-color: var(--brand); background: var(--brand-soft); }
 .working { display: flex; gap: 14px; align-items: center; margin: 18px 0 4px; padding: 14px 16px; background: var(--paper); border-radius: 12px; }
 .working p { margin: 2px 0 0; }
-.spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--brand); animation: spin .9s linear infinite; flex: none; }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--brand); animation: spin 1s cubic-bezier(.45, .05, .55, .95) infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ----- proposals ----- */
@@ -89,7 +89,7 @@ textarea.ask { font-size: 16px; resize: vertical; margin-bottom: 10px; line-heig
 details.passed { margin-top: 14px; }
 details.passed summary { color: var(--good); font-weight: 600; font-size: 14px; }
 /* the one authored moment: the guardrails tick in one after another */
-details.passed[open] .checks li { animation: tick .2s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(min(var(--i), 4) * 20ms); }
+details.passed[open] .checks li { animation: tick .2s var(--ease-out) both; animation-delay: calc(min(var(--i), 3) * 20ms); }
 @keyframes tick { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 .blockedmsg { margin: 14px 0 0; color: var(--bad); font-size: 14px; }
 
@@ -184,7 +184,7 @@ details.passed[open] .checks li { animation: tick .2s cubic-bezier(.16, 1, .3, 1
 
 /* ----- UX principles: motion, hit areas, focus ----- */
 /* Frequent actions (approve, reject, pay, typing) get colour changes only: 120 ms, ease-out, no movement.
-   Every other animation in this file is under 300 ms with ease-out; the spinner is the only constant-speed motion (it is a progress signal). */
+   Every animation in this file is under 300 ms (delay included) and eased; nothing moves at constant speed. */
 button, .chip, .example, .preset, .tagbox, .autonomy .opt, .stepper button b {
   transition: background-color .12s ease-out, border-color .12s ease-out, color .12s ease-out, box-shadow .12s ease-out;
 }
@@ -206,4 +206,68 @@ button, .chip, .example, .preset, .tagbox, .autonomy .opt, .stepper button b {
 input[aria-invalid="true"] { border-color: var(--bad) !important; }
 @media (prefers-reduced-motion: reduce) {
   button, .chip, .example, .preset, .tagbox, .autonomy .opt, .stepper button b { transition: none; }
+}
+
+/* ----- the 12 animation principles, applied (Wiki: UI Animation & UX Principles) -----
+   Frequency rule first: approve, reject, pay, typing and navigation only get a 60 ms press and a 120 ms colour change.
+   Flourish is reserved for the rare moments: mandate signed (stamp), payment captured (pop), attack blocked (shake). */
+:root {
+  --ease-out: cubic-bezier(.16, 1, .3, 1);          /* slow out: fast start, soft landing */
+  --ease-in-out: cubic-bezier(.45, .05, .55, .95);  /* slow in and slow out */
+}
+
+/* Staging: one panel arrives at a time, so the eye goes to it. 6 px, 180 ms. */
+.stage { animation: stage .18s var(--ease-out) both; }
+@keyframes stage { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* Messages appear instead of blinking in. */
+.alert, .ok, .working, .understood, .hintline, .tagwarn { animation: stage .16s var(--ease-out) both; }
+
+/* Anticipation + squash: the control dips 60 ms under the finger before it acts. */
+.primary:active:not(:disabled), .ghost:active:not(:disabled), .chip:active:not(:disabled), .example:active, .preset:active {
+  transform: scale(.975, .96); transition-duration: .06s;
+}
+button { transition-property: background-color, border-color, color, box-shadow, transform; }
+
+/* Solid drawing: raised things lift a little (depth), 120 ms. */
+.primary:hover:not(:disabled) { box-shadow: 0 6px 14px -8px rgba(23, 26, 43, .55); }
+.example:hover, .preset:hover { box-shadow: 0 6px 14px -10px rgba(23, 26, 43, .4); transform: translateY(-1px); }
+.example:active, .preset:active { transform: scale(.975, .96); }
+
+/* Rare moment 1, mandate signed: the seal is stamped. It comes in along an arc (translate + rotate), is squashed on impact,
+   overshoots (follow through) and settles. 280 ms. */
+.seal.stamp { animation: stamp .28s var(--ease-out) both; transform-origin: 20% 40%; }
+@keyframes stamp {
+  0% { opacity: 0; transform: translate(12px, -16px) rotate(5deg) scale(1.2); }
+  55% { opacity: 1; transform: translate(0, 2px) rotate(-.8deg) scale(.97, .94); }
+  80% { transform: translate(0, -1px) rotate(.3deg) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+/* Secondary action: the hash badge settles a beat after the seal lands, from a stronger tilt than it rests at. */
+.seal.stamp .seal-hash b { animation: badge .22s .06s var(--ease-out) both; }
+@keyframes badge { from { opacity: 0; transform: rotate(-7deg) scale(1.15); } to { opacity: 1; transform: rotate(-1.5deg); } }
+
+/* Rare moment 2, payment captured: the amount pops past its size (exaggeration) and settles; the badge follows. 280 ms. */
+.just-paid .bigamt { animation: pop .28s var(--ease-out) both; transform-origin: left center; }
+@keyframes pop { 0% { opacity: .3; transform: scale(.88); } 55% { opacity: 1; transform: scale(1.12); } 100% { transform: none; } }
+.just-paid .badge.good { animation: stage .18s .08s var(--ease-out) both; }
+
+/* Rare moment 3, attack blocked: the red verdict recoils. A small pull the other way first (anticipation), then it shakes
+   and dies out. 280 ms. */
+.verdict.shake { animation: shake .28s var(--ease-out) both; }
+@keyframes shake {
+  0% { transform: translateX(0); } 12% { transform: translateX(3px); } 32% { transform: translateX(-8px); }
+  52% { transform: translateX(6px); } 72% { transform: translateX(-3px); } 100% { transform: none; }
+}
+
+/* Secondary action on every guardrail row: the tick icon pops in with its row (it is the point of the row). */
+details.passed[open] .checks .pass .icon { animation: iconpop .22s var(--ease-out) both; animation-delay: calc(min(var(--i), 3) * 20ms); }
+@keyframes iconpop { 0% { transform: scale(.4); } 60% { transform: scale(1.2); } 100% { transform: none; } }
+/* Follow through on the stepper: the dot of the step you arrive at settles in with a ring. 160 ms. */
+.stepper button.on b { animation: ring .16s var(--ease-out) both; }
+@keyframes ring { from { box-shadow: 0 0 0 0 var(--brand-soft); } to { box-shadow: 0 0 0 4px var(--brand-soft); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage, .alert, .ok, .working, .understood, .hintline, .tagwarn, .seal.stamp, .seal.stamp .seal-hash b, .just-paid .bigamt, .just-paid .badge.good,
+  .verdict.shake, details.passed[open] .checks .pass .icon, .stepper button.on b { animation: none; }
+  .primary:active:not(:disabled), .ghost:active:not(:disabled), .chip:active:not(:disabled), .example:active, .preset:active, .example:hover, .preset:hover { transform: none; }
 }

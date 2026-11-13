@@ -26,6 +26,11 @@ export default function App() {
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
   const [traceOpen, setTraceOpen] = useState(true);
   const { busy, error, setError, run } = useRun();
+  // The rare moments that earn a flourish (motion principles): a mandate was just signed, an attack was just blocked.
+  const [fresh, setFresh] = useState<{ kind: "signed" | "attack"; id?: string }>();
+  useEffect(() => { setFresh((f) => (f && ((f.kind === "signed" && step > 1) || (f.kind === "attack" && step !== 2)) ? undefined : f)); }, [step]);
+  const signedNow = () => { setFresh({ kind: "signed" }); refresh(); };
+  const attacked = (p: Proposal) => { upsert(p); setFresh({ kind: "attack", id: p.id }); setStep(2); };
 
   const refresh = () => api.config().then(setConfig).catch((e) => setError(e.message));
   // Reloading the page must not lose the session: restore the mandate and the proposals from the server.
@@ -83,16 +88,18 @@ export default function App() {
 
         {error && <div className="alert" role="alert">{error}</div>}
 
-        {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={refresh} onNext={() => setStep(1)} onResult={gotResult} />}
+        <div key={step} className="stage">
+        {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={signedNow} onNext={() => setStep(1)} onResult={gotResult} />}
         {step === 1 && signed && config && (
           <AskStep
-            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={refresh} initialText={lastAsk}
+            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={signedNow} initialText={lastAsk} freshSeal={fresh?.kind === "signed"}
             onResult={gotResult}
-            onAttack={(p) => { upsert(p); setStep(2); }}
+            onAttack={attacked}
           />
         )}
-        {step === 2 && signed && <ProposalStep proposals={proposals} busy={busy} run={run} onReview={(id) => { setSelectedId(id); setStep(3); }} onAttack={upsert} onAskAgain={() => setStep(1)} />}
+        {step === 2 && signed && <ProposalStep proposals={proposals} busy={busy} run={run} onReview={(id) => { setSelectedId(id); setStep(3); }} onAttack={attacked} freshId={fresh?.kind === "attack" ? fresh.id : undefined} onAskAgain={() => setStep(1)} />}
         {step === 3 && selected && config && <PayStep p={selected} config={config} busy={busy} run={run} onChange={change} onAskAgain={() => setStep(1)} />}
+        </div>
 
         {config?.resettable && (
           <footer className="foot">
@@ -332,10 +339,10 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
 }
 
 /** The signed mandate, drawn as the document it is. */
-function Seal({ signed, spentCents = 0 }: { signed: SignedMandate; spentCents?: number }) {
+function Seal({ signed, spentCents = 0, stamp }: { signed: SignedMandate; spentCents?: number; stamp?: boolean }) {
   const m = signed.mandate;
   return (
-    <div className="seal" aria-label="Signed mandate">
+    <div className={`seal ${stamp ? "stamp" : ""}`} aria-label="Signed mandate">
       <div className="seal-hash"><span className="seal-title"><Icon name="shield" size={16} /> Signed mandate</span><b className="mono">{signed.hash}</b></div>
       <dl>
         <dt>Budget</dt><dd>{money(m.totalBudgetCents, m.currency)}{spentCents > 0 && <span className="left"> · {money(Math.max(m.totalBudgetCents - spentCents, 0), m.currency)} left</span>}</dd>
@@ -351,7 +358,7 @@ function Seal({ signed, spentCents = 0 }: { signed: SignedMandate; spentCents?: 
 }
 
 /* ---------- 2. Ask ---------- */
-function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack, initialText }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void; onAttack: (p: Proposal) => void; initialText?: string }) {
+function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack, initialText, freshSeal }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void; onAttack: (p: Proposal) => void; initialText?: string; freshSeal?: boolean }) {
   const sym = symbol(config.currency);
   const live = config.demoMode === "live";
   const examples = live
@@ -376,6 +383,7 @@ function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResu
   }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, text.trim()));
   return (
     <section className="card">
+      {freshSeal && <Seal signed={signed} spentCents={config.spentCents} stamp />}
       <h2>What should it buy?</h2>
       <p className="muted hint">Say it in your own words. The agent searches the catalog and proposes a cart. It cannot pay.</p>
       <textarea
@@ -422,7 +430,7 @@ function AttackButton({ busy, run, onAttack }: { busy: boolean; run: RunFn; onAt
 }
 
 /* ---------- 3. Proposal ---------- */
-function ProposalStep({ proposals, busy, run, onReview, onAttack, onAskAgain }: { proposals: Proposal[]; busy: boolean; run: RunFn; onReview: (id: string) => void; onAttack: (p: Proposal) => void; onAskAgain: () => void }) {
+function ProposalStep({ proposals, busy, run, onReview, onAttack, onAskAgain, freshId }: { proposals: Proposal[]; busy: boolean; run: RunFn; onReview: (id: string) => void; onAttack: (p: Proposal) => void; onAskAgain: () => void; freshId?: string }) {
   return (
     <section>
       <div className="card head">
@@ -430,7 +438,7 @@ function ProposalStep({ proposals, busy, run, onReview, onAttack, onAskAgain }: 
         <p className="muted hint">Every cart is checked by code outside the model before anyone can approve it.</p>
         <div className="actions tight"><button className="ghost" onClick={onAskAgain}>Ask again</button><AttackButton busy={busy} run={run} onAttack={onAttack} /></div>
       </div>
-      {proposals.map((p) => <ProposalCard key={p.id} p={p} onReview={p.blocked ? undefined : () => onReview(p.id)} />)}
+      {proposals.map((p) => <ProposalCard key={p.id} p={p} fresh={p.id === freshId} onReview={p.blocked ? undefined : () => onReview(p.id)} />)}
     </section>
   );
 }
@@ -455,12 +463,12 @@ function CheckRow({ c, i }: { c: Check; i: number }) {
   );
 }
 
-function ProposalCard({ p, onReview }: { p: Proposal; onReview?: () => void }) {
+function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => void; fresh?: boolean }) {
   const failed = p.checks.filter((c) => !c.ok);
   const passed = p.checks.filter((c) => c.ok);
   return (
     <article className={`card pcard ${p.blocked ? "blocked" : ""}`}>
-      <div className={`verdict ${p.blocked ? "bad" : "good"}`}>
+      <div className={`verdict ${p.blocked ? "bad" : "good"} ${fresh && p.blocked ? "shake" : ""}`}>
         <Icon name={p.blocked ? "cross" : "shield"} size={18} />
         <b>{p.blocked ? `Blocked: ${failed.length} of ${p.checks.length} checks failed` : `Inside your mandate: ${passed.length} of ${p.checks.length} checks passed`}</b>
       </div>
@@ -533,7 +541,8 @@ function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; 
   const link = p.order?.approveUrl?.startsWith("http") ? p.order.approveUrl : undefined;
   // Feedback on the pressed button in the same frame (Doherty): the label says what is running, the other buttons stay disabled.
   const [doing, setDoing] = useState<"approve" | "reject" | "pay">();
-  const act = (what: "approve" | "reject" | "pay", fn: () => Promise<Proposal>) => { setDoing(what); return run(fn).then((r) => r && onChange(r)).finally(() => setDoing(undefined)); };
+  const [justPaid, setJustPaid] = useState(false);
+  const act = (what: "approve" | "reject" | "pay", fn: () => Promise<Proposal>) => { setDoing(what); return run(fn).then((r) => { if (r) { if (what === "pay" && r.status === "paid") setJustPaid(true); onChange(r); } }).finally(() => setDoing(undefined)); };
   return (
     <section>
       <div className="card"><Timeline p={p} /></div>
@@ -560,7 +569,7 @@ function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; 
           </>
         )}
         {p.status === "paid" && (
-          <div className="receipt">
+          <div className={`receipt ${justPaid ? "just-paid" : ""}`}>
             <h2>Paid <span className="badge good">{p.autoApproved ? "by the mandate" : "approved by you"}</span></h2>
             <p className="bigamt mono">{money(p.totalCents, p.currency)}</p>
             <dl>
