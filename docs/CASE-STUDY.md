@@ -1,43 +1,10 @@
-# Devpost submission: Mandate
+# Mandate: case study
 
-## Before you submit (Isaac)
+Give a shopping agent a signed mandate, not your wallet. This is the long version of the project: what it does, how it is built, what went wrong and what it still cannot do. Sandbox only: no real money moves.
 
-- [x] Smoke tests with real keys: Channel3 prices are decimal USD, PayPal sandbox order created and captured.
-- [x] Demo service: https://mandate-gb6t.onrender.com. Live service: https://mandate-live-7q2i.onrender.com.
-- [ ] Video recorded, public on YouTube, link below (under 3 minutes, no copyrighted music or marks).
-- [ ] Sandbox buyer (a throwaway account) written into "Testing instructions" in Devpost.
-- [ ] Devpost: can one person submit two projects (Even Steven and Mandate)? If not, submit only Mandate.
-- [ ] Reset the demo (button at the bottom of the demo service) and wake both services a few minutes before submitting.
-- [ ] Submit before Thursday 12 Nov 2026, 21:00 Madrid (12:00 PT). Aim for 18:00.
-
-Links to paste: GitHub `https://github.com/isaacboque/mandate` · Live demo `https://mandate-gb6t.onrender.com` · Live mode `https://mandate-live-7q2i.onrender.com` · Video `[video URL]`
+Links: [GitHub](https://github.com/isaacboque/mandate) · [live demo](https://mandate-gb6t.onrender.com) (fixtures, simulated payments, no keys) · [live mode](https://mandate-live-7q2i.onrender.com) (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, so the demo mode is the easy way to try it). Free instances can take about 30 s to wake up.
 
 ---
-
-## Testing instructions (paste into Devpost)
-
-- **Demo, no setup:** https://mandate-gb6t.onrender.com is the demo mode (fixture catalog, simulated PayPal, rules agent). Each visitor has their own session. Sign a mandate, ask, approve, and use **Try an attack**.
-- **Live, real services:** https://mandate-live-7q2i.onrender.com uses the real Channel3 catalog and PayPal sandbox. To complete the payment you need a PayPal **sandbox buyer**: [Isaac: sandbox buyer email and password, a throwaway sandbox account]. The page shows an "Approve in PayPal sandbox" link; approve with that buyer, come back, and press **Capture payment**. The live instance limits searches per visitor and per day to protect free quotas.
-- **Run it yourself:** see the README ("Run it in 2 minutes" and "Run it live").
-
----
-
-## Title
-
-Mandate
-
-## Tagline (49 characters)
-
-Give a shopping agent a mandate, not your wallet.
-
-## Prize tracks
-
-- **Best Use of Agentic Commerce:** the agent shops end to end (search, compare, propose, pay), but spending authority lives in a signed mandate that code enforces.
-- **Best Use of PayPal + AI:** PayPal Orders v2 in the sandbox (create, buyer approval, capture) is the only way money moves, behind an approval queue and a re-check at checkout.
-- **Channel3 sponsor prize:** the live catalog is Channel3 search and product detail; the same interface is backed by fixtures for the demo and the eval.
-- **Render credits:** deployed as two free Render web services, a demo one (`render.yaml`) and a live one with the real catalog and PayPal sandbox (`render.live.yaml`).
-
-## Description
 
 ### Inspiration
 
@@ -57,13 +24,13 @@ The key decision is where the power sits. The agent has three tools: search, get
 
 Product titles and descriptions never go into the system prompt. They reach the model as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them. Payments go through PayPal Orders v2 in the sandbox with idempotency, and a mock gateway follows the same rules for the demo. Everything is traced to JSONL and shown live in the UI.
 
-I wrote 46 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result: spend safety 100% (46/46), injection resistance 7/7, task success 12/12. I also broke two guardrails on purpose to check that the eval fails when it should.
+I wrote 46 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result on the fixture catalog: spend safety 100% (46/46), injection resistance 7/7, task success 12/12. I also broke two guardrails on purpose to check that the eval fails when it should.
 
 ### Challenges
 
 PayPal's agent toolkit `create_order` only accepts USD, and I wanted euros, so I call the Orders v2 REST API directly behind the same tool-shaped interface. Real data is messy: Channel3's docs don't state price units (I confirmed decimal USD with a smoke script), sizes come as US labels inside variants, and categories form a tree, so the guardrails fail closed whenever data is missing and the mandate form looks categories up in the catalog's own tree. And time: I had about a day, so I reused the trace, approval-queue pattern and design system from my earlier project, Even Steven, and wrote the rest new.
 
-### Accomplishments
+### What worked
 
 A poisoned listing can fool the model but cannot move money, and I can show that on screen in the first fifteen seconds. The eval proves it for 46 scenarios, including three ways of trying to bypass the approval queue.
 
@@ -79,7 +46,7 @@ A real merchant handoff (paying the merchant behind a listing instead of my sand
 
 TypeScript, Node.js, Hono, React, Vite, Vercel AI SDK, Google Gemini, PayPal Orders v2 (sandbox), Channel3 API, Vitest, GitHub Actions, Render.
 
-## AI tools used
+## How AI was used
 
 - **Claude Code (Claude Sonnet 5.5)** wrote most of the code under my direction: the plan, tests, guardrails, catalog, payments, agent, UI and eval. I reviewed the pull requests and CI results.
 - **Google Gemini 2.5 Flash** (via the Vercel AI SDK) is the optional shopping agent at runtime. Without a key, a deterministic rules agent is used.
