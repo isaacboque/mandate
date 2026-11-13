@@ -129,3 +129,14 @@ describe("rules reader keeps a category even when the catalog does not know it",
     expect(d.warnings.join(" ")).toContain("connection reset by peer");
   });
 });
+
+describe("rules reader accepts the amounts people type (Postel)", () => {
+  const total = async (text: string) => (await draft(text)).mandate.totalBudgetCents;
+  it.each([
+    ["Indoor futsal shoes, max 90€", 9000], ["Indoor futsal shoes, max € 90", 9000], ["Indoor futsal shoes, max 90 EUR", 9000],
+    ["Indoor futsal shoes, max 90,00 €", 9000], ["Indoor futsal shoes, max 90.50 eur", 9050],
+    ["Indoor futsal shoes, max 1.000 €", 100000], ["Indoor futsal shoes, max $1,000", 100000], ["Indoor futsal shoes, max 1 000 €", 100000],
+  ])("%s -> %i cents", async (text, cents) => {
+    expect(await total(text)).toBe(cents);
+  });
+});

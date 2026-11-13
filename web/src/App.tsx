@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useRun, type RunFn } from "./useRun";
 import { api, money, toCents, type Check, type Config, type Draft, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
 import { Icon } from "./icons";
 import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
+import { formatMoneyInput, parseMoney } from "./moneyInput";
 
 type Step = 0 | 1 | 2 | 3;
 const STEPS = ["Request & limits", "Ask", "Proposal", "Approve & pay"];
@@ -117,6 +118,25 @@ function describeMandate(m: Mandate): string {
   return `Up to ${money(m.totalBudgetCents, cur)} in total, ${money(m.perItemCapCents, cur)} per item, at most ${m.maxQuantityPerItem} of each. Only ${m.allowedCategories.join(", ")}, ${where}. ${alone}`;
 }
 
+/** Enter sends a one-line request; Shift+Enter adds a line; Ctrl/Cmd+Enter also sends. Never while an IME is composing. */
+const sendKey = (e: KeyboardEvent) => e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
+
+/** A money field that takes "90", "90€", "€90", "90 eur" or "90,00" and shows back one clean value on leaving the field. */
+function MoneyInput({ sym, value, onChange, disabled, inline, label }: { sym: string; value: string; onChange: (v: string) => void; disabled?: boolean; inline?: boolean; label?: string }) {
+  const cents = parseMoney(value);
+  const invalid = value.trim() !== "" && Number.isNaN(cents);
+  return (
+    <span className={`cur ${inline ? "inline" : ""}`}>
+      <i>{sym}</i>
+      <input
+        inputMode="decimal" autoComplete="off" aria-label={label} aria-invalid={invalid || undefined} value={value} disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => { const clean = formatMoneyInput(cents); if (clean && clean !== value) onChange(clean); }}
+      />
+    </span>
+  );
+}
+
 function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: { config: Config; signed: SignedMandate | null; busy: boolean; run: RunFn; onSigned: () => void; onNext: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void }) {
   const live = config.demoMode === "live";
   const sym = symbol(config.currency);
@@ -137,7 +157,7 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
     }));
   const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
   const cur = signed?.mandate;
-  const eur = (c: number) => String(c / 100);
+  const eur = (c: number) => formatMoneyInput(c) ?? "";
   const [budget, setBudget] = useState(cur ? eur(cur.totalBudgetCents) : "100");
   const [cap, setCap] = useState(cur ? eur(cur.perItemCapCents) : "100");
   const [cats, setCats] = useState<string[]>(cur ? cur.allowedCategories : shoeCats);
@@ -202,6 +222,11 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
   if (m.perItemCapCents > m.totalBudgetCents) hints.push("The per-item cap is above the total budget, so the total is the real limit.");
   if (auto && toCents(threshold) > m.totalBudgetCents) hints.push("The auto-buy amount is above the total budget.");
 
+  const signOnly = () => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } });
+  const hasDraft = Boolean(draft) && describe.trim().length >= 3;
+  /** What Enter does in the limits form: the same as the primary button. */
+  const submitPrimary = () => (hasDraft ? signAndSearch() : signOnly());
+
   const presets = [
     { name: "One pair of shoes", note: `Up to ${sym}100. Asks you first.`, set: () => { setBudget("100"); setCap("100"); setQty("1"); setCats(shoeCats); setMerchants([]); setAuto(false); } },
     live
@@ -219,14 +244,14 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
         <textarea
           id="describe" className="ask" rows={3} value={describe} onChange={(e) => setDescribe(e.target.value)}
           placeholder={examples[0]}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && describe.trim().length >= 3) run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d)); }}
+          onKeyDown={(e) => { if (sendKey(e) && !busy && describe.trim().length >= 3) { e.preventDefault(); run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d)); } }}
         />
         <div className="examples" role="group" aria-label="Examples">
           {examples.map((x) => <button key={x} type="button" className="example" onClick={() => setDescribe(x)}><b>{x}</b></button>)}
         </div>
         {busy && <Working live={config.agent === "llm"} />}
         <div className="actions tight">
-          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>Draft the limits</button>
+          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>{busy ? "Drafting…" : "Draft the limits"}</button>
           <span className="muted small">The assistant only drafts. You review and sign; the agent does not search before that.</span>
         </div>
         {draft && !busy && (
@@ -246,11 +271,11 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
         ))}
       </div>
 
-      <div className="mform">
+      <div className="mform" onKeyDown={(e) => { if (e.key === "Enter" && !e.defaultPrevented && e.target instanceof HTMLInputElement && e.target.type !== "radio" && !busy && problems.length === 0) { e.preventDefault(); submitPrimary(); } }}>
         <fieldset className="fgroup">
           <legend>Spending limits</legend>
-          <label>Total budget<span className="cur"><i>{sym}</i><input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} /></span></label>
-          <label>Max per item<span className="cur"><i>{sym}</i><input inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} /></span></label>
+          <label>Total budget<MoneyInput sym={sym} value={budget} onChange={setBudget} /></label>
+          <label>Max per item<MoneyInput sym={sym} value={cap} onChange={setCap} /></label>
           <label>Max quantity per item<input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} /></label>
           <label>Valid for
             <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>{HOURS.map((o) => <option key={o.h} value={o.h}>{o.label}</option>)}</select>
@@ -279,7 +304,7 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
           <label className={`opt ${!auto ? "on" : ""}`}><input type="radio" name="auto" checked={!auto} onChange={() => setAuto(false)} /> Nothing: ask me every time</label>
           <label className={`opt ${auto ? "on" : ""}`}>
             <input type="radio" name="auto" checked={auto} onChange={() => setAuto(true)} /> Buy alone when the cart is under
-            <span className="cur inline"><i>{sym}</i><input inputMode="decimal" aria-label="Auto-buy amount" value={threshold} onChange={(e) => setThreshold(e.target.value)} disabled={!auto} /></span>
+            <MoneyInput sym={sym} value={threshold} onChange={setThreshold} disabled={!auto} inline label="Auto-buy amount" />
           </label>
         </fieldset>
       </div>
@@ -291,13 +316,13 @@ function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: 
 
       <div className="actions">
         {signed && <button className="ghost" onClick={onNext} disabled={busy}>Keep the signed mandate</button>}
-        {draft && describe.trim().length >= 3 ? (
+        {hasDraft ? (
           <>
-            <button className="ghost" disabled={busy || problems.length > 0} onClick={() => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } })}>Sign only</button>
+            <button className="ghost" disabled={busy || problems.length > 0} onClick={signOnly}>Sign only</button>
             <button className="primary" disabled={busy || problems.length > 0} onClick={signAndSearch}>Sign and search</button>
           </>
         ) : (
-          <button className="primary" disabled={busy || problems.length > 0} onClick={() => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } })}>
+          <button className="primary" disabled={busy || problems.length > 0} onClick={signOnly}>
             {signed ? "Sign a new mandate" : "Sign mandate"}
           </button>
         )}
@@ -355,7 +380,7 @@ function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResu
       <p className="muted hint">Say it in your own words. The agent searches the catalog and proposes a cart. It cannot pay.</p>
       <textarea
         className="ask" rows={3} value={text} onChange={(e) => setText(e.target.value)} aria-label="What should the agent buy?"
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && text.trim().length >= 2) submit(); }}
+        onKeyDown={(e) => { if (sendKey(e) && !busy && text.trim().length >= 2) { e.preventDefault(); submit(); } }}
       />
       <div className="examples" role="group" aria-label="Examples">
         {examples.map((x) => (
@@ -367,7 +392,7 @@ function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResu
       {!busy && nearMisses.length > 0 && <NearMisses items={nearMisses} onFix={applyFix} />}
       <div className="actions">
         <AttackButton busy={busy} run={run} onAttack={onAttack} />
-        <button className="primary" disabled={busy || text.trim().length < 2} onClick={submit}>Find options</button>
+        <button className="primary" disabled={busy || text.trim().length < 2} onClick={submit}>{busy ? "Searching…" : "Find options"}</button>
       </div>
     </section>
   );
@@ -506,6 +531,9 @@ function Timeline({ p }: { p: Proposal }) {
 function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; config: Config; busy: boolean; run: RunFn; onChange: (p: Proposal) => void; onAskAgain: () => void }) {
   const mock = config.demoMode === "mock";
   const link = p.order?.approveUrl?.startsWith("http") ? p.order.approveUrl : undefined;
+  // Feedback on the pressed button in the same frame (Doherty): the label says what is running, the other buttons stay disabled.
+  const [doing, setDoing] = useState<"approve" | "reject" | "pay">();
+  const act = (what: "approve" | "reject" | "pay", fn: () => Promise<Proposal>) => { setDoing(what); return run(fn).then((r) => r && onChange(r)).finally(() => setDoing(undefined)); };
   return (
     <section>
       <div className="card"><Timeline p={p} /></div>
@@ -516,8 +544,8 @@ function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; 
             <h2>Approve this purchase?</h2>
             <p className="muted hint">Nothing has been paid. Approving creates the order, after the price and the mandate are checked again.</p>
             <div className="actions">
-              <button className="ghost" disabled={busy} onClick={() => run(() => api.reject(p.id)).then((r) => r && onChange(r))}>Reject</button>
-              <button className="primary" disabled={busy} onClick={() => run(() => api.approve(p.id)).then((r) => r && onChange(r))}>Approve {money(p.totalCents, p.currency)}</button>
+              <button className="ghost" disabled={busy} aria-busy={doing === "reject"} onClick={() => act("reject", () => api.reject(p.id))}>{doing === "reject" ? "Rejecting…" : "Reject"}</button>
+              <button className="primary" disabled={busy} aria-busy={doing === "approve"} onClick={() => act("approve", () => api.approve(p.id))}>{doing === "approve" ? "Approving…" : `Approve ${money(p.totalCents, p.currency)}`}</button>
             </div>
           </>
         )}
@@ -527,7 +555,7 @@ function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; 
             <p className="muted hint">{mock ? "Demo mode: simulate the buyer approving on PayPal, then capture the payment." : "Open PayPal, approve with the sandbox buyer account, come back and capture the payment."}</p>
             {link && <p><a className="paylink" href={link} target="_blank" rel="noreferrer noopener"><Icon name="external" size={15} /> Approve in PayPal sandbox</a></p>}
             <div className="actions">
-              <button className="primary" disabled={busy} onClick={() => run(() => api.pay(p.id)).then((r) => r && onChange(r))}>{mock ? "Simulate buyer and pay" : "Capture payment"}</button>
+              <button className="primary" disabled={busy} aria-busy={doing === "pay"} onClick={() => act("pay", () => api.pay(p.id))}>{doing === "pay" ? "Capturing payment…" : mock ? "Simulate buyer and pay" : "Capture payment"}</button>
             </div>
           </>
         )}

@@ -89,7 +89,7 @@ textarea.ask { font-size: 16px; resize: vertical; margin-bottom: 10px; line-heig
 details.passed { margin-top: 14px; }
 details.passed summary { color: var(--good); font-weight: 600; font-size: 14px; }
 /* the one authored moment: the guardrails tick in one after another */
-details.passed[open] .checks li { animation: tick .42s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--i) * 45ms); }
+details.passed[open] .checks li { animation: tick .24s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(min(var(--i), 6) * 25ms); }
 @keyframes tick { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 .blockedmsg { margin: 14px 0 0; color: var(--bad); font-size: 14px; }
 
@@ -181,3 +181,28 @@ details.passed[open] .checks li { animation: tick .42s cubic-bezier(.16, 1, .3, 
 .understood li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; }
 .understood li .icon { color: var(--good); margin-top: 3px; }
 .orhand { margin: 24px 0 8px; font-size: 15px; color: var(--muted); font-weight: 650; scroll-margin-top: 16px; }
+
+/* ----- UX principles: motion, hit areas, focus ----- */
+/* Frequent actions (approve, reject, pay, typing) get colour changes only: 120 ms, ease-out, no movement.
+   Every other animation in this file is under 300 ms with ease-out; the spinner is the only constant-speed motion (it is a progress signal). */
+button, .chip, .example, .preset, .tagbox, .autonomy .opt, .stepper button b {
+  transition: background-color .12s ease-out, border-color .12s ease-out, color .12s ease-out, box-shadow .12s ease-out;
+}
+/* Fitts: the clickable area of small controls is larger than what is drawn. */
+.tag button, .linklike, .ghost.small, .chip, .stepper button { position: relative; }
+.tag button::after { content: ""; position: absolute; inset: -11px; }
+.linklike::after { content: ""; position: absolute; inset: -14px -10px; }
+.ghost.small::after, .chip::after { content: ""; position: absolute; inset: -6px -4px; }
+.stepper button::after { content: ""; position: absolute; inset: -8px -6px; }
+@media (pointer: coarse) {
+  .primary, .ghost, .example, .preset { min-height: 44px; }
+  .chip, .ghost.small { min-height: 36px; }
+  .fgroup input:not([type=radio]), .fgroup select { min-height: 44px; }
+}
+/* Hick/Miller: long suggestion lists show seven, the rest behind one button. */
+.sugg .morebtn { border-style: dashed; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cur.bad input, input[aria-invalid="true"] { border-color: var(--bad) !important; }
+@media (prefers-reduced-motion: reduce) {
+  button, .chip, .example, .preset, .tagbox, .autonomy .opt { transition: none; }
+}
