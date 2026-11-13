@@ -1,3 +1,4 @@
+import { parseMoney } from "./moneyInput";
 export type Autonomy = { mode: "ask_always" } | { mode: "auto_under"; thresholdCents: number };
 export type Mandate = {
   currency: string; totalBudgetCents: number; perItemCapCents: number; allowedCategories: string[]; allowedMerchants?: string[];
@@ -49,7 +50,5 @@ export const api = {
 };
 
 export const money = (cents: number, currency = "EUR") => new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(cents / 100);
-export const toCents = (s: string) => {
-  const n = Number(s.replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
-};
+/** Forgiving: "90", "90€", "€90", "90 eur", "90,00" all read as 9000 cents (see moneyInput.ts). NaN if it is not an amount. */
+export const toCents = parseMoney;

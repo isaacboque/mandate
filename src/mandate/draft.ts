@@ -2,6 +2,7 @@ import { generateText, stepCountIs, tool, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { CatalogGateway } from "../catalog/types.js";
 import { formatCents } from "../core/money.js";
+import { parseMoney } from "../core/parseMoney.js";
 import type { Mandate } from "./types.js";
 
 /**
@@ -58,12 +59,15 @@ async function specFromModel(model: LanguageModel, text: string, currency: strin
   return got;
 }
 
+// An amount with a currency mark: "90€", "€ 90", "90,00 eur", "$1,000", "1.000 €". Thousands groups are exactly three digits; a plain space is not a separator here ("size 10 100€").
+const NUM = String.raw`(?:\d{1,3}(?:[., ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
+const MONEY = new RegExp(String.raw`(?:[$€£]\s*(${NUM})|(${NUM})\s*(?:[$€£]|usd\b|eur\b|euros?\b|dollars?\b|bucks\b))`, "gi");
+
 const STOP = new Set(["want", "buy", "with", "from", "that", "this", "than", "only", "should", "would", "could", "have", "will", "just", "into", "when", "ask", "first", "before", "paying", "pay", "anything", "total", "most", "much", "each", "every", "item", "items", "pair", "pairs", "unit", "units", "shop", "shops", "valid", "hour", "hours", "days", "day", "week", "alone", "automatically", "without", "asking", "under", "over", "about", "agent", "please", "some", "kind", "kinds", "stuff", "things", "thing", "like", "also", "same", "such", "dollar", "dollars", "euro", "euros", "money", "spend", "spent", "allow", "allowed", "mandate", "cart", "least", "more", "less", "many", "need", "wants", "make", "give", "tell"]);
 
 /** A plain-rules reading, used when there is no AI model or it failed. Deliberately simple and conservative. */
 function specFromRules(text: string): Spec & { fallbackCategory?: string } {
-  const money = [...text.matchAll(/(?:[$€£]\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*(?:[$€£]|usd\b|eur\b|euros?\b|dollars?\b|bucks\b))/gi)]
-    .map((m) => ({ v: Number((m[1] ?? m[2]).replace(",", ".")), at: m.index ?? 0 }));
+  const money = [...text.matchAll(MONEY)].map((m) => ({ v: parseMoney(m[1] ?? m[2]) / 100, at: m.index ?? 0 })).filter((m) => m.v > 0);
   if (money.length === 0) throw new Error('I could not find a budget in that text. Say how much it can spend, for example "up to $100".');
   let cap: number | undefined;
   let threshold: number | undefined;

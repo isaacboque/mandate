@@ -10,6 +10,9 @@ export const normalizeCategory = (raw: string) => raw.trim().toLowerCase().repla
 /** A shop as the catalog names it: "https://www.Shoebacca.com/x" -> "shoebacca.com". */
 export const normalizeShop = (raw: string) => raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#].*$/, "").replace(/[^a-z0-9.-]/g, "");
 
+/** Miller: at most seven suggestions at once; the rest are one click away. */
+const MAX_SHOWN = 7;
+
 export type Suggestion = { value: string; label?: string; note?: string };
 type Group = { label: string; values: string[] };
 
@@ -27,6 +30,7 @@ export function TagInput({ id, label, hint, values, onChange, normalize, format 
   const [found, setFound] = useState<Suggestion[]>([]);
   const [warn, setWarn] = useState<string>();
   const [armed, setArmed] = useState("");
+  const [more, setMore] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -93,6 +97,7 @@ export function TagInput({ id, label, hint, values, onChange, normalize, format 
           onChange={(e) => { setWarn(undefined); setArmed(""); if (/[,\n]/.test(e.target.value)) add(e.target.value); else setText(e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === ",") { e.preventDefault(); submit(); }
+            else if (e.key === "Escape" && (text || warn)) { e.preventDefault(); e.stopPropagation(); setText(""); setWarn(undefined); setArmed(""); }
             else if (e.key === "Backspace" && text === "" && values.length) remove(values[values.length - 1]);
           }}
           onBlur={() => { if (text && !search) add(text); }}
@@ -103,7 +108,8 @@ export function TagInput({ id, label, hint, values, onChange, normalize, format 
         <div className="sugg" role="group" aria-label={heading ?? "Suggestions"}>
           {heading && <span className="muted small">{heading}</span>}
           {!typed && openGroups.map((g) => <button type="button" key={g.label} className="chip ghost" onClick={() => add(g.values.join(","))}>+ {g.label}</button>)}
-          {open.map((s) => <button type="button" key={s.value} className="chip" title={s.value} onClick={() => add(s.value)}>+ {s.label ?? format(s.value)}{s.note && <i>{s.note}</i>}</button>)}
+          {(more ? open : open.slice(0, MAX_SHOWN)).map((s) => <button type="button" key={s.value} className="chip" title={s.value} onClick={() => add(s.value)}>+ {s.label ?? format(s.value)}{s.note && <i>{s.note}</i>}</button>)}
+          {open.length > MAX_SHOWN && <button type="button" className="chip morebtn" onClick={() => setMore((m) => !m)}>{more ? "Show fewer" : `Show ${open.length - MAX_SHOWN} more`}</button>}
         </div>
       )}
     </div>
