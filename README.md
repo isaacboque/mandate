@@ -97,7 +97,7 @@ On the fixture catalog, with a simulated clock and mock payments (no keys):
 
 What this does not prove: it is not a test of a real LLM (see below), not a real-money test, and not a security review of the hosting. See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
-**How I built this:** most of the code was written with Claude Code under my direction, and the commit trailers show where.
+**How I built this:** I built it with Claude Code writing the code under my direction, and the commit trailers show where.
 I set the scope, the design and what the eval must prove; the eval, tests, typecheck and CI check the output, and the guardrails stay plain code outside the LLM.
 What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.md](docs/HOW-I-BUILT-THIS.md).
 
@@ -105,7 +105,7 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 - **PayPal:** Orders v2 in the sandbox is the only way money moves (create, buyer approves, capture), idempotent, behind the approval queue and a checkout re-check. The toolkit's `create_order` only accepts USD, so the code calls the Orders REST API behind the same tool-shaped interface.
 - **AI at runtime:** an optional LLM (Gemini by default; OpenAI or Anthropic by `LLM_PROVIDER`) drafts the mandate form and acts as the shopping agent, with propose-only tools. No AI is involved in the guardrails, the approval queue or the payment logic.
-- **AI in development:** most of the code was written with Claude Code under the author's direction; the author reviewed the pull requests and CI results.
+- **AI in development:** the code was written with Claude Code under the author's direction; every change goes through a pull request, and nothing merges unless CI passes.
 
 ## Evaluation
 

@@ -1,10 +1,10 @@
 # How I built this
 
-Most of the code in this repo was written by Claude, an AI model, working under my direction. This page says what that meant in practice: which tools I used, what I decided and what I delegated, and how the output was checked. It only states what the repo, its commits and its pull requests show; where I could not point to evidence, it says `TODO(Isaac): confirm`.
+I built this with Claude, an AI model, writing the code under my direction. This page says what that meant in practice: which tools I used, what I decided and what I delegated, and how the output was checked. It only states what the repo, its commits and its pull requests show.
 
 ## Tooling
 
-I used Claude Code (Claude Sonnet 5.5) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". I used Claude in chat for planning and review. `TODO(Isaac): confirm` the chat part; the repo itself only shows Claude Code. At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
+I used Claude Code (Claude Sonnet 5.5) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
 
 ## Who decided what
 
@@ -16,8 +16,7 @@ I used Claude Code (Claude Sonnet 5.5) for implementation: it worked through the
 | Reusing the trace, approval queue and design system from my own earlier project ([Reuse](../README.md#reuse)) | Reading the Channel3 API: price units, cheapest in-stock offer, attribute mapping, with a smoke script for me to confirm them |
 | What the eval must measure: spend safety at 100%, injection resistance, task success (PLAN.md, "Eval") | Writing the eval scenarios, the scripted "fooled" model and the independent oracle |
 | Saying plainly that the merchant of record is a sandbox account and a real merchant handoff is not built (PLAN.md, "Architecture") | Holding scope on submission day, e.g. no "any category" option and no EU to US size conversion |
-| Reviewing the pull requests and CI results before merging. `TODO(Isaac): confirm` how closely each PR was read | |
-| The mutation check ("I broke two guardrails on purpose", in the case study). `TODO(Isaac): confirm`: the M7 PR says Claude ran it | |
+| The merge rule: every change goes through a pull request, and nothing merges unless CI passes ([AGENTS.md](../AGENTS.md)) | Opening each pull request with its checks run and its decisions written down, so the diff and the reasoning can be read together |
 
 ## How the output was checked
 
