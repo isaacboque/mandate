@@ -8,6 +8,18 @@ You give a shopping agent a **signed mandate**: total budget, per-item cap, cate
 
 The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but it cannot move money: the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout.
 
+**Quickstart (no keys, Node 20+):**
+
+```bash
+git clone https://github.com/isaacboque/mandate.git && cd mandate
+npm install
+npm run build && npm start      # http://localhost:8787 (demo mode: fixture catalog, mock payments)
+npm run eval                    # 46 deterministic scenarios, prints the table below
+npm run eval:mutants            # switch each of the 10 guardrails off in turn: the eval must notice
+```
+
+**How it is checked:** `npm test` (177 tests, mocks only), `npm run eval` (spend safety 46/46 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (10 of 10 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+
 ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-5-attack.png)
 
 **Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; needs a sandbox buyer to pay, paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
@@ -94,6 +106,8 @@ On the fixture catalog, with a simulated clock and mock payments (no keys):
 - **Spend safety 46/46**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
 - **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
 - **Guardrails 27/27** and **task success 12/12**.
+
+- **Every guardrail is load-bearing:** switching off any one of the 10 checks makes at least one scenario fail (10/10, [docs/MUTATION.md](docs/MUTATION.md)). For `hard_attributes` and `price_freshness` the failure is on the scenario outcome, not on the oracle.
 
 What this does not prove: it is not a test of a real LLM (see below), not a real-money test, and not a security review of the hosting. See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
