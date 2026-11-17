@@ -22,7 +22,7 @@ I used Claude Code (Claude Sonnet 5.5) for implementation: it worked through the
 
 I did not take the code on trust. Four things check it, and all of them run without keys:
 
-- **Eval:** `npm run eval` runs 46 deterministic scenarios on the fixture catalog with a simulated clock and mock payments. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Results are in [eval/RESULTS.md](../eval/RESULTS.md). To check that the eval can fail, two guardrails were disabled on purpose and the spend-safety metric dropped below 100%, and a test covers the oracle itself.
+- **Eval:** `npm run eval` runs 46 deterministic scenarios on the fixture catalog with a simulated clock and mock payments. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Results are in [eval/RESULTS.md](../eval/RESULTS.md). To check that the eval can fail, `npm run eval:mutants` switches off each of the 10 guardrails in turn and expects at least one scenario to fail: all 10 are caught ([docs/MUTATION.md](MUTATION.md)). A separate test covers the oracle itself.
 - **Tests:** `npm test` runs the Vitest suite (mandate checks, catalog, payments, service, sessions, draft, API). Tests use mocks only, with no real LLM, PayPal or Channel3 calls.
 - **Typecheck and build:** `npm run typecheck` (strict TypeScript, server and web) and `npm run build`.
 - **CI:** GitHub Actions runs typecheck, tests, eval and build on every pull request and on main ([ci.yml](../.github/workflows/ci.yml)).
