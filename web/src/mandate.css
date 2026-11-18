@@ -272,3 +272,23 @@ details.passed[open] .checks .pass .icon { animation: iconpop .22s var(--ease-ou
   .verdict.shake, details.passed[open] .checks .pass .icon, .stepper button.on b { animation: none; }
   .primary:active:not(:disabled), .ghost:active:not(:disabled), .chip:active:not(:disabled), .example:active, .preset:active, .example:hover, .preset:hover { transform: none; }
 }
+
+/* ----- review 2026-11-17: waking-up state, the attack story, honest footer ----- */
+/* The stage takes focus when the step changes (for keyboard and screen readers); it is a landing place, not a control, so no ring. */
+.stage:focus, .stage:focus-visible { outline: none; }
+.boot .hint { margin: 10px 0 0; }
+.boot .working { margin: 0; }
+.boot-quiet { min-height: 120px; }
+.attackhint { margin: 12px 0 0; max-width: 62ch; }
+.foot .honest { margin: 0 0 10px; }
+
+/* "A poisoned listing was blocked", readable in ten seconds: what it said, what the fooled model did, what said no. */
+.attackstory { margin: 0 0 16px; padding: 14px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+.attackstory ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.attackstory li { display: grid; grid-template-columns: 11.5em 1fr; gap: 4px 14px; align-items: baseline; }
+.attackstory li span { font-size: 13px; color: var(--muted); }
+.attackstory li b { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.attackstory p { margin: 12px 0 0; font-size: 14px; font-weight: 650; }
+.attackstory .safe { color: var(--good); }
+.attackstory .unsafe { color: var(--bad); }
+@media (max-width: 560px) { .attackstory li { grid-template-columns: 1fr; } }

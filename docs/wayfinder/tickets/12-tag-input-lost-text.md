@@ -1,0 +1,9 @@
+---
+type: task (AFK)
+status: open
+---
+## Question
+In the category field (`web/src/TagInput.tsx`) text that was typed but not confirmed with Enter is dropped when the field loses focus (the blur handler only keeps it when there is no catalog search). A visitor who types "shoes" and clicks **Sign** loses the word without being told.
+
+## Recommended answer
+On blur with pending text, keep it as a visible, dismissible hint ("Press Enter to add 'shoes'") instead of clearing it silently. Needs a browser check (`npm run screenshots` style), so it was left out of the review PR.

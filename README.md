@@ -2,27 +2,29 @@
 
 > Agents shouldn't be trusted with money. They should be trusted with a mandate.
 
-**In 30 seconds:** you sign a spending mandate (budget, caps, categories, shops, expiry). A shopping agent searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model; it cannot move money. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
+[![CI](https://github.com/isaacboque/mandate/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/mandate/actions/workflows/ci.yml)
+
+**In 30 seconds:** you sign a spending mandate (budget, caps, categories, shops, expiry). A shopping agent searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model, but the model has no tool that pays; in the eval no captured payment ever left the mandate. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
 
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
 
-The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but it cannot move money: the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout.
+The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout. In the 46-scenario eval, with a model that is fooled on purpose, no payment was captured outside the mandate.
 
 **Quickstart (no keys, Node 20+):**
 
 ```bash
 git clone https://github.com/isaacboque/mandate.git && cd mandate
-npm install
+npm ci
 npm run build && npm start      # http://localhost:8787 (demo mode: fixture catalog, mock payments)
 npm run eval                    # 46 deterministic scenarios, prints the table below
 npm run eval:mutants            # switch each of the 10 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (177 tests, mocks only), `npm run eval` (spend safety 46/46 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (10 of 10 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (197 tests, mocks only), `npm run eval` (spend safety 46/46 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (10 of 10 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-5-attack.png)
 
-**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; needs a sandbox buyer to pay, paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
+**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
 
 Started as a PayPal AI Hackathon project. Sandbox only: no real money moves. More: [case study](docs/CASE-STUDY.md) · [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT-MODEL.md) · [60-second demo script](docs/DEMO.md).
 
@@ -60,20 +62,11 @@ flowchart LR
 - **Audit**: each purchase can be downloaded as JSON (signed mandate, checks, approval and payment trace).
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
 
-## Run it in 2 minutes (demo mode, no keys)
+## Try it in 2 minutes (demo mode, no keys)
 
-Needs Node 20+.
+Start it as in the quickstart above (`npm ci`, `npm run build && npm start`, Node 20+), or for development `npm run dev` (API on :8787, UI on :5173).
 
-```bash
-git clone https://github.com/isaacboque/mandate.git
-cd mandate
-npm install
-npm run build && npm start      # http://localhost:8787
-```
-
-Or for development: `npm run dev` (API on :8787, UI on :5173).
-
-Then: type a request such as "Grip socks, max 15 €" → **Draft the limits** (review them) → **Sign and search** → **Review** → **Approve** → **Simulate buyer and pay**. Click **Try an attack** to see a poisoned listing blocked.
+Then: type a request such as "Grip socks, max 15 €" → **Draft the limits** (review them) → **Sign and search** → **Review** → **Approve** → **Simulate buyer and pay**. Click **Try an attack** to see a poisoned listing blocked: the card says what the listing told the model, what the fooled model proposed and which guardrails stopped it.
 
 Demo mode uses a fixture catalog (16 products, 3 of them poisoned, 1 with a price that rises at checkout) and mock payments. If you set an LLM key (below) the agent is the LLM instead of the rules agent.
 
@@ -144,6 +137,7 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 - **The main eval does not test a real LLM.** It uses the rules agent and scripted models. The guardrails hold whatever the model does, but how well a given LLM chooses products is only measured by the opt-in `npm run eval:real`.
 - **Injection detection is regex-based and conservative.** It is one layer. The ones that matter are structural: the agent cannot pay, product text never reaches the system prompt, and guardrails run in code at proposal and at checkout.
 - **Price units from Channel3** are assumed to be decimal major units (e.g. 49.99); `npm run smoke:channel3` prints prices so you can confirm with your key.
+- **The guardrails assume the catalog sends sane prices.** A price under one cent is dropped when a Channel3 listing is read, but `checkCart` itself does not yet reject a zero, negative or non-numeric price (a decision for the owner, [ticket 08](docs/wayfinder/tickets/08-checkcart-price-sanity.md)).
 - State (proposals, approvals) is in memory and resets on restart. No accounts, shipping addresses, multi-currency or refunds.
 
 ## Reuse
@@ -156,7 +150,7 @@ The trace, approval-queue pattern, PayPal OAuth refresh approach and the design 
 
 Every visitor gets their own session (an HttpOnly cookie): their mandate, budget, proposals and trace are not visible to, or spent by, anyone else. Sessions are in memory and expire after 2 hours idle. **Reset demo** clears your own proposals.
 
-`render.live.yaml` defines a second service in **live mode** (deployed at https://mandate-live-7q2i.onrender.com) (real Channel3 catalog, PayPal sandbox, optional AI model). Keys are entered in the Render dashboard, never in the repo. To protect the free quotas it limits searches per visitor per hour and per day for the whole instance (`RATE_LIMIT_ASKS_PER_HOUR`, `DAILY_ASK_CAP`; 0 turns a limit off), and when a limit is hit the screen says so. PayPal sends the buyer back to the service's own URL (`APP_URL`, or Render's `RENDER_EXTERNAL_URL`).
+`render.live.yaml` defines a second service in **live mode** (deployed at https://mandate-live-7q2i.onrender.com) (real Channel3 catalog, PayPal sandbox, optional AI model). Keys are entered in the Render dashboard, never in the repo. `LLM_TIMEOUT_SECONDS` (default 40) cuts off a model that does not answer, and the rules agent answers instead. To protect the free quotas it limits searches per visitor per hour and per day for the whole instance (`RATE_LIMIT_ASKS_PER_HOUR`, `DAILY_ASK_CAP`; 0 turns a limit off), and when a limit is hit the screen says so. PayPal sends the buyer back to the service's own URL (`APP_URL`, or Render's `RENDER_EXTERNAL_URL`).
 
 ## License
 

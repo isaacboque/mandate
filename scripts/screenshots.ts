@@ -126,15 +126,53 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await ctx.close();
 }
 
+/** The first visit to a sleeping free-tier server, and a server that is down: the page must say so, and Try again must work. */
+async function bootStates(browser: Awaited<ReturnType<typeof chromium.launch>>, url: string) {
+  log("boot states (380px)");
+  const ctx = await browser.newContext({ viewport: { width: 380, height: 800 }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  await page.route("**/api/config", async (route) => { await new Promise((r) => setTimeout(r, 3500)); await route.continue(); });
+  await page.goto(url);
+  const waking = await page.getByText(/Waking up the demo/).waitFor({ timeout: 3000 }).then(() => true, () => false);
+  log(`  waking-up message while the server is slow: ${waking ? "shown" : "MISSING"}`);
+  if (!waking) findings.push({ run: "boot", step: "slow server", what: "no waking-up message while /api/config is slow" });
+  else await page.screenshot({ path: `${OUT}/mobile-cold-start.png` });
+  await page.getByRole("heading", { name: "What should it buy?" }).waitFor();
+  const names = await page.getByRole("button", { name: /^(1|2|3|4)?\s*(Request & limits|Ask|Proposal|Approve & pay)$/ }).count();
+  log(`  stepper buttons with an accessible name at 380px: ${names} of 4`);
+  if (names !== 4) findings.push({ run: "boot", step: "stepper", what: `only ${names} of 4 stepper buttons have a name at phone width` });
+  await page.getByRole("button", { name: /Ask/ }).first().isDisabled().then((d) => log(`  step 2 disabled before signing: ${d}`));
+  await ctx.close();
+
+  const down = await browser.newContext({ viewport: { width: 380, height: 800 }, deviceScaleFactor: 1 });
+  const p2 = await down.newPage();
+  let calls = 0;
+  await p2.route("**/api/config", (route) => (calls++ === 0 ? route.fulfill({ status: 502, body: "<html>Bad Gateway</html>", contentType: "text/html" }) : route.continue()));
+  await p2.goto(url);
+  const retry = p2.getByRole("button", { name: "Try again" });
+  const shown = await retry.waitFor({ timeout: 4000 }).then(() => true, () => false);
+  log(`  server down: Try again ${shown ? "shown" : "MISSING"}`);
+  if (!shown) findings.push({ run: "boot", step: "server down", what: "no Try again button after a 502" });
+  else {
+    await p2.screenshot({ path: `${OUT}/mobile-server-down.png` });
+    await retry.click();
+    const back = await p2.getByRole("heading", { name: "What should it buy?" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
+    log(`  Try again recovers the page: ${back}`);
+    if (!back) findings.push({ run: "boot", step: "retry", what: "Try again did not load the page" });
+  }
+  await down.close();
+}
+
 async function main() {
   if (!existsSync("web/dist")) throw new Error("web/dist is missing: run `npm run build` first");
   mkdirSync(OUT, { recursive: true });
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const app = startApp(port);
-  const browser = await chromium.launch({ channel: process.env.CHANNEL ?? "msedge" });
+  const browser = await chromium.launch({ channel: process.env.CHANNEL ?? "msedge", args: process.env.NO_SANDBOX ? ["--no-sandbox"] : [] }); // NO_SANDBOX=1 when running as root (CI containers)
   try {
     await waitUp(url);
+    await bootStates(browser, url);
     for (const vp of VIEWPORTS) for (const reduced of [false, true]) { log(`${vp.name} ${vp.width}px, reduced motion: ${reduced}`); await run(browser, url, vp, reduced); }
   } finally {
     await browser.close();

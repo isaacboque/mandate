@@ -29,3 +29,6 @@ export function modelFromEnv(env: NodeJS.ProcessEnv = process.env): LanguageMode
       throw new Error(`Unknown LLM_PROVIDER "${provider}" (use google, openai or anthropic)`);
   }
 }
+
+/** A model that has not answered after this long is cut off and the rules agent (or reader) takes over. */
+export const DEFAULT_LLM_TIMEOUT_MS = 40_000;

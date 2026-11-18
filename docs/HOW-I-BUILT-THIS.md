@@ -4,7 +4,7 @@ I built this with Claude, an AI model, writing the code under my direction. This
 
 ## Tooling
 
-I used Claude Code (Claude Sonnet 5.5) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
+I used Claude Code (Claude Sonnet 5.5; two commits carry a Claude Fable 5.2 trailer) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
 
 ## Who decided what
 

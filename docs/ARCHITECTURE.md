@@ -48,5 +48,5 @@ flowchart LR
 
 - Money is integer cents.
 - The budget belongs to the mandate, not to a cart: approved and paid amounts count against it.
-- The guardrails fail closed when data is missing.
+- The guardrails fail closed when data is missing or unreadable (a bad date, a missing size or category). A price that is not a whole number of cents above zero is dropped when the catalog is read; making `checkCart` itself refuse it is [ticket 08](wayfinder/tickets/08-checkcart-price-sanity.md).
 - Tests and the eval use mocks only; no keys, no network.
