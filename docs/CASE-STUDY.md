@@ -28,11 +28,11 @@ I wrote 46 deterministic scenarios as an eval. A scripted "fooled" model propose
 
 ### Challenges
 
-PayPal's agent toolkit `create_order` only accepts USD, and I wanted euros, so I call the Orders v2 REST API directly behind the same tool-shaped interface. Real data is messy: Channel3's docs don't state price units (I confirmed decimal USD with a smoke script), sizes come as US labels inside variants, and categories form a tree, so the guardrails fail closed whenever data is missing and the mandate form looks categories up in the catalog's own tree. And time: I had about a day, so I reused the trace, approval-queue pattern and design system from my earlier project, Even Steven, and wrote the rest new.
+PayPal's agent toolkit `create_order` only accepts USD, and I wanted euros, so I call the Orders v2 REST API directly behind the same tool-shaped interface. Real data is messy: Channel3's docs don't state price units (I confirmed decimal USD with a smoke script), sizes come as US labels inside variants, and categories form a tree, so the guardrails fail closed when a size, category or date is missing or unreadable (a nonsense price from the catalog is dropped before it reaches them) and the mandate form looks categories up in the catalog's own tree. And time: I had about a day, so I reused the trace, approval-queue pattern and design system from my earlier project, Even Steven, and wrote the rest new.
 
 ### What worked
 
-A poisoned listing can fool the model but cannot move money, and I can show that on screen in the first fifteen seconds. The eval proves it for 46 scenarios, including three ways of trying to bypass the approval queue.
+In the eval a model that is fooled on purpose never moved money, and I can show the attack on screen in the first fifteen seconds: the card says what the listing told the model, what the model proposed and which guardrails stopped it. The 46 scenarios cover the cases I thought of, including three ways of trying to bypass the approval queue; they are not a security audit.
 
 ### What I learned
 
@@ -48,7 +48,7 @@ TypeScript, Node.js, Hono, React, Vite, Vercel AI SDK, Google Gemini, PayPal Ord
 
 ## How AI was used
 
-- **Claude Code (Claude Sonnet 5.5)** wrote most of the code under my direction: the plan, tests, guardrails, catalog, payments, agent, UI and eval. I reviewed the pull requests and CI results.
+- **Claude Code** (Claude Sonnet 5.5; the commit trailers also name Claude Fable 5.2 on two commits) wrote most of the code under my direction: the plan, tests, guardrails, catalog, payments, agent, UI and eval. I reviewed the pull requests and CI results.
 - **Google Gemini 2.5 Flash** (via the Vercel AI SDK) is the optional shopping agent at runtime. Without a key, a deterministic rules agent is used.
 - No AI is involved in the guardrails, the approval queue or the payment logic: those are plain code.
 

@@ -1,12 +1,12 @@
 # LinkedIn drafts
 
-Facts come only from this repo and are reproducible: `npm run eval` (46 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (177 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
+Facts come only from this repo and are reproducible: `npm run eval` (46 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (197 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
 
 Repo: https://github.com/isaacboque/mandate · Demo (no keys): https://mandate-gb6t.onrender.com
 
 ## Post A (short)
 
-The model can propose. It can never pay.
+The model can propose. It has no tool that can pay.
 
 That is the whole design of Mandate, a shopping agent that spends only inside a mandate you sign: budget, per-item cap, categories, shops, quantity, expiry.
 
@@ -14,7 +14,7 @@ That is the whole design of Mandate, a shopping agent that spends only inside a 
 - Ten guardrails run as plain TypeScript outside the LLM, at proposal and again at checkout with the live price.
 - Product text never reaches the system prompt, only as quoted data.
 
-A poisoned listing can fool the model. It cannot move money.
+A poisoned listing can fool the model. In my eval it never moved money.
 
 How I check it: 46 deterministic scenarios with an oracle that never calls the guardrail code, and a mutation run that switches each of the 10 guardrails off in turn. The eval caught all 10.
 
@@ -24,7 +24,7 @@ Sandbox only; the eval does not test a real LLM. Repo and a no-keys demo in the 
 
 ## Post B (longer, technical)
 
-Everyone is building agents that can buy things. "Be careful" in a prompt is not a control: a product listing is text from a stranger, and text can tell a model to buy ten pairs of shoes.
+Many teams are building agents that can buy things. "Be careful" in a prompt is not a control: a product listing is text from a stranger, and text can tell a model to buy ten pairs of shoes.
 
 Mandate takes the opposite approach: decide what the model *cannot* do.
 
@@ -50,14 +50,14 @@ What building an agent that handles money taught me:
 1. Ask "what can the model not do at all?" before "how do I make it safer?".
 2. The budget belongs to the mandate, not to a cart.
 3. Fail closed on missing data; real catalogs are messy.
-4. An eval is only worth trusting if it goes red when you break something. Mine now proves that for each guardrail.
+4. An eval is only worth trusting if it goes red when you break something. Mine now shows that for each of the ten guardrails, one at a time.
 5. Say why something was blocked, and offer the one-click fix to the human, never to the agent.
 
 #AIAgents #TypeScript #Evals
 
 ## First comment
 
-Repo: https://github.com/isaacboque/mandate. No-keys demo: https://mandate-gb6t.onrender.com (free instance, about 30 s to wake). To reproduce the checks: `npm install && npm run eval && npm run eval:mutants`.
+Repo: https://github.com/isaacboque/mandate. No-keys demo: https://mandate-gb6t.onrender.com (free instance, about 30 s to wake). To reproduce the checks: `npm ci && npm run eval && npm run eval:mutants`.
 
 ## Suggested visuals
 
