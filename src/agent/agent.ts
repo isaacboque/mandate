@@ -2,6 +2,7 @@ import { generateText, stepCountIs, tool, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { CatalogGateway, Product } from "../catalog/types.js";
 import { quoteUntrusted } from "../catalog/injection.js";
+import { DEFAULT_LLM_TIMEOUT_MS } from "../llm/model.js";
 import { formatCents, parseCents } from "../core/money.js";
 import { attributeMatches } from "../mandate/check.js";
 import type { Mandate } from "../mandate/types.js";
@@ -17,6 +18,8 @@ export type AgentCtx = {
   seen: Map<string, Product>;
   /** Records a proposal. It only enqueues: the agent has no way to pay. */
   propose: (input: ProposeInput) => Promise<Proposal>;
+  /** Longest wait for the model (default DEFAULT_LLM_TIMEOUT_MS). */
+  llmTimeoutMs?: number;
 };
 export type AgentRun = { summary: string; mode: "llm" | "rules"; refused: string[] };
 
@@ -98,6 +101,7 @@ export async function runLlmAgent(ask: string, model: LanguageModel, ctx: AgentC
     prompt: `The user asks: ${JSON.stringify(ask)}`,
     tools: buildTools(ctx, out),
     stopWhen: stepCountIs(8),
+    abortSignal: AbortSignal.timeout(ctx.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS),
   });
   ctx.tracer.log({ runId: ctx.runId, step: "agent.finish", kind: "llm", result: { text: res.text, steps: res.steps.length, usage: res.totalUsage } });
   return { summary: res.text, mode: "llm", refused: out.refused };

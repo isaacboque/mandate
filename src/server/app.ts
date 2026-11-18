@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
@@ -11,7 +12,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR" };
 }
 
-const cents = z.number().int().nonnegative();
+/** Every amount in a mandate is at most 1,000,000.00: far inside the range where integer cents stay exact when added and multiplied. */
+export const MAX_MANDATE_CENTS = 100_000_000;
+/** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
+const MAX_BODY_BYTES = 32 * 1024;
+const cents = z.number().int().nonnegative().max(MAX_MANDATE_CENTS);
 export const MandateInput = z.object({
   currency: z.string().length(3).transform((s) => s.toUpperCase()),
   totalBudgetCents: cents.positive(),
@@ -35,6 +40,16 @@ const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?
 export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter): Hono {
   const app = new Hono();
   const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c) : source);
+
+  // Browser hardening for every answer, API and web page alike (the static files are mounted after this app is built).
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("x-content-type-options", "nosniff");
+    c.header("x-frame-options", "DENY");
+    c.header("referrer-policy", "no-referrer");
+    c.header("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  });
+  app.use("/api/*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Request too large" }, 413) }));
 
   app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
@@ -85,14 +100,18 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.post("/api/attack", async (c) => c.json(await svc(c).attack(), 201));
   app.get("/api/proposals/:id/audit", (c) => {
     const id = c.req.param("id");
-    c.header("content-disposition", `attachment; filename="mandate-audit-${id}.json"`);
-    return c.json(svc(c).audit(id));
+    const audit = svc(c).audit(id); // throws for an unknown id, so an error is never sent as a file download
+    c.header("content-disposition", `attachment; filename="mandate-audit-${id.replace(/[^\w-]/g, "")}.json"`);
+    return c.json(audit);
   });
   app.get("/api/trace", (c) => c.json(svc(c).trail()));
   app.post("/api/reset", (c) => {
     svc(c).reset();
     return c.json({ ok: true });
   });
+
+  // Anything else under /api is a JSON 404 (without this, the web page's fallback would answer it with HTML).
+  app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
   return app;
 }

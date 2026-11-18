@@ -24,6 +24,8 @@ export type ServiceDeps = {
   model?: LanguageModel;
   /** Makes proposal ids unique across visitors, so PayPal idempotency keys never collide. */
   idPrefix?: string;
+  /** Longest wait for the AI model before the rules agent takes over (default 40 s). */
+  llmTimeoutMs?: number;
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
@@ -40,6 +42,8 @@ export class MandateService {
   private signed: SignedMandate | null = null;
   private proposals = new Map<string, Proposal>();
   private seq = 0;
+  /** Approve and Pay that are running right now, by proposal: a second click (or a retry) joins the first instead of repeating it. */
+  private inflight = new Map<string, Promise<Proposal>>();
   /** Every in-stock, clean product this visitor's searches returned: the source of category and shop suggestions. */
   private seenProducts = new Map<string, { category: string; merchant: string }>();
 
@@ -61,7 +65,7 @@ export class MandateService {
   /** Category lookup for the mandate form (the whole branch under a name). Empty when the catalog cannot do it. */
   /** Drafts a mandate from plain words. It never signs: the person reviews the draft and signs it themselves. */
   async draftMandate(text: string, currency: string): Promise<Draft> {
-    const draft = await draftMandate({ text, currency, model: this.d.model, catalog: this.d.catalog, now: this.now() });
+    const draft = await draftMandate({ text, currency, model: this.d.model, catalog: this.d.catalog, now: this.now(), timeoutMs: this.d.llmTimeoutMs });
     this.trace("mandate.drafted", "decision", { args: { chars: text.length }, result: { mode: draft.mode, warnings: draft.warnings.length, signed: false } });
     return draft;
   }
@@ -117,7 +121,8 @@ export class MandateService {
   /** Everything needed to audit one purchase: the signed mandate, the proposal with its checks and order, and its trace. */
   audit(id: string) {
     const p = this.get(id);
-    const needles = [p.id, p.order?.id, p.approvalId].filter((x): x is string => Boolean(x));
+    // Quoted, so "prop_x_1" matches the whole id and never the start of "prop_x_10".
+    const needles = [p.id, p.order?.id, p.approvalId].filter((x): x is string => Boolean(x)).map((n) => JSON.stringify(n));
     const events = this.trail().filter((e) => e.step === "mandate.signed" || needles.some((n) => JSON.stringify([e.args, e.result]).includes(n)));
     return {
       generatedAt: this.now().toISOString(),
@@ -147,6 +152,7 @@ export class MandateService {
         mine.push(p);
         return p;
       },
+      llmTimeoutMs: this.d.llmTimeoutMs,
     };
     this.trace("ask", "decision", { args: { text } });
     let run: AgentRun;
@@ -157,7 +163,7 @@ export class MandateService {
       const why = (e as Error).message.slice(0, 160);
       this.trace("agent.llm_failed", "error", { args: { text }, error: why });
       run = await runRulesAgent(text, ctx);
-      run.summary = `The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : "error"}), so the built-in rules agent answered. ${run.summary}`;
+      run.summary = `The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : /timeout|timed out|abort/i.test(why) ? "took too long" : "error"}), so the built-in rules agent answered. ${run.summary}`;
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     for (const p of mine) {
@@ -222,11 +228,13 @@ export class MandateService {
   }
 
   /** Step 4: a person approves. Creates the order (live: the buyer then approves on PayPal). */
-  async approve(id: string): Promise<Proposal> {
-    const p = this.get(id);
-    if (p.status !== "pending" || !p.approvalId) throw new Error(`Proposal ${id} is ${p.status}, nothing to approve`);
-    this.d.approvals.decide(p.approvalId, true, "user");
-    return this.executeOrder(p);
+  approve(id: string): Promise<Proposal> {
+    return this.once(`approve:${id}`, async () => {
+      const p = this.get(id);
+      if (p.status !== "pending" || !p.approvalId) throw new Error(`Proposal ${id} is ${p.status}, nothing to approve`);
+      this.d.approvals.decide(p.approvalId, true, "user");
+      return this.executeOrder(p);
+    });
   }
 
   reject(id: string): Proposal {
@@ -238,24 +246,35 @@ export class MandateService {
   }
 
   /** Capture the payment. Demo mode simulates the buyer's approval first; live needs the real buyer to have approved. */
-  async pay(id: string): Promise<Proposal> {
-    const p = this.get(id);
-    if (p.status === "paid") return p;
-    if (p.status !== "awaiting_buyer" || !p.order || !p.approvalId) throw new Error(`Proposal ${id} is ${p.status}, cannot pay`);
-    const re = await this.recheck(p);
-    if (!re.ok) return this.fail(p, re.problems.join("; "), true);
-    try {
-      if (this.d.payments instanceof MockPayments) this.d.payments.simulateBuyerApproval(p.order.id);
-      p.order = await this.d.payments.captureOrder(p.order.id, p.approvalId);
-      p.status = p.order.status === "completed" ? "paid" : "awaiting_buyer";
-      p.error = undefined;
-      this.trace("payment.captured", "decision", { args: { proposalId: p.id }, result: { orderId: p.order.id, captureId: p.order.captureId } });
-      return p;
-    } catch (e) {
-      p.error = (e as Error).message; // keep awaiting_buyer: the buyer can still approve and the user can retry
-      this.trace("payment.capture.error", "error", { args: { proposalId: p.id }, error: p.error });
-      throw e;
-    }
+  pay(id: string): Promise<Proposal> {
+    return this.once(`pay:${id}`, async () => {
+      const p = this.get(id);
+      if (p.status === "paid") return p;
+      if (p.status !== "awaiting_buyer" || !p.order || !p.approvalId) throw new Error(`Proposal ${id} is ${p.status}, cannot pay`);
+      const re = await this.recheck(p);
+      if (!re.ok) return this.fail(p, re.problems.join("; "), true);
+      try {
+        if (this.d.payments instanceof MockPayments) this.d.payments.simulateBuyerApproval(p.order.id);
+        p.order = await this.d.payments.captureOrder(p.order.id, p.approvalId);
+        p.status = p.order.status === "completed" ? "paid" : "awaiting_buyer";
+        p.error = undefined;
+        this.trace("payment.captured", "decision", { args: { proposalId: p.id }, result: { orderId: p.order.id, captureId: p.order.captureId } });
+        return p;
+      } catch (e) {
+        p.error = (e as Error).message; // keep awaiting_buyer: the buyer can still approve and the user can retry
+        this.trace("payment.capture.error", "error", { args: { proposalId: p.id }, error: p.error });
+        throw e;
+      }
+    });
+  }
+
+  /** One run per key at a time: a second call while the first is still running gets the first one's result. */
+  private once(key: string, run: () => Promise<Proposal>): Promise<Proposal> {
+    const running = this.inflight.get(key);
+    if (running) return running;
+    const started = run().finally(() => this.inflight.delete(key));
+    this.inflight.set(key, started);
+    return started;
   }
 
   // ---- internals ----

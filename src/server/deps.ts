@@ -37,7 +37,7 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
     const payments = invoker
       ? new PayPalOrders(invoker, approvals, tracer, { traceId: runId, returnUrl: `${appUrl}/?paypal=return`, cancelUrl: `${appUrl}/?paypal=cancel` })
       : new MockPayments(approvals, tracer, { traceId: runId });
-    return new MandateService({ catalog, attackCatalog, payments, approvals, tracer, runId, model, idPrefix: id.slice(0, 6) });
+    return new MandateService({ catalog, attackCatalog, payments, approvals, tracer, runId, model, idPrefix: id.slice(0, 6), llmTimeoutMs: num(env.LLM_TIMEOUT_SECONDS, 0) > 0 ? num(env.LLM_TIMEOUT_SECONDS, 0) * 1000 : undefined });
   };
 
   const sessions = new SessionStore(makeService, { ttlMs: num(env.SESSION_TTL_MINUTES, 120) * 60 * 1000, max: num(env.MAX_SESSIONS, 300) });

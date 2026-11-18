@@ -86,7 +86,9 @@ export class Channel3Catalog implements CatalogGateway {
   }
 
   private map(p: C3Product): Product | null {
-    const offers = (p.offers ?? []).filter((o) => o.availability === "InStock" && typeof o.price?.price === "number");
+    // An offer must be in stock and carry a real price: at least one cent, a finite number. A zero, negative or missing
+    // price is dropped here, before "cheapest" is chosen, so a bogus free offer can neither win nor hide a valid one.
+    const offers = (p.offers ?? []).filter((o) => o.availability === "InStock" && typeof o.price?.price === "number" && toCents(o.price.price) > 0);
     if (offers.length === 0) return null;
     const best = offers.reduce((a, b) => (b.price!.price! < a.price!.price! ? b : a));
     const attributes: Record<string, string> = {};
@@ -105,7 +107,7 @@ export class Channel3Catalog implements CatalogGateway {
       merchant: best.domain ?? "unknown",
       category: (p.category?.slug ?? p.category?.title ?? "").toLowerCase(),
       categoryPath: pathOf(p),
-      priceCents: Math.round(best.price!.price! * 100),
+      priceCents: toCents(best.price!.price!),
       currency: (best.price!.currency ?? "").toUpperCase(),
       attributes,
       inStock: true,
@@ -115,6 +117,12 @@ export class Channel3Catalog implements CatalogGateway {
       injectionFlag: productLooksPoisoned({ title, description }),
     };
   }
+}
+
+/** Decimal major units to integer cents. NaN or Infinity come back as 0, which the caller rejects. */
+function toCents(major: number): number {
+  const cents = Math.round(major * 100);
+  return Number.isSafeInteger(cents) ? cents : 0;
 }
 
 /** Main image if the catalog has one. Only https URLs are kept; the UI renders them without a referrer. */
