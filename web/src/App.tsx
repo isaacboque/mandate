@@ -1,16 +1,16 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useRun, type RunFn } from "./useRun";
 import { api, money, toCents, type Check, type Config, type Draft, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
 import { Icon } from "./icons";
 import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
 import { formatMoneyInput, parseMoney } from "./moneyInput";
+import { explainAttack } from "./attack";
+import { friendlyError } from "./errors";
+import { CHECK_LABEL } from "./labels";
+import { traceRows } from "./trace";
 
 type Step = 0 | 1 | 2 | 3;
 const STEPS = ["Request & limits", "Ask", "Proposal", "Approve & pay"];
-const CHECK_LABEL: Record<Check["name"], string> = {
-  total_budget: "Total budget", per_item_cap: "Per-item cap", category: "Category", merchant: "Merchant", quantity: "Quantity",
-  expiry: "Mandate still valid", currency: "Currency", hard_attributes: "Required attributes", price_freshness: "Price is fresh", injection_flag: "Listing is clean",
-};
 const STATUS_LABEL: Record<Proposal["status"], string> = {
   blocked: "Blocked", pending: "Needs your approval", auto_approved: "Approved by the mandate", awaiting_buyer: "Waiting for the buyer", paid: "Paid", rejected: "Rejected", failed: "Stopped at checkout",
 };
@@ -24,7 +24,10 @@ export default function App() {
   const [note, setNote] = useState<string>();
   const [lastAsk, setLastAsk] = useState<string>();
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
-  const [traceOpen, setTraceOpen] = useState(true);
+  // The trace sits beside the page on a wide screen; on a phone it would push the page down, so it starts closed there.
+  const [traceOpen, setTraceOpen] = useState(() => window.matchMedia("(min-width: 1001px)").matches);
+  const [bootTry, setBootTry] = useState(0);
+  const [bootError, setBootError] = useState<string>();
   const { busy, error, setError, run } = useRun();
   // The rare moments that earn a flourish (motion principles): a mandate was just signed, an attack was just blocked.
   const [fresh, setFresh] = useState<{ kind: "signed" | "attack"; id?: string }>();
@@ -35,6 +38,7 @@ export default function App() {
   const refresh = () => api.config().then(setConfig).catch((e) => setError(e.message));
   // Reloading the page must not lose the session: restore the mandate and the proposals from the server.
   useEffect(() => {
+    setBootError(undefined);
     Promise.all([api.config(), api.proposals()])
       .then(([c, ps]) => {
         setConfig(c);
@@ -50,14 +54,18 @@ export default function App() {
           if (back === "cancel") setError("You cancelled in PayPal. The order is still waiting: open the PayPal link again to approve it.");
         } else if (c.mandate) setStep(ps.length ? 2 : 1);
       })
-      .catch((e) => setError(e.message));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch((e) => setBootError(friendlyError((e as Error).message)));
+  }, [bootTry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signed = config?.mandate ?? null;
   const selected = proposals.find((p) => p.id === selectedId);
   const change = (p: Proposal) => { upsert(p); refresh(); };
   const gotResult = (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); setNearMisses(misses); setLastAsk(text); refresh(); setStep(ps.length ? 2 : 1); };
   const upsert = (p: Proposal) => setProposals((all) => (all.some((x) => x.id === p.id) ? all.map((x) => (x.id === p.id ? p : x)) : [p, ...all]));
+  // Moving between steps replaces the whole panel: put keyboard and screen-reader focus on the new one, not on a button that is gone.
+  const stage = useRef<HTMLDivElement>(null);
+  const firstStep = useRef(true);
+  useEffect(() => { if (firstStep.current) { firstStep.current = false; return; } stage.current?.focus({ preventScroll: true }); }, [step]);
   const maxStep = !signed ? 0 : proposals.length === 0 ? 1 : selected ? 3 : 2;
 
   return (
@@ -88,7 +96,8 @@ export default function App() {
 
         {error && <div className="alert" role="alert">{error}</div>}
 
-        <div key={step} className="stage">
+        <div key={step} ref={stage} className="stage" tabIndex={-1}>
+        {!config && <Booting error={bootError} onRetry={() => setBootTry((n) => n + 1)} />}
         {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={signedNow} onNext={() => setStep(1)} onResult={gotResult} />}
         {step === 1 && signed && config && (
           <AskStep
@@ -101,16 +110,42 @@ export default function App() {
         {step === 3 && selected && config && <PayStep p={selected} config={config} busy={busy} run={run} onChange={change} onAskAgain={() => setStep(1)} />}
         </div>
 
-        {config?.resettable && (
-          <footer className="foot">
+        <footer className="foot">
+          {config && <p className="muted small honest">{config.demoMode === "mock" ? "Demo: a fixture catalog and simulated payments. Nothing is bought and no real money moves." : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
+          {config?.resettable && (
             <button className="linklike" disabled={busy} onClick={() => run(() => api.reset()).then((r) => { if (r) { setProposals([]); setSelectedId(undefined); setNote(undefined); setNearMisses([]); refresh(); setStep(signed ? 1 : 0); } })}>
               Reset demo
             </button>
-          </footer>
-        )}
+          )}
+        </footer>
       </main>
       {traceOpen && <TracePanel active={Boolean(signed)} />}
     </div>
+  );
+}
+
+/** The first request can wait for a sleeping free-tier server. Say so, with a clock, instead of showing nothing. */
+function Booting({ error, onRetry }: { error?: string; onRetry: () => void }) {
+  const [s, setS] = useState(0);
+  useEffect(() => { if (error) return; setS(0); const t = setInterval(() => setS((x) => x + 1), 1000); return () => clearInterval(t); }, [error]);
+  if (error) {
+    return (
+      <section className="card boot" role="alert">
+        <h2>The demo is not answering yet</h2>
+        <p className="muted hint">{error}</p>
+        <div className="actions tight"><button className="primary" onClick={onRetry}>Try again</button></div>
+      </section>
+    );
+  }
+  // Under two seconds is a normal page load: show nothing, so a fast server does not flash a message.
+  if (s < 2) return <div className="boot-quiet" aria-busy="true" />;
+  return (
+    <section className="card boot" role="status">
+      <div className="working"><span className="spinner" aria-hidden /><div>
+        <b>Waking up the demo… {s}s</b>
+        <p className="muted small">This demo runs on free hosting that sleeps when nobody uses it. The first visit can take about 30 seconds; after that it is fast.</p>
+      </div></div>
+    </section>
   );
 }
 
@@ -395,6 +430,7 @@ function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResu
           <button key={x.text} className={`example ${x.text === text ? "on" : ""}`} onClick={() => setText(x.text)}><b>{x.text}</b><span>{x.hint}</span></button>
         ))}
       </div>
+      <p className="muted small attackhint"><b>Try an attack</b> loads a product listing that tells the agent to buy 10 pairs. The model is fooled on purpose; watch what stops it.</p>
       {busy && <Working live={live && config.agent === "llm"} />}
       {note && !busy && <div className="alert warn" role="status">{note}</div>}
       {!busy && nearMisses.length > 0 && <NearMisses items={nearMisses} onFix={applyFix} />}
@@ -463,6 +499,21 @@ function CheckRow({ c, i }: { c: Check; i: number }) {
   );
 }
 
+function AttackStory({ p }: { p: Proposal }) {
+  const story = explainAttack(p);
+  if (!story) return null;
+  return (
+    <section className="attackstory" aria-label="What happened in this attack">
+      <ol>
+        <li><span>The listing told the model</span><b>{story.told}</b></li>
+        <li><span>The fooled model proposed</span><b>{story.proposed}</b></li>
+        <li><span>Stopped by</span><b>{story.stoppedBy.length ? story.stoppedBy.join(" · ") : "nothing"}</b></li>
+      </ol>
+      <p className={p.blocked ? "safe" : "unsafe"}>{story.outcome}</p>
+    </section>
+  );
+}
+
 function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => void; fresh?: boolean }) {
   const failed = p.checks.filter((c) => !c.ok);
   const passed = p.checks.filter((c) => c.ok);
@@ -472,6 +523,7 @@ function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => vo
         <Icon name={p.blocked ? "cross" : "shield"} size={18} />
         <b>{p.blocked ? `Blocked: ${failed.length} of ${p.checks.length} checks failed` : `Inside your mandate: ${passed.length} of ${p.checks.length} checks passed`}</b>
       </div>
+      <AttackStory p={p} />
       <div className="phead">
         <span className={`pstatus ${p.status}`}>{STATUS_LABEL[p.status]}</span>
         {p.source === "attack" && <span className="badge live">Attack demo</span>}
@@ -491,7 +543,7 @@ function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => vo
           </li>
         ))}
       </ul>
-      {p.summary && <p className="muted small summary">{p.summary}</p>}
+      {p.summary && p.source !== "attack" && <p className="muted small summary">{p.summary}</p>}
 
       {failed.length > 0 && <ul className="checks failures" aria-label="Failed guardrail checks">{failed.map((c, i) => <CheckRow key={c.name} c={c} i={i} />)}</ul>}
       {passed.length > 0 && (
@@ -641,12 +693,14 @@ function TracePanel({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) return;
     let alive = true;
-    const tick = () => api.trace().then((e) => alive && setEvents(e)).catch(() => {});
+    // A tab nobody is looking at does not poll; it catches up the moment it is shown again.
+    const tick = () => { if (!document.hidden) api.trace().then((e) => alive && setEvents(e)).catch(() => {}); };
     tick();
     const t = setInterval(tick, 1500);
-    return () => { alive = false; clearInterval(t); };
+    document.addEventListener("visibilitychange", tick);
+    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", tick); };
   }, [active]);
-  const shown = events.filter((e) => filter === "all" || e.kind === filter);
+  const shown = traceRows(events, filter);
   return (
     <aside className="trace" aria-label="Trace">
       <h2>Trace</h2>
@@ -657,13 +711,13 @@ function TracePanel({ active }: { active: boolean }) {
         ))}
       </div>
       <ol>
-        {shown.slice().reverse().map((e, i) => (
-          <li key={`${e.ts}-${i}`} className={`ev ${e.kind}`}>
-            <button className="evbtn" onClick={() => setOpen(open === i ? undefined : i)} aria-expanded={open === i}>
+        {shown.map(({ n, e }) => (
+          <li key={n} className={`ev ${e.kind}`}>
+            <button className="evbtn" onClick={() => setOpen(open === n ? undefined : n)} aria-expanded={open === n}>
               <div className="evh"><span className="kindtag">{e.kind}</span> <b>{describe(e)}</b> <time>{new Date(e.ts).toLocaleTimeString()}</time></div>
               {e.error && <div className="everr">{e.error}</div>}
             </button>
-            {open === i && <pre><span className="stepname">{e.step}</span>{"\n"}{JSON.stringify({ args: e.args, result: e.result }, null, 2)}</pre>}
+            {open === n && <pre><span className="stepname">{e.step}</span>{"\n"}{JSON.stringify({ args: e.args, result: e.result }, null, 2)}</pre>}
           </li>
         ))}
         {!active && <li className="muted">Sign a mandate to start.</li>}
