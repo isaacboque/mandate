@@ -24,7 +24,7 @@ The key decision is where the power sits. The agent has three tools: search, get
 
 Product titles and descriptions never go into the system prompt. They reach the model as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them. Payments go through PayPal Orders v2 in the sandbox with idempotency, and a mock gateway follows the same rules for the demo. Everything is traced to JSONL and shown live in the UI.
 
-I wrote 55 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result on the fixture catalog: spend safety 100% (55/55), injection resistance 7/7, task success 12/12, agent scenarios 9/9. I also switch off each of the 11 guardrails in turn (`npm run eval:mutants`) to check that the eval fails when it should; all 11 are caught (see [MUTATION.md](MUTATION.md)).
+I wrote 56 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result on the fixture catalog: spend safety 100% (56/56), injection resistance 7/7, task success 12/12, agent scenarios 9/9. I also switch off each of the 11 guardrails in turn (`npm run eval:mutants`) to check that the eval fails when it should; all 11 are caught (see [MUTATION.md](MUTATION.md)).
 
 ### Challenges
 
@@ -32,11 +32,11 @@ PayPal's agent toolkit `create_order` only accepts USD, and I wanted euros, so I
 
 ### What worked
 
-In the eval a model that is fooled on purpose never moved money, and I can show the attack on screen in the first fifteen seconds: the card says what the listing told the model, what the model proposed and which guardrails stopped it. The 55 scenarios cover the cases I thought of, including three ways of trying to bypass the approval queue; they are not a security audit.
+In the eval a model that is fooled on purpose never moved money, and I can show the attack on screen in the first fifteen seconds: the card says what the listing told the model, what the model proposed and which guardrails stopped it. The 56 scenarios cover the cases I thought of, including three ways of trying to bypass the approval queue; they are not a security audit.
 
 ### What changes in the threat model when the agent can draft its own contract
 
-Drafts and amendments are pending data; they authorise nothing. Signing is a human-only endpoint, and the UI never renders anything actionable from model text: the chat shows typed cards built from server state, and unknown card types render nothing. Spend is cumulative over the amendment chain. A new `mandate_active` guardrail refuses a revoked or superseded contract at proposal and again at checkout. The agent has exactly 8 tools and a call to any other is refused and traced. Figures the model writes in the chat are not verified; the cards carry the server's numbers. Eval: 55/55 scenarios (9 new for the agent), 11/11 mutants caught.
+Drafts and amendments are pending data; they authorise nothing. Signing is a human-only endpoint, and the UI never renders anything actionable from model text: the chat shows typed cards built from server state, and unknown card types render nothing. Spend is cumulative over the amendment chain. A new `mandate_active` guardrail refuses a revoked or superseded contract at proposal and again at checkout. The agent has exactly 8 tools and a call to any other is refused and traced. Figures the model writes in the chat are not verified; the cards carry the server's numbers. Eval: 55/56 scenarios (9 new for the agent), 11/11 mutants caught.
 
 ### What I learned
 

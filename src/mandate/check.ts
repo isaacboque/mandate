@@ -25,19 +25,26 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spent
   const add = (name: CheckName, bad: string[], good: string) =>
     out.push({ name, ok: bad.length === 0, reason: bad.length === 0 ? good : bad.join("; ") });
   const lines = cart.lines;
-  const fmt = (c: number) => formatCents(c, mandate.currency);
+  // A nonsense amount (NaN, 100.5) must reach the check results as text, never throw out of the guardrails.
+  const fmt = (c: number) => (Number.isInteger(c) ? formatCents(c, mandate.currency) : String(c));
+
+  // Fail closed on a price that is not a whole number of cents above 0 (0, negative, NaN, Infinity, 100.5): it must never
+  // lower the total or slip past a comparison (`NaN > cap` is false). The rule lives inside total_budget and per_item_cap.
+  const badPrice = (l: Cart["lines"][number]) => !Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 1;
+  const priceProblem = (l: Cart["lines"][number]) => `${l.productId} price ${l.unitPriceCents} is not a whole number of cents above 0`;
+  const badPrices = lines.filter(badPrice);
 
   const total = lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
   // The budget is for the whole mandate, not per cart: what was already approved or paid counts against it.
   const spent = opts.spentCents ?? 0;
   const left = mandate.totalBudgetCents - spent;
-  add("total_budget", total > left
+  add("total_budget", badPrices.length > 0 ? badPrices.map(priceProblem) : total > left
       ? [spent > 0 ? `total ${fmt(total)} is over what is left of the budget (${fmt(Math.max(left, 0))} of ${fmt(mandate.totalBudgetCents)}; ${fmt(spent)} already committed)` : `total ${fmt(total)} is over the budget ${fmt(mandate.totalBudgetCents)}`]
       : [],
     `total ${fmt(total)} within budget (${fmt(left)} left)`);
 
-  add("per_item_cap", lines.filter((l) => l.unitPriceCents > mandate.perItemCapCents)
-    .map((l) => `${l.productId} costs ${fmt(l.unitPriceCents)}, cap is ${fmt(mandate.perItemCapCents)}`), "every item within the per-item cap");
+  add("per_item_cap", [...badPrices.map(priceProblem), ...lines.filter((l) => !badPrice(l) && l.unitPriceCents > mandate.perItemCapCents)
+    .map((l) => `${l.productId} costs ${fmt(l.unitPriceCents)}, cap is ${fmt(mandate.perItemCapCents)}`)], "every item within the per-item cap");
 
   // Allowing a category allows everything inside it: a product passes if its own category or any ancestor is allowed.
   const inAllowedCategory = (l: Cart["lines"][number]) => [l.category, ...(l.categoryPath ?? [])].some((c) => mandate.allowedCategories.includes(c));

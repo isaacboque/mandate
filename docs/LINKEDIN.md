@@ -1,6 +1,6 @@
 # LinkedIn drafts
 
-Facts come only from this repo and are reproducible: `npm run eval` (55 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (251 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
+Facts come only from this repo and are reproducible: `npm run eval` (56 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (261 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
 
 Repo: https://github.com/isaacboque/mandate · Demo (no keys): https://mandate-gb6t.onrender.com
 
@@ -16,7 +16,7 @@ That is the whole design of Mandate, a shopping agent that spends only inside a 
 
 A poisoned listing can fool the model. In my eval it never moved money.
 
-How I check it: 55 deterministic scenarios with an oracle that never calls the guardrail code, and a mutation run that switches each of the 11 guardrails off in turn. The eval caught all 11.
+How I check it: 56 deterministic scenarios with an oracle that never calls the guardrail code, and a mutation run that switches each of the 11 guardrails off in turn. The eval caught all 11.
 
 Sandbox only; the eval does not test a real LLM. Repo and a no-keys demo in the first comment.
 
@@ -36,7 +36,7 @@ Architecture
 - Payments (PayPal Orders v2, sandbox) refuse to run without an approved, unused approval.
 
 How I tested it, because "the guardrails work" is cheap to say
-1. 55 deterministic scenarios: over budget, expired mandate, price drift, bypassing the queue, poisoned listings. A scripted model is fooled on purpose and proposes what the mandate forbids.
+1. 56 deterministic scenarios: over budget, expired mandate, price drift, bypassing the queue, poisoned listings. A scripted model is fooled on purpose and proposes what the mandate forbids.
 2. An independent oracle that never calls the guardrail code and re-derives, from the raw fixtures, whether any captured payment left the mandate. Result: 46/46 inside the mandate.
 3. A mutation run: switch off each of the eleven guardrails one at a time and require at least one scenario to fail. All eleven are caught (1 to 6 scenarios each). Nine of them also show money leaving the mandate; for size and price freshness the failure is on the scenario outcome, because my oracle does not yet judge those two. I wrote that down as an open ticket instead of hiding it.
 
@@ -56,7 +56,7 @@ I turned Mandate from a form-driven demo into an agent you talk to. It can now w
 - A revoked or superseded contract fails an eleventh guardrail, at proposal and again at checkout.
 - The UI renders only typed cards built from server state. Agent text is plain text; an unknown card type renders nothing (there is a test for it).
 
-How I check it: 55 scenarios (9 of them about the agent), and a mutation run that switches each of the 11 guardrails off in turn. All 11 caught. Sandbox only; the eval does not use a real LLM.
+How I check it: 56 scenarios (9 of them about the agent), and a mutation run that switches each of the 11 guardrails off in turn. All 11 caught. Sandbox only; the eval does not use a real LLM.
 
 #AIAgents #TypeScript #Evals
 

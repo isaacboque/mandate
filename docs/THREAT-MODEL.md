@@ -15,7 +15,7 @@ The asset is the buyer's money. The mandate (budget, per-item cap, categories, m
 | Write a reason for each line | Approve, edit the mandate, or raise the budget |
 | | Read product text as instructions: it is quoted JSON, never part of the system prompt |
 
-## Attacks covered (55 scenarios, `npm run eval`)
+## Attacks covered (56 scenarios, `npm run eval`)
 
 An independent oracle re-derives every captured payment from the raw fixture rows and the mandate it was made under; it never calls the guardrail code.
 
@@ -38,14 +38,14 @@ The chat agent has exactly 8 tools: search, get product, propose cart, draft con
 
 Limit: figures the model writes in chat text are not verified; cards carry numbers from server state, and the approval of an `auto_under` cart follows the rule in the human-signed contract, not the agent.
 
-Result: spend safety 55/55, guardrails 27/27, injection 7/7, task success 12/12, agent 9/9.
+Result: spend safety 56/56, guardrails 28/28, injection 7/7, task success 12/12, agent 9/9.
 
 ## Out of scope and known limits
 
 - **Sandbox only.** The merchant of record in the demo is a PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a merchant handoff) is not built, so the trust problem of a real merchant (fraud, delivery, refunds) is not addressed.
 - **The scripted eval does not test a real LLM.** The guardrails hold whatever the model does, but how well a given model chooses products is not measured by it. `npm run eval:real` runs a smaller set against a real model when you set your own key.
 - **Injection detection is regex-based and conservative.** It is one layer. The layers that matter are structural: no payment tool, untrusted text kept out of the system prompt, checks in code at proposal and at checkout.
-- **Catalog data is trusted for facts:** price, stock and category come from Channel3. A merchant that lies about them is not detected. Price units are assumed decimal major units (confirmed with a smoke test). Offers priced under one cent are dropped when a listing is read, but `checkCart` itself does not reject a zero, negative or non-numeric price ([ticket 08](wayfinder/tickets/08-checkcart-price-sanity.md)).
+- **Catalog data is trusted for facts:** price, stock and category come from Channel3. A merchant that lies about them is not detected. Price units are assumed decimal major units (confirmed with a smoke test). Offers priced under one cent are dropped when a listing is read, and `checkCart` also fails closed on a price that is not a whole number of cents above 0 (the rule sits inside `per_item_cap` and `total_budget`; scenario s56, [ticket 08](wayfinder/tickets/08-checkcart-price-sanity.md)).
 - **State is in memory:** proposals and approvals reset on restart. No accounts, shipping addresses, multi-currency or refunds.
 - **A compromised server or a stolen session is not covered.** Sessions are HttpOnly cookies, in memory, 2 hours idle; this is a demo, not an authentication design.
 - **A person approving a bad cart is not an attack Mandate can stop.** It only guarantees the cart is inside the mandate they signed.

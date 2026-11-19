@@ -32,7 +32,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - [Real merchant handoff](tickets/05-merchant-handoff.md): decided 2026-11-19, sandbox only, declared as a limit
 - [Check hosted demo links before posting](tickets/06-hosted-links.md) (HITL: needs a browser logged out)
 - [Forwarded-for spoofing of the per-visitor limit](tickets/07-forwarded-for-spoofing.md) (HITL: needs a look at the hosted proxy chain)
-- [`checkCart` and nonsense prices](tickets/08-checkcart-price-sanity.md) (HITL, decision: changes what a guardrail blocks)
+- [`checkCart` and nonsense prices](tickets/08-checkcart-price-sanity.md): resolved 2026-11-19
 - [Trace retention](tickets/09-trace-retention.md): resolved 2026-11-19
 - [CI hygiene: `npm ci`, audit, Node 20, visible mutation step](tickets/10-ci-hygiene.md): resolved 2026-11-19
 - [Content-Security-Policy](tickets/11-content-security-policy.md) (AFK, needs a browser check)

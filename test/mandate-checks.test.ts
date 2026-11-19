@@ -27,6 +27,19 @@ describe("checkCart: one test per check, pass and fail", () => {
     expect(ok(m, cart(line({ unitPriceCents: 5000 })), "per_item_cap")).toBe(true);
     expect(ok(m, cart(line({ unitPriceCents: 5001 })), "per_item_cap")).toBe(false);
   });
+  it("a price that is not a whole number of cents above 0 fails per_item_cap and total_budget (fail closed)", () => {
+    for (const price of [0, -1, -5000, NaN, Infinity, 100.5]) {
+      const c = cart(line({ unitPriceCents: price }));
+      expect(ok(mandate, c, "per_item_cap")).toBe(false);
+      expect(ok(mandate, c, "total_budget")).toBe(false);
+    }
+    // A negative line cannot pay for a second, over-cap line: the cart as a whole is blocked.
+    const trick = cart(line({ productId: "a", unitPriceCents: 8900 }), line({ productId: "b", unitPriceCents: 6400 }), line({ productId: "neg", unitPriceCents: -7000 }));
+    expect(ok({ ...mandate, perItemCapCents: 9000 }, trick, "total_budget")).toBe(false);
+    expect(checkCart(mandate, cart(line({ unitPriceCents: -1 })), NOW).find((r) => r.name === "per_item_cap")!.reason).toMatch(/whole number of cents above 0/);
+    // A normal price is unaffected.
+    expect(ok(mandate, cart(line({ unitPriceCents: 1 })), "per_item_cap")).toBe(true);
+  });
   it("category", () => {
     expect(ok(mandate, cart(line({ category: "shoes" })), "category")).toBe(true);
     expect(ok(mandate, cart(line({ category: "electronics" })), "category")).toBe(false);

@@ -8,7 +8,7 @@
 
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
 
-The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout. In the 55-scenario eval, with a model that is fooled on purpose, no payment was captured outside the mandate.
+The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout. In the 56-scenario eval, with a model that is fooled on purpose, no payment was captured outside the mandate.
 
 **Quickstart (no keys, Node 20+):**
 
@@ -16,11 +16,11 @@ The guardrails are plain code **outside the LLM**. A poisoned product listing ca
 git clone https://github.com/isaacboque/mandate.git && cd mandate
 npm ci
 npm run build && npm start      # http://localhost:8787 (demo mode: chat + contracts, fixture catalog, mock payments, no keys)
-npm run eval                    # 55 deterministic scenarios, prints the table below
+npm run eval                    # 56 deterministic scenarios, prints the table below
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (260 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (261 tests, mocks only), `npm run eval` (spend safety 56/56 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -105,9 +105,9 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 
 On the fixture catalog, with a simulated clock and mock payments (no keys):
 
-- **Spend safety 55/55**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
+- **Spend safety 56/56**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
 - **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
-- **Guardrails 27/27**, **task success 12/12** and **agent scenarios 9/9** (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays).
+- **Guardrails 28/28**, **task success 12/12** and **agent scenarios 9/9** (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays).
 
 - **Every guardrail is load-bearing:** switching off any one of the 11 checks makes at least one scenario fail (11/11, [docs/MUTATION.md](docs/MUTATION.md)). For `hard_attributes` and `price_freshness` the failure is on the scenario outcome, not on the oracle.
 
@@ -125,13 +125,13 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 ## Evaluation
 
-`npm run eval` runs 55 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
+`npm run eval` runs 56 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 55/55 |
-| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 27/27 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 56/56 |
+| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 28/28 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
 | Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 9/9 |
