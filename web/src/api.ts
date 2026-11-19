@@ -53,6 +53,8 @@ async function req<T>(path: string, json?: unknown, post = json !== undefined): 
 export const api = {
   config: () => req<Config>("/api/config"),
   setMandate: (m: Mandate) => req<SignedMandate>("/api/mandate", m),
+  /** The one-click fix: the server signs an amendment (a successor contract), so the chain and the spend are kept. */
+  fixMandate: (hash: string, patch: MandatePatch) => req<SignedMandate>(`/api/mandates/${hash}/fix`, { patch }),
   draftMandate: (text: string) => req<Draft>("/api/mandate/draft", { text }),
   ask: (text: string) => req<AskResult>("/api/ask", { text }),
   approve: (id: string) => req<Proposal>(`/api/proposals/${id}/approve`, {}),

@@ -67,6 +67,12 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.post("/api/drafts/:id/discard", (c) => c.json(svc(c).discardDraft(c.req.param("id"))));
   app.post("/api/amendments/:id/sign", async (c) => c.json(svc(c).signAmendment(c.req.param("id"), await optionalJson(c)), 201));
   app.post("/api/amendments/:id/reject", (c) => c.json(svc(c).rejectAmendment(c.req.param("id"))));
+  // The one-click fix on a blocked card: a successor contract signed in one step (chain and spend kept). Human-only; no agent tool.
+  const FixInput = z.object({ patch: z.object({
+    allowedCategories: z.array(z.string()).optional(), allowedMerchants: z.array(z.string()).optional(),
+    perItemCapCents: z.number().optional(), totalBudgetCents: z.number().optional(),
+  }).strict() }).strict();
+  app.post("/api/mandates/:hash/fix", async (c) => c.json(svc(c).applyFix(c.req.param("hash"), FixInput.parse(await c.req.json()).patch), 201));
   app.post("/api/mandates/:hash/revoke", (c) => c.json(svc(c).revoke(c.req.param("hash"))));
 
   // chat: plain text in, the agent's words plus typed cards out (built from server state, never from model text)

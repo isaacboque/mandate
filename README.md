@@ -20,7 +20,7 @@ npm run eval                    # 55 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (256 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (260 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -67,7 +67,7 @@ flowchart LR
 - **One sentence is enough**: write what you want with how much you can spend ("indoor futsal shoes, max $90") and the agent drafts the limits into a form in the Contracts panel for you to review; **Sign contract** signs the fields as you left them. The agent does not search before a contract is signed. The draft covers budget, caps, categories (resolved against the catalog's own tree, not guessed by the model), shops, validity and what it may do alone. It only drafts: nothing is signed until you press Sign, and the signed mandate goes through the same validation as one typed by hand. Without an AI model, or if it fails, a simple rules reader does a plainer version and says so.
 - **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
 - **Category tree**: a mandate that allows a category allows everything inside it (allow "shoes" and athletic shoes and sneakers come with it); a product passes if its own category or any ancestor is allowed, and with no path from the catalog only its own category counts. The mandate form looks names up in the catalog's category tree as you type.
-- **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the contract (new hash). The agent can never do this itself.
+- **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that signs an amendment (a successor contract with a new hash that replaces the old one), so the spend already committed still counts. The agent can never do this itself.
 - **Audit**: each purchase, and each contract as a whole (the chain of signed contracts, every proposal under it and the trace), can be downloaded as JSON.
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
 
