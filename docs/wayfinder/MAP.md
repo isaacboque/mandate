@@ -27,7 +27,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - Resolved 2026-11-19: [23 fix keeps the chain](tickets/23-fix-resigns-chain.md). Resolved 2026-11-19: [24 per-contract audit](tickets/24-contract-audit.md).
 
 ## Open
-- [Extend the oracle to size and price freshness](tickets/02-oracle-blind-spots.md) (AFK follow-up, not done here: changes the oracle's inputs)
+- [Extend the oracle to size and price freshness](tickets/02-oracle-blind-spots.md): resolved 2026-11-19
 - [Run `eval:real` and publish the numbers?](tickets/04-real-model-numbers.md) (HITL: spends API credits)
 - [Real merchant handoff](tickets/05-merchant-handoff.md): decided 2026-11-19, sandbox only, declared as a limit
 - [Check hosted demo links before posting](tickets/06-hosted-links.md) (HITL: needs a browser logged out)

@@ -37,6 +37,8 @@ describe("mutation: the eval notices when a guardrail is switched off", () => {
         console.log(`MUTANT ${name}: ${killed.length} scenarios fail (${killed.map((r) => r.id).join(",")}); money outside mandate in ${leaked.length} (${leaked.join(",")})`);
       }
       expect(killed.length).toBeGreaterThan(0);
+      // The oracle judges size and price freshness itself (ticket 02), so these two are caught as money outside the mandate, not only as a wrong outcome.
+      if (name === "hard_attributes" || name === "price_freshness") expect(killed.some((r) => !r.noSpendOutsideMandate)).toBe(true);
     });
   }
 });
