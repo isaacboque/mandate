@@ -420,12 +420,13 @@ export class MandateService {
    * One chat turn. The agent can draft, propose and explain; every action that moves authority or money is an
    * endpoint a person calls. Cards come from server state, never from the model's words.
    */
-  async chat(text: string): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+  /** `onText` (streaming) gets the model's words as they are written; the returned reply and the cards are the only things that count. */
+  async chat(text: string, onText?: (delta: string) => void): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
     const out: ConciergeOut = { refused: [], cards: [] };
     const seen = new Map<string, Product>();
     const mode = this.agentMode;
     const port: ConciergePort = {
-      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs,
+      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs, onText,
       mandates: () => this.mandates(),
       draftFromSpec: async (spec: DraftSpec) => this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent"),
       draftFromText: async (t) => this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent"),

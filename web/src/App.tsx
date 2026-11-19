@@ -29,6 +29,7 @@ export default function App() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [tab, setTab] = useState<Tab>("chat");
   const [sending, setSending] = useState(false);
+  const [streamed, setStreamed] = useState(""); // the agent's words so far in this turn; the final reply replaces it
   const [freshAttack, setFreshAttack] = useState<string>();
   // The trace sits beside the page only on a very wide screen; otherwise it is one click away.
   const [traceOpen, setTraceOpen] = useState(() => window.matchMedia("(min-width: 1500px)").matches);
@@ -69,8 +70,10 @@ export default function App() {
     const userId = nextId();
     setItems((all) => [...all, { id: userId, role: "user", text, cards: [] }]);
     setSending(true);
-    const r = await run(() => api.chat(text));
+    setStreamed("");
+    const r = await run(() => api.chatStream(text, (d) => setStreamed((t) => t + d)));
     setSending(false);
+    setStreamed("");
     if (!r) { setItems((all) => all.filter((i) => i.id !== userId)); return false; }
     const cards = parseCards(r.cards);
     for (const c of cards) if (c.type === "proposal") upsert(c.proposal);
@@ -144,7 +147,7 @@ export default function App() {
             <div className="workspace" data-tab={tab}>
               <div id="chat-pane" className="pane chatpane" role="tabpanel" aria-labelledby="tab-chat">
                 <Chat
-                  items={items} sending={sending} onSend={onSend} onAttack={onAttack}
+                  items={items} sending={sending} streaming={streamed} onSend={onSend} onAttack={onAttack}
                   ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts, amendments, freshAttack, onReview, onFix, onProposalChange: (p) => { upsert(p); refresh(); } }}
                 />
               </div>

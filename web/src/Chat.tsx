@@ -70,7 +70,7 @@ function CardView({ card, ctx }: { card: Card; ctx: Ctx }) {
   }
 }
 
-export function Chat({ items, ctx, sending, onSend, onAttack }: { items: ChatItem[]; ctx: Ctx; sending: boolean; onSend: (text: string) => Promise<boolean>; onAttack: () => void }) {
+export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: { items: ChatItem[]; ctx: Ctx; sending: boolean; streaming?: string; onSend: (text: string) => Promise<boolean>; onAttack: () => void }) {
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -81,7 +81,7 @@ export function Chat({ items, ctx, sending, onSend, onAttack }: { items: ChatIte
     : [`Indoor futsal shoes, max 90 ${sym}`, `Grip socks, max 15 ${sym}`, `A futsal ball, max 40 ${sym}`];
   const first = !items.some((i) => i.role === "user");
   const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  useEffect(() => { end.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" }); }, [items.length, sending, reduce, ctx.proposals]);
+  useEffect(() => { end.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" }); }, [items.length, sending, streaming.length > 0, reduce, ctx.proposals]);
   const send = async (t = text) => {
     const v = t.trim();
     if (!v || sending) return;
@@ -109,6 +109,10 @@ export function Chat({ items, ctx, sending, onSend, onAttack }: { items: ChatIte
             {m.cards.map((c, i) => <CardView key={i} card={c} ctx={ctx} />)}
           </div>
         ))}
+        {sending && streaming && (
+          // The model's words as they arrive: plain text only, never actions. The final reply (and its cards) replaces this bubble.
+          <div className="msg agent streaming" aria-live="off"><p className="bubble">{streaming}</p></div>
+        )}
         {sending && <Working live={live && ctx.config.agent === "llm"} />}
         <div ref={end} />
       </div>

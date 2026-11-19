@@ -50,6 +50,43 @@ async function req<T>(path: string, json?: unknown, post = json !== undefined): 
   return data as T;
 }
 
+async function chatStream(text: string, onText: (delta: string) => void): Promise<ChatResult> {
+  let r: Response;
+  try {
+    r = await fetch("/api/chat/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+  } catch {
+    return api.chat(text); // nothing reached the server
+  }
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? `HTTP ${r.status}`);
+  }
+  if (!r.body || !(r.headers.get("content-type") ?? "").includes("text/event-stream")) return api.chat(text); // a proxy that cannot stream
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let done: ChatResult | undefined;
+  const handle = (block: string) => {
+    const event = /^event: (.*)$/m.exec(block)?.[1];
+    const data = /^data: (.*)$/m.exec(block)?.[1];
+    if (!event || data === undefined) return;
+    const payload = JSON.parse(data);
+    if (event === "text") onText(String(payload.delta ?? ""));
+    else if (event === "done") done = payload as ChatResult;
+    else if (event === "error") throw new Error(String(payload.error ?? "The agent could not answer"));
+  };
+  for (;;) {
+    const { value, done: end } = await reader.read();
+    if (value) buf += decoder.decode(value, { stream: true });
+    let i: number;
+    while ((i = buf.indexOf("\n\n")) >= 0) { handle(buf.slice(0, i)); buf = buf.slice(i + 2); }
+    if (end) break;
+  }
+  if (buf.trim()) handle(buf);
+  if (!done) throw new Error("The reply was cut off. Try again.");
+  return done;
+}
+
 export const api = {
   config: () => req<Config>("/api/config"),
   setMandate: (m: Mandate) => req<SignedMandate>("/api/mandate", m),
@@ -65,6 +102,12 @@ export const api = {
   attack: () => req<Proposal>("/api/attack", {}),
   trace: () => req<TraceEvent[]>("/api/trace"),
   chat: (text: string) => req<ChatResult>("/api/chat", { text }),
+  /**
+   * The same turn as `chat`, with the agent's words handed to `onText` as they are written (Server-Sent Events). Only the final
+   * `done` payload counts: the cards and the reply come from it. If the stream cannot be used at all (no body, wrong content type,
+   * network error before anything arrived) it falls back to `chat`; a turn that already ran or failed on the server is never repeated.
+   */
+  chatStream: (text: string, onText: (delta: string) => void) => chatStream(text, onText),
   history: () => req<{ role: "user" | "assistant"; text: string }[]>("/api/chat"),
   mandates: () => req<MandateView[]>("/api/mandates"),
   drafts: () => req<PendingDraft[]>("/api/drafts"),
