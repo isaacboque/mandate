@@ -208,6 +208,15 @@ export class MandateService {
     return a;
   }
 
+  /**
+   * The person's one-click fix on a blocked card: an amendment built from the fix patch and signed in the same step.
+   * The result is a successor contract (`supersedes` = the old one), so the chain and the spend already committed are kept.
+   * Human-only, like every signing act: the concierge has no tool for this. Fix fields are limited to what a card can offer.
+   */
+  applyFix(baseHash: string, patch: MandatePatch): SignedMandate {
+    return this.signAmendment(this.amend(baseHash, patch, "One-click fix on a blocked card", "user").id);
+  }
+
   /** Validates the successor like a hand-typed mandate and refuses a budget below what the chain already committed. */
   private successor(base: MandateRecord, fields: unknown): Mandate {
     const { supersedes: _ignored, ...plain } = fields as Mandate;

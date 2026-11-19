@@ -91,14 +91,14 @@ export default function App() {
     });
   };
 
-  /** The person widens their own contract: the one-click fix re-signs through the human endpoint, with a new hash. */
+  /** The person widens their own contract: the one-click fix signs an amendment (a successor contract), so the chain and the spend are kept. */
   const onFix = (b: BlockedView) => {
     const p = proposalMap.get(b.proposalId);
     const base = contracts.find((c) => c.hash === p?.mandateHash);
     if (!b.fix || !base) { setError("That contract can no longer be changed here. Ask the agent for a new one."); return; }
-    run(() => api.setMandate({ ...base.mandate, ...b.fix!.patch, supersedes: undefined })).then((s) => {
+    run(() => api.fixMandate(base.hash, b.fix!.patch)).then((s) => {
       if (!s) return;
-      add("agent", `Done: you signed a new contract (${s.hash}) with that change. The old one is superseded. Ask again to retry.`);
+      add("agent", `Done: you signed an amendment (${s.hash}) with that change. It replaces the old contract and keeps what was already spent. Ask again to retry.`);
       refresh();
     });
   };
