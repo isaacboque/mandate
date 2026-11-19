@@ -1,10 +1,11 @@
 import type { LanguageModel } from "ai";
 import { runLlmAgent, runRulesAgent, type AgentCtx, type AgentRun } from "../agent/agent.js";
+import { runLlmConcierge, runRulesConcierge, type Card, type ConciergeOut, type ConciergePort } from "../agent/concierge.js";
 import type { ApprovalQueue } from "../approval/queue.js";
 import type { CatalogGateway, CategoryHit, Product } from "../catalog/types.js";
 import { allPass, checkCart } from "../mandate/check.js";
 import { ancestry, type MandateRecord } from "../mandate/chain.js";
-import { draftMandate, type Draft } from "../mandate/draft.js";
+import { draftFromSpec, draftMandate, type Draft, type DraftSpec } from "../mandate/draft.js";
 import { MandateInput } from "../mandate/input.js";
 import { signMandate, type SignedMandate } from "../mandate/sign.js";
 import type { Cart, CartLine, Mandate } from "../mandate/types.js";
@@ -12,7 +13,8 @@ import { MockPayments } from "../payments/MockPayments.js";
 import { orderIdempotencyKey, type PaymentGateway } from "../payments/types.js";
 import type { Tracer } from "../trace/trace.js";
 import { formatCents } from "../core/money.js";
-import type { Amendment, AmendmentChanges, MandatePatch, MandateView, NearMiss, PendingDraft, Proposal, ProposeInput } from "./types.js";
+import { Conversation, type Turn } from "./conversation.js";
+import type { Amendment, AmendmentChanges, BlockedView, MandatePatch, MandateView, NearMiss, PendingDraft, Proposal, ProposeInput } from "./types.js";
 
 export type ServiceDeps = {
   catalog: CatalogGateway;
@@ -28,12 +30,29 @@ export type ServiceDeps = {
   idPrefix?: string;
   /** Longest wait for the AI model before the rules agent takes over (default 40 s). */
   llmTimeoutMs?: number;
+  /** Currency for drafts when no contract exists yet (default EUR). */
+  currency?: string;
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
   productId: p.id, title: p.title, merchant: p.merchant, category: p.category, categoryPath: p.categoryPath, unitPriceCents: p.priceCents, quantity,
   currency: p.currency, attributes: p.attributes, priceCheckedAt: p.priceCheckedAt, injectionFlag: p.injectionFlag,
 });
+
+/**
+ * The exact mandate change that would let a product through, when every failure is a limit the person (not the agent)
+ * could raise or widen. Shared by "products the agent saw but could not propose" and "why was this blocked".
+ */
+function mandateFix(m: Mandate, spent: number, names: string[], p: { category: string; merchant: string; priceCents: number }): NearMiss["fix"] {
+  if (!names.every((n) => n === "category" || n === "merchant" || n === "per_item_cap" || n === "total_budget")) return undefined;
+  const patch: MandatePatch = {};
+  const parts: string[] = [];
+  if (names.includes("category")) { patch.allowedCategories = [...m.allowedCategories, p.category]; parts.push(`allow "${p.category}"`); }
+  if (names.includes("merchant")) { patch.allowedMerchants = [...(m.allowedMerchants ?? []), p.merchant]; parts.push(`allow ${p.merchant}`); }
+  if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
+  if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
+  return { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch };
+}
 
 /**
  * The orchestration layer. The agent only proposes. Guardrails (pure code) check every proposal,
@@ -45,6 +64,7 @@ export class MandateService {
   private records = new Map<string, MandateRecord>();
   private pendingDrafts = new Map<string, PendingDraft>();
   private pendingAmendments = new Map<string, Amendment>();
+  private conversation = new Conversation();
   private proposals = new Map<string, Proposal>();
   private seq = 0;
   /** Approve and Pay that are running right now, by proposal: a second click (or a retry) joins the first instead of repeating it. */
@@ -273,6 +293,7 @@ export class MandateService {
     this.proposals.clear();
     this.pendingDrafts.clear();
     this.pendingAmendments.clear();
+    this.conversation.clear();
     this.d.approvals.clear();
     this.trace("demo.reset", "decision", {});
   }
@@ -334,23 +355,72 @@ export class MandateService {
       if (proposed.has(p.id) || p.injectionFlag || !p.inStock) continue;
       const failed = checkCart(m, { lines: [toCartLine(p, 1)] }, this.now(), { spentCents: spent, status: this.record(signed.hash).status }).filter((c) => !c.ok);
       if (failed.length === 0) continue;
-      const names = failed.map((c) => c.name);
-      const fixable = names.every((n) => n === "category" || n === "merchant" || n === "per_item_cap" || n === "total_budget");
-      const patch: MandatePatch = {};
-      const parts: string[] = [];
-      if (fixable) {
-        if (names.includes("category")) { patch.allowedCategories = [...m.allowedCategories, p.category]; parts.push(`allow "${p.category}"`); }
-        if (names.includes("merchant")) { patch.allowedMerchants = [...(m.allowedMerchants ?? []), p.merchant]; parts.push(`allow ${p.merchant}`); }
-        if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
-        if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
-      }
+      const fix = mandateFix(m, spent, failed.map((c) => c.name), p);
       out.push({
         productId: p.id, title: p.title, merchant: p.merchant, category: p.category, priceCents: p.priceCents, currency: p.currency, url: p.url, imageUrl: p.imageUrl,
         failed: failed.map((c) => ({ name: c.name, reason: c.reason })),
-        fix: fixable ? { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch } : undefined,
+        fix,
       });
     }
     return out.sort((a, b) => a.failed.length - b.failed.length || a.priceCents - b.priceCents).slice(0, 4);
+  }
+
+  /** Why a proposal did not go through, from the guardrail results (default: the latest blocked or failed one). */
+  explain(id?: string): BlockedView | null {
+    const p = id ? this.get(id) : [...this.proposals.values()].reverse().find((x) => x.blocked || x.status === "failed");
+    if (!p) return null;
+    const failed = p.checks.filter((c) => !c.ok).map((c) => ({ name: c.name, reason: c.reason }));
+    const rec = this.records.get(p.mandateHash);
+    const line = p.cart.lines.length === 1 ? p.cart.lines[0] : undefined;
+    const fix = rec?.status === "active" && line && failed.length
+      ? mandateFix(rec.signed.mandate, this.spentCents(p.mandateHash), failed.map((f) => f.name), { category: line.category, merchant: line.merchant, priceCents: line.unitPriceCents })
+      : undefined;
+    return { proposalId: p.id, title: p.lines.map((l) => l.title).join(", "), status: p.status, failed, error: p.error, fix };
+  }
+
+  history(): Turn[] {
+    return this.conversation.history();
+  }
+
+  /**
+   * One chat turn. The agent can draft, propose and explain; every action that moves authority or money is an
+   * endpoint a person calls. Cards come from server state, never from the model's words.
+   */
+  async chat(text: string): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+    const out: ConciergeOut = { refused: [], cards: [] };
+    const seen = new Map<string, Product>();
+    const mode = this.agentMode;
+    const port: ConciergePort = {
+      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs,
+      mandates: () => this.mandates(),
+      draftFromSpec: async (spec: DraftSpec) => this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent"),
+      draftFromText: async (t) => this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent"),
+      amend: (id, changes, reason) => this.amend(id, changes, reason, "agent"),
+      proposeCart: async (hash, input, ask) => {
+        const p = this.createProposal("agent", ask, seen, input, "", hash);
+        p.agent = mode;
+        await this.autoApprove(p);
+        return p;
+      },
+      explain: (id) => this.explain(id),
+    };
+    this.trace("chat.turn", "decision", { args: { chars: text.length, mode } });
+    let reply: string;
+    try {
+      reply = this.d.model ? await runLlmConcierge(this.conversation.history(), text, this.d.model, port, out) : await runRulesConcierge(text, port, out);
+    } catch (e) {
+      if (!this.d.model || out.cards.length) throw e; // after a tool already acted, a second try would repeat it
+      this.trace("concierge.llm_failed", "error", { args: { chars: text.length }, error: (e as Error).message.slice(0, 160) });
+      reply = "The AI model was unavailable, so the built-in rules mode answered. " + (await runRulesConcierge(text, port, out));
+    }
+    for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
+    this.conversation.add("user", text);
+    this.conversation.add("assistant", reply);
+    return { messages: [{ role: "assistant", text: reply }], cards: out.cards };
+  }
+
+  private currencyOf(): string {
+    return this.mandate?.mandate.currency ?? this.d.currency ?? "EUR";
   }
 
   /** The attack demo: a model fooled by a poisoned listing proposes buying 10. The guardrails must stop it. */

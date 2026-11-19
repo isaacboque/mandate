@@ -21,7 +21,7 @@ export type Draft = {
   mode: "llm" | "rules";
 };
 
-const Spec = z.object({
+export const DraftSpec = z.object({
   totalBudget: z.number().positive().describe("Total the agent may spend, in major units (100 means 100.00)."),
   perItemCap: z.number().positive().optional().describe("Most it may pay for one item. Omit if the person did not say."),
   maxQuantityPerItem: z.number().int().min(1).max(100).optional().describe("How many of the same item. Default 1."),
@@ -34,7 +34,8 @@ const Spec = z.object({
   }),
   assumptions: z.array(z.string().max(160)).max(6).optional().describe("Anything you had to guess; choose the most restrictive reading."),
 });
-type Spec = z.infer<typeof Spec>;
+export type DraftSpec = z.infer<typeof DraftSpec>;
+type Spec = DraftSpec;
 
 const HOUR_STEPS = [1, 4, 24, 72, 168];
 const MAX_MONEY = 1_000_000;
@@ -52,7 +53,7 @@ async function specFromModel(model: LanguageModel, text: string, currency: strin
     model,
     system: SYSTEM(currency),
     prompt: `The person describes the mandate: ${JSON.stringify(text)}`,
-    tools: { draft_mandate: tool({ description: "Record the drafted mandate.", inputSchema: Spec, execute: async (input) => { got = input; return { ok: true }; } }) },
+    tools: { draft_mandate: tool({ description: "Record the drafted mandate.", inputSchema: DraftSpec, execute: async (input) => { got = input; return { ok: true }; } }) },
     toolChoice: { type: "tool", toolName: "draft_mandate" },
     stopWhen: stepCountIs(1), // the one forced tool call is the whole job
     abortSignal: AbortSignal.timeout(timeoutMs),
@@ -121,7 +122,16 @@ export async function draftMandate(opts: { text: string; currency: string; model
     spec = specFromRules(text);
     if (warnings.length === 0) warnings.push("Drafted with simple rules (no AI model). Check every field.");
   }
+  return draftFromSpec(spec, { currency: opts.currency, catalog: opts.catalog, now: opts.now, mode, warnings });
+}
 
+/**
+ * Turns an already-structured spec into a draft: clamps amounts, snaps validity to what the form offers and takes categories
+ * from the catalog's own tree. The concierge's `draft_mandate` tool calls this directly, so no second model call is needed.
+ */
+export async function draftFromSpec(spec: Spec & { fallbackCategory?: string }, opts: { currency: string; catalog: CatalogGateway; now: Date; mode: Draft["mode"]; warnings?: string[] }): Promise<Draft> {
+  const warnings = opts.warnings ?? [];
+  const mode = opts.mode;
   const cur = opts.currency;
   const fmt = (c: number) => formatCents(c, cur);
   const clampMoney = (v: number, what: string) => {

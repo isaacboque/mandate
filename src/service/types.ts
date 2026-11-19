@@ -80,3 +80,11 @@ export type Amendment = {
   id: string; baseHash: string; mandate: Mandate; diff: { field: string; before: unknown; after: unknown }[]; reason: string;
   source: "agent" | "user"; status: "pending" | "signed" | "rejected"; createdAt: string; signedHash?: string;
 };
+
+/** Why a proposal did not go through, from the guardrail results on the server. `fix` only when a person could widen their own contract. */
+export type BlockedView = {
+  proposalId: string; title: string; status: ProposalStatus;
+  failed: { name: string; reason: string }[];
+  error?: string;
+  fix?: { label: string; patch: MandatePatch };
+};
