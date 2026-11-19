@@ -100,7 +100,12 @@ export function TagInput({ id, label, hint, values, onChange, normalize, format 
             else if (e.key === "Escape" && (text || warn)) { e.preventDefault(); e.stopPropagation(); setText(""); setWarn(undefined); setArmed(""); }
             else if (e.key === "Backspace" && text === "" && values.length) remove(values[values.length - 1]);
           }}
-          onBlur={() => { if (text && !search) add(text); }}
+          onBlur={() => {
+            if (!text.trim()) return;
+            if (!search) add(text);
+            // With a catalog search the word is not added silently (it may match nothing): keep it and say it is still pending.
+            else if (!warn) setWarn(`"${text.trim()}" is not added yet. Press Enter to add it, or pick a match.`);
+          }}
         />
       </div>
       {warn && <p className="tagwarn" role="status">{warn}</p>}

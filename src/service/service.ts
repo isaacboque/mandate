@@ -288,6 +288,31 @@ export class MandateService {
     };
   }
 
+  /**
+   * Everything needed to audit one contract: the chain of signed contracts it grew out of (oldest first, so an amendment
+   * is visible next to what it replaced), every proposal made under any of them, and the trace of those proposals.
+   */
+  auditContract(hash: string) {
+    const record = this.record(hash); // throws for an unknown hash, so an error is never sent as a file download
+    const chainHashes = ancestry(this.records, record.signed.hash);
+    const chain = [...chainHashes].reverse().map((h) => ({ ...this.records.get(h)!.signed, status: this.records.get(h)!.status, signedAt: this.records.get(h)!.signedAt, revokedAt: this.records.get(h)!.revokedAt }));
+    const proposals = this.list().filter((p) => chainHashes.includes(p.mandateHash));
+    const needles = proposals.flatMap((p) => [p.id, p.order?.id, p.approvalId]).filter((x): x is string => Boolean(x)).map((n) => JSON.stringify(n));
+    const hashNeedles = chainHashes.map((h) => JSON.stringify(h));
+    const trace = this.trail().filter((e) => {
+      if (["mandate.signed", "mandate.revoked"].includes(e.step)) return hashNeedles.some((n) => JSON.stringify([e.args, e.result]).includes(n));
+      return needles.some((n) => JSON.stringify([e.args, e.result]).includes(n));
+    });
+    return {
+      generatedAt: this.now().toISOString(),
+      note: "The chain of signed contracts (oldest first), every proposal made under it with its guardrail checks, and the approval and payment trace. Re-hash each mandate JSON (canonical, sorted keys, sha256, first 12 hex) to verify its signature.",
+      chain,
+      spentCents: this.spentCents(record.signed.hash),
+      proposals,
+      trace,
+    };
+  }
+
   reset(): void {
     if (!this.isMock) throw new Error("Reset only exists in demo mode");
     this.proposals.clear();

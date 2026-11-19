@@ -1,4 +1,4 @@
-# Agent spec: Mandate as a conversational agent (part 1: core)
+# Agent spec: Mandate as a conversational agent
 
 ## Decisions
 - **Eleventh guardrail `mandate_active`.** A contract is `active`, `revoked` or `superseded` (expired stays derived from the date). Enforced at proposal and again at checkout.
@@ -10,10 +10,10 @@
 - **History** is bounded: 20 exchanges (40 messages), plain text only. Without an LLM key the concierge runs in rules mode (regex intents).
 
 ## API
-`GET /api/mandates`, `/api/drafts`, `/api/amendments`, `/api/chat`; `POST /api/drafts/:id/sign|discard`, `/api/amendments/:id/sign|reject`, `/api/mandates/:hash/revoke`, `/api/chat` (`{text}` 1..500 chars, rate limited).
+`GET /api/mandates`, `/api/mandates/:hash/audit` (the chain of signed contracts, every proposal under it and its trace, as a download), `/api/drafts`, `/api/amendments`, `/api/chat`; `POST /api/drafts/:id/sign|discard`, `/api/amendments/:id/sign|reject`, `/api/mandates/:hash/revoke`, `/api/chat` (`{text}` 1..500 chars, rate limited).
 
 ## Tests
 `test/chain.test.ts`, `mandates.test.ts`, `concierge.test.ts`, `chat-api.test.ts`; eval group `agent` (a01-a09); mutant `mandate_active` (a05, a06, s14).
 
-## Out of scope (part 2 and later)
-Web UI for chat and contracts (the web label "All 11 guardrail checks passed" is already updated), streaming replies, agent-side auto-sign (ticket 17, recommend no), agent-callable revoke (ticket 18, recommend no).
+## Out of scope
+Streaming replies, agent-side auto-sign (ticket 17, recommend no), agent-callable revoke (ticket 18, recommend no).

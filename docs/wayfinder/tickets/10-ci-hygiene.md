@@ -1,6 +1,6 @@
 ---
 type: task (AFK)
-status: open
+status: resolved
 ---
 ## Question
 Four small gaps between what CI runs and what the README promises:
@@ -11,3 +11,7 @@ Four small gaps between what CI runs and what the README promises:
 
 ## Recommended answer
 Change the workflow to `npm ci`, add `npm audit --omit=dev` as a non-blocking step and an explicit `npm run eval:mutants` step, and set `engines.node` to `>=20`. Not done in the review PR: it touches the workflow file and `package.json`, which the task did not list.
+
+
+## Resolution (2026-11-19)
+CI uses `npm ci`, a non-blocking `npm audit --omit=dev` step and a named `eval:mutants` step; `engines.node` is `>=20`.

@@ -19,7 +19,7 @@
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

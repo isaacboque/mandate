@@ -328,3 +328,44 @@ describe("category tree through the whole flow", () => {
     expect((await (await app.request("/api/categories?q=shoes")).json()).categories).toEqual([]);
   });
 });
+
+describe("per-contract audit", () => {
+  it("bundles the whole chain (oldest first), every proposal under it and the trace, whichever contract in the chain you ask about", async () => {
+    const { service } = setup();
+    const first = service.mandate!;
+    const p1 = (await service.ask(ASK)).proposals[0];
+    await service.approve(p1.id);
+    await service.pay(p1.id);
+    const next = service.signAmendment(service.amend(first.hash, { totalBudgetCents: 20000, perItemCapCents: 20000 }, "more", "agent").id);
+    const a = service.auditContract(next.hash);
+    expect(a.chain.map((c) => c.hash)).toEqual([first.hash, next.hash]);
+    expect(a.chain[0].status).toBe("superseded");
+    expect(a.chain[1].status).toBe("active");
+    expect(a.proposals.map((p) => p.id)).toEqual([p1.id]);
+    expect(a.spentCents).toBe(p1.totalCents);
+    expect(a.trace.map((e) => e.step)).toEqual(expect.arrayContaining(["mandate.signed", "guardrails.checkCart", "payments.capture"]));
+    // Asking about the older contract: same chain only up to it, but it still carries its own proposals.
+    const old = service.auditContract(first.hash);
+    expect(old.chain.map((c) => c.hash)).toEqual([first.hash]);
+    expect(old.proposals).toHaveLength(1);
+  });
+
+  it("a contract with no purchases still exports (the signature and an empty list), and an unknown hash is an error", () => {
+    const { service } = setup();
+    const a = service.auditContract(service.mandate!.hash);
+    expect(a.proposals).toEqual([]);
+    expect(a.chain).toHaveLength(1);
+    expect(() => service.auditContract("nope")).toThrow();
+  });
+
+  it("is served as a file download by GET /api/mandates/:hash/audit, and an unknown hash is a plain error", async () => {
+    const { service } = setup();
+    const app = createApp(service, { demoMode: "mock", currency: "EUR" });
+    const ok = await app.request(`/api/mandates/${service.mandate!.hash}/audit`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-disposition")).toMatch(/attachment; filename="mandate-contract-audit-/);
+    const bad = await app.request("/api/mandates/nope/audit");
+    expect(bad.status).toBeGreaterThanOrEqual(400);
+    expect(bad.headers.get("content-disposition")).toBeNull();
+  });
+});

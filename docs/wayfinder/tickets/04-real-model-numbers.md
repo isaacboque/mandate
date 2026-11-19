@@ -7,3 +7,7 @@ status: open
 
 ## Recommended answer
 Yes, once, with your own key and the cheapest model that works, then add the table to the README under "Limits". Until then the posts say the main eval does not test a real LLM.
+
+
+## Decision
+Decided by Isaac 2026-11-19: yes, run `npm run eval:real` once with his own key and publish the table. Manual step for Isaac (keys are never handled by agents); then add the table to the README under "Limits".
