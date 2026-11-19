@@ -13,7 +13,8 @@ vi.mock("../src/mandate/check.js", async (importOriginal) => {
   };
 });
 
-const { runAll } = await import("../src/eval/run.js");
+const { runAll, runScenario } = await import("../src/eval/run.js");
+const { buildScenarios } = await import("../src/eval/scenarios.js");
 
 const CHECKS: CheckName[] = [
   "total_budget", "per_item_cap", "category", "merchant", "quantity",
@@ -41,4 +42,13 @@ describe("mutation: the eval notices when a guardrail is switched off", () => {
       if (name === "hard_attributes" || name === "price_freshness") expect(killed.some((r) => !r.noSpendOutsideMandate)).toBe(true);
     });
   }
+
+  it("price rule switched off (it lives in total_budget and per_item_cap): s56 reaches the payment layer, the mock refuses, the oracle still reports it", async () => {
+    state.disabled = new Set(["total_budget", "per_item_cap"]);
+    const r = await runScenario(buildScenarios().find((s) => s.id === "s56")!);
+    state.disabled.clear();
+    expect(r.pass).toBe(false);
+    expect(r.noSpendOutsideMandate).toBe(false);
+    expect(r.violations.some((v) => /payment attempt/.test(v) && /price -7000/.test(v))).toBe(true);
+  });
 });
