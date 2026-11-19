@@ -1,751 +1,166 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { useRun, type RunFn } from "./useRun";
-import { api, money, toCents, type Check, type Config, type Draft, type Mandate, type NearMiss, type Proposal, type SignedMandate, type TraceEvent } from "./api";
-import { Icon } from "./icons";
-import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
-import { formatMoneyInput, parseMoney } from "./moneyInput";
-import { explainAttack } from "./attack";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, type Amendment, type BlockedView, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
+import { Booting } from "./Booting";
+import { attention, parseCards } from "./cards";
+import { Chat, type ChatItem } from "./Chat";
+import { ContractsPanel } from "./ContractsPanel";
 import { friendlyError } from "./errors";
-import { CHECK_LABEL } from "./labels";
-import { traceRows } from "./trace";
+import { TracePanel } from "./TracePanel";
+import { useRun } from "./useRun";
 
-type Step = 0 | 1 | 2 | 3;
-const STEPS = ["Request & limits", "Ask", "Proposal", "Approve & pay"];
-const STATUS_LABEL: Record<Proposal["status"], string> = {
-  blocked: "Blocked", pending: "Needs your approval", auto_approved: "Approved by the mandate", awaiting_buyer: "Waiting for the buyer", paid: "Paid", rejected: "Rejected", failed: "Stopped at checkout",
-};
-const symbol = (currency: string) => new Intl.NumberFormat("en", { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency;
+type Tab = "chat" | "contracts";
+
+/** What is waiting for the person after a reload: the chat cards are gone, the server's pending objects are not. */
+function waitingItem(drafts: PendingDraft[], amendments: Amendment[], proposals: Proposal[], id: number): ChatItem | undefined {
+  const cards: ChatItem["cards"] = [
+    ...drafts.filter((d) => d.status === "pending").map((draft) => ({ type: "draft" as const, draft })),
+    ...amendments.filter((a) => a.status === "pending").map((amendment) => ({ type: "amendment" as const, amendment })),
+    ...proposals.filter((p) => !p.blocked && ["pending", "awaiting_buyer", "auto_approved"].includes(p.status)).map((proposal) => ({ type: "proposal" as const, proposal })),
+  ];
+  return cards.length ? { id, role: "agent", text: "Welcome back. These are waiting for you:", cards } : undefined;
+}
 
 export default function App() {
   const [config, setConfig] = useState<Config>();
-  const [step, setStep] = useState<Step>(0);
+  const [contracts, setContracts] = useState<MandateView[]>([]);
+  const [drafts, setDrafts] = useState<PendingDraft[]>([]);
+  const [amendments, setAmendments] = useState<Amendment[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [selectedId, setSelectedId] = useState<string>();
-  const [note, setNote] = useState<string>();
-  const [lastAsk, setLastAsk] = useState<string>();
-  const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
-  // The trace sits beside the page on a wide screen; on a phone it would push the page down, so it starts closed there.
-  const [traceOpen, setTraceOpen] = useState(() => window.matchMedia("(min-width: 1001px)").matches);
+  const [items, setItems] = useState<ChatItem[]>([]);
+  const [tab, setTab] = useState<Tab>("chat");
+  const [sending, setSending] = useState(false);
+  const [freshAttack, setFreshAttack] = useState<string>();
+  // The trace sits beside the page only on a very wide screen; otherwise it is one click away.
+  const [traceOpen, setTraceOpen] = useState(() => window.matchMedia("(min-width: 1500px)").matches);
   const [bootTry, setBootTry] = useState(0);
   const [bootError, setBootError] = useState<string>();
   const { busy, error, setError, run } = useRun();
-  // The rare moments that earn a flourish (motion principles): a mandate was just signed, an attack was just blocked.
-  const [fresh, setFresh] = useState<{ kind: "signed" | "attack"; id?: string }>();
-  useEffect(() => { setFresh((f) => (f && ((f.kind === "signed" && step > 1) || (f.kind === "attack" && step !== 2)) ? undefined : f)); }, [step]);
-  const signedNow = () => { setFresh({ kind: "signed" }); refresh(); };
-  const attacked = (p: Proposal) => { upsert(p); setFresh({ kind: "attack", id: p.id }); setStep(2); };
+  const nextId = useMemo(() => { let n = 0; return () => ++n; }, []);
 
-  const refresh = () => api.config().then(setConfig).catch((e) => setError(e.message));
-  // Reloading the page must not lose the session: restore the mandate and the proposals from the server.
+  const load = useCallback(async () => {
+    const [c, m, d, a, p] = await Promise.all([api.config(), api.mandates(), api.drafts(), api.amendments(), api.proposals()]);
+    setConfig(c); setContracts(m); setDrafts(d); setAmendments(a); setProposals(p.slice().reverse());
+    return { c, d, a, p: p.slice().reverse() };
+  }, []);
+  const refresh = useCallback(() => { load().catch((e) => setError(friendlyError((e as Error).message))); }, [load, setError]);
+
+  // Reloading the page must not lose the session: restore the conversation text and whatever is still waiting for the person.
   useEffect(() => {
     setBootError(undefined);
-    Promise.all([api.config(), api.proposals()])
-      .then(([c, ps]) => {
-        setConfig(c);
-        const list = ps.slice().reverse();
-        setProposals(list);
-        // The buyer comes back from PayPal to /?paypal=return (or cancel): open the purchase that is waiting.
+    Promise.all([load(), api.history()])
+      .then(([{ d, a, p }, hist]) => {
+        const restored: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? "user" : "agent", text: t.text, cards: [] }));
+        const waiting = waitingItem(d, a, p, nextId());
+        setItems(waiting ? [...restored, waiting] : restored);
         const back = new URLSearchParams(window.location.search).get("paypal");
-        if (back) window.history.replaceState({}, "", window.location.pathname);
-        const waiting = list.find((p) => p.status === "awaiting_buyer");
-        if (back && waiting) {
-          setSelectedId(waiting.id);
-          setStep(3);
+        if (back) {
+          window.history.replaceState({}, "", window.location.pathname);
           if (back === "cancel") setError("You cancelled in PayPal. The order is still waiting: open the PayPal link again to approve it.");
-        } else if (c.mandate) setStep(ps.length ? 2 : 1);
+        }
       })
       .catch((e) => setBootError(friendlyError((e as Error).message)));
   }, [bootTry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const signed = config?.mandate ?? null;
-  const selected = proposals.find((p) => p.id === selectedId);
-  const change = (p: Proposal) => { upsert(p); refresh(); };
-  const gotResult = (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => { ps.forEach(upsert); setSelectedId(undefined); setNote(summary); setNearMisses(misses); setLastAsk(text); refresh(); setStep(ps.length ? 2 : 1); };
   const upsert = (p: Proposal) => setProposals((all) => (all.some((x) => x.id === p.id) ? all.map((x) => (x.id === p.id ? p : x)) : [p, ...all]));
-  // Moving between steps replaces the whole panel: put keyboard and screen-reader focus on the new one, not on a button that is gone.
-  const stage = useRef<HTMLDivElement>(null);
-  const firstStep = useRef(true);
-  useEffect(() => { if (firstStep.current) { firstStep.current = false; return; } stage.current?.focus({ preventScroll: true }); }, [step]);
-  const maxStep = !signed ? 0 : proposals.length === 0 ? 1 : selected ? 3 : 2;
+  const proposalMap = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
+  const add = (role: ChatItem["role"], text: string, cards: ChatItem["cards"] = []) => setItems((all) => [...all, { id: nextId(), role, text, cards }]);
+
+  const onSend = async (text: string): Promise<boolean> => {
+    const userId = nextId();
+    setItems((all) => [...all, { id: userId, role: "user", text, cards: [] }]);
+    setSending(true);
+    const r = await run(() => api.chat(text));
+    setSending(false);
+    if (!r) { setItems((all) => all.filter((i) => i.id !== userId)); return false; }
+    const cards = parseCards(r.cards);
+    for (const c of cards) if (c.type === "proposal") upsert(c.proposal);
+    const reply = r.messages.map((m) => m.text).join("\n\n");
+    setItems((all) => [...all, { id: nextId(), role: "agent", text: reply, cards }]);
+    refresh();
+    return true;
+  };
+
+  const onAttack = () => {
+    if (!contracts.some((c) => c.status === "active")) { add("agent", "The attack demo needs a signed contract to be stopped by. Ask me for one first."); return; }
+    run(() => api.attack()).then((p) => {
+      if (!p) return;
+      upsert(p);
+      setFreshAttack(p.id);
+      add("agent", "A poisoned listing just told the model to buy 10 pairs. Here is what happened:", [{ type: "proposal", proposal: p }]);
+      refresh();
+    });
+  };
+
+  /** The person widens their own contract: the one-click fix re-signs through the human endpoint, with a new hash. */
+  const onFix = (b: BlockedView) => {
+    const p = proposalMap.get(b.proposalId);
+    const base = contracts.find((c) => c.hash === p?.mandateHash);
+    if (!b.fix || !base) { setError("That contract can no longer be changed here. Ask the agent for a new one."); return; }
+    run(() => api.setMandate({ ...base.mandate, ...b.fix!.patch, supersedes: undefined })).then((s) => {
+      if (!s) return;
+      add("agent", `Done: you signed a new contract (${s.hash}) with that change. The old one is superseded. Ask again to retry.`);
+      refresh();
+    });
+  };
+
+  const onReview = () => {
+    setTab("contracts");
+    window.setTimeout(() => document.getElementById("contracts-pane")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
+  };
+
+  const dots = attention(drafts, amendments, proposals);
+  const resetDemo = () => run(() => api.reset()).then((r) => { if (r) { setItems([]); setFreshAttack(undefined); setTab("chat"); refresh(); } });
 
   return (
-    <div className={`shell ${traceOpen ? "" : "notrace"}`}>
+    <div className={`shell agentic ${traceOpen ? "" : "notrace"}`}>
       <main>
         <header className="top">
           <div className="brand">
             <span className="logo" aria-hidden><i /><i /></span>
             <div>
               <h1>Mandate</h1>
-              <p>Agents shouldn't be trusted with money. They should be trusted with a mandate.</p>
+              <p>An agent you talk to, bound by contracts it cannot sign.</p>
             </div>
           </div>
           <div className="badges">
             {config && <span className={`badge ${config.demoMode === "mock" ? "" : "live"}`}>{config.demoMode === "mock" ? "Demo payments" : "PayPal sandbox"}</span>}
-            {config && <span className="badge">Agent: {config.agent === "llm" ? "AI model" : "rules"}</span>}
             <button className="ghost small" onClick={() => setTraceOpen((o) => !o)} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
           </div>
         </header>
 
-        <nav className="stepper" aria-label="Progress">
-          {STEPS.map((s, i) => (
-            <button key={s} className={i === step ? "on" : i < step ? "done" : ""} disabled={i > maxStep} onClick={() => setStep(i as Step)} aria-current={i === step ? "step" : undefined}>
-              <b>{i < step ? <Icon name="check" size={14} /> : i + 1}</b> <span>{s}</span>
-            </button>
-          ))}
-        </nav>
-
         {error && <div className="alert" role="alert">{error}</div>}
-
-        <div key={step} ref={stage} className="stage" tabIndex={-1}>
         {!config && <Booting error={bootError} onRetry={() => setBootTry((n) => n + 1)} />}
-        {step === 0 && config && <MandateStep config={config} signed={signed} busy={busy} run={run} onSigned={signedNow} onNext={() => setStep(1)} onResult={gotResult} />}
-        {step === 1 && signed && config && (
-          <AskStep
-            config={config} signed={signed} busy={busy} run={run} note={note} nearMisses={nearMisses} onSigned={signedNow} initialText={lastAsk} freshSeal={fresh?.kind === "signed"}
-            onResult={gotResult}
-            onAttack={attacked}
-          />
+
+        {config && (
+          <>
+            <div className="tabs" role="tablist" aria-label="Chat or contracts">
+              <button role="tab" id="tab-chat" aria-selected={tab === "chat"} aria-controls="chat-pane" className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
+                Chat{dots.chat && <i className="dot" aria-label="needs you" />}
+              </button>
+              <button role="tab" id="tab-contracts" aria-selected={tab === "contracts"} aria-controls="contracts-pane" className={tab === "contracts" ? "on" : ""} onClick={() => setTab("contracts")}>
+                Contracts{dots.contracts && <i className="dot" aria-label="needs you" />}
+              </button>
+            </div>
+            <div className="workspace" data-tab={tab}>
+              <div id="chat-pane" className="pane chatpane" role="tabpanel" aria-labelledby="tab-chat">
+                <Chat
+                  items={items} sending={sending} onSend={onSend} onAttack={onAttack}
+                  ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts, amendments, freshAttack, onReview, onFix, onProposalChange: (p) => { upsert(p); refresh(); } }}
+                />
+              </div>
+              <div id="contracts-pane" className="pane contractspane" role="tabpanel" aria-labelledby="tab-contracts" tabIndex={-1}>
+                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} proposals={proposals} busy={busy || sending} run={run} onChanged={refresh} />
+              </div>
+            </div>
+          </>
         )}
-        {step === 2 && signed && <ProposalStep proposals={proposals} busy={busy} run={run} onReview={(id) => { setSelectedId(id); setStep(3); }} onAttack={attacked} freshId={fresh?.kind === "attack" ? fresh.id : undefined} onAskAgain={() => setStep(1)} />}
-        {step === 3 && selected && config && <PayStep p={selected} config={config} busy={busy} run={run} onChange={change} onAskAgain={() => setStep(1)} />}
-        </div>
 
         <footer className="foot">
           {config && <p className="muted small honest">{config.demoMode === "mock" ? "Demo: a fixture catalog and simulated payments. Nothing is bought and no real money moves." : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
-          {config?.resettable && (
-            <button className="linklike" disabled={busy} onClick={() => run(() => api.reset()).then((r) => { if (r) { setProposals([]); setSelectedId(undefined); setNote(undefined); setNearMisses([]); refresh(); setStep(signed ? 1 : 0); } })}>
-              Reset demo
-            </button>
-          )}
+          {config?.resettable && <button className="linklike" disabled={busy || sending} onClick={resetDemo}>Reset demo</button>}
         </footer>
       </main>
-      {traceOpen && <TracePanel active={Boolean(signed)} />}
-    </div>
-  );
-}
-
-/** The first request can wait for a sleeping free-tier server. Say so, with a clock, instead of showing nothing. */
-function Booting({ error, onRetry }: { error?: string; onRetry: () => void }) {
-  const [s, setS] = useState(0);
-  useEffect(() => { if (error) return; setS(0); const t = setInterval(() => setS((x) => x + 1), 1000); return () => clearInterval(t); }, [error]);
-  if (error) {
-    return (
-      <section className="card boot" role="alert">
-        <h2>The demo is not answering yet</h2>
-        <p className="muted hint">{error}</p>
-        <div className="actions tight"><button className="primary" onClick={onRetry}>Try again</button></div>
-      </section>
-    );
-  }
-  // Under two seconds is a normal page load: show nothing, so a fast server does not flash a message.
-  if (s < 2) return <div className="boot-quiet" aria-busy="true" />;
-  return (
-    <section className="card boot" role="status">
-      <div className="working"><span className="spinner" aria-hidden /><div>
-        <b>Waking up the demo… {s}s</b>
-        <p className="muted small">This demo runs on free hosting that sleeps when nobody uses it. The first visit can take about 30 seconds; after that it is fast.</p>
-      </div></div>
-    </section>
-  );
-}
-
-/* ---------- 1. Mandate ---------- */
-const HOURS = [{ label: "1 hour", h: 1 }, { label: "4 hours", h: 4 }, { label: "24 hours", h: 24 }, { label: "3 days", h: 72 }, { label: "7 days", h: 168 }];
-
-/** The mandate in one plain sentence, for people who do not read JSON. */
-function describeMandate(m: Mandate): string {
-  const cur = m.currency;
-  const where = m.allowedMerchants?.length ? `only from ${m.allowedMerchants.join(", ")}` : "from any shop";
-  const alone = m.autonomy.mode === "ask_always" ? "It asks you before every purchase." : `It may buy alone when the cart is under ${money(m.autonomy.thresholdCents, cur)}; anything above waits for you.`;
-  return `Up to ${money(m.totalBudgetCents, cur)} in total, ${money(m.perItemCapCents, cur)} per item, at most ${m.maxQuantityPerItem} of each. Only ${m.allowedCategories.join(", ")}, ${where}. ${alone}`;
-}
-
-/** Enter sends a one-line request; Shift+Enter adds a line; Ctrl/Cmd+Enter also sends. Never while an IME is composing. */
-const sendKey = (e: KeyboardEvent) => e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
-
-/** A money field that takes "90", "90€", "€90", "90 eur" or "90,00" and shows back one clean value on leaving the field. */
-function MoneyInput({ sym, value, onChange, disabled, inline, label }: { sym: string; value: string; onChange: (v: string) => void; disabled?: boolean; inline?: boolean; label?: string }) {
-  const cents = parseMoney(value);
-  const invalid = value.trim() !== "" && Number.isNaN(cents);
-  return (
-    <span className={`cur ${inline ? "inline" : ""}`}>
-      <i>{sym}</i>
-      <input
-        inputMode="decimal" autoComplete="off" aria-label={label} aria-invalid={invalid || undefined} value={value} disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => { const clean = formatMoneyInput(cents); if (clean && clean !== value) onChange(clean); }}
-      />
-    </span>
-  );
-}
-
-function MandateStep({ config, signed, busy, run, onSigned, onNext, onResult }: { config: Config; signed: SignedMandate | null; busy: boolean; run: RunFn; onSigned: () => void; onNext: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void }) {
-  const live = config.demoMode === "live";
-  const sym = symbol(config.currency);
-  const shoeCats = live ? ["athletic-shoes", "soccer-shoes", "sneakers"] : ["shoes"];
-  // What a person can pick without knowing the catalog: what it returned in this session, then what we know of it.
-  const knownCats = live ? ["athletic-shoes", "soccer-shoes", "sneakers", "in-ear-headphones"] : ["shoes", "socks", "balls", "bags", "clothing", "protection"];
-  const seenCats = config.seen?.categories ?? [];
-  const catSuggestions = [
-    ...seenCats.map((c) => ({ value: c.value, note: `${c.count} found` })),
-    ...knownCats.filter((k) => !seenCats.some((c) => c.value === k)).map((k) => ({ value: k })),
-  ];
-  /** Live lookup in the catalog's category tree: a name finds the category and where it sits. */
-  const searchCategories = async (q: string) =>
-    (await api.categories(q)).categories.map((c) => ({
-      value: c.slug,
-      label: c.title,
-      note: [c.path.length > 1 ? c.path.slice(0, -1).map((n) => n.title).join(" › ") : "", c.hasChildren ? "includes subcategories" : ""].filter(Boolean).join(" · "),
-    }));
-  const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
-  const cur = signed?.mandate;
-  const eur = (c: number) => formatMoneyInput(c) ?? "";
-  const [budget, setBudget] = useState(cur ? eur(cur.totalBudgetCents) : "100");
-  const [cap, setCap] = useState(cur ? eur(cur.perItemCapCents) : "100");
-  const [cats, setCats] = useState<string[]>(cur ? cur.allowedCategories : shoeCats);
-  const [merchants, setMerchants] = useState<string[]>(cur?.allowedMerchants ?? []);
-  const [qty, setQty] = useState(String(cur?.maxQuantityPerItem ?? 1));
-  const [hours, setHours] = useState(24);
-  const [auto, setAuto] = useState(cur?.autonomy.mode === "auto_under");
-  const [threshold, setThreshold] = useState(cur?.autonomy.mode === "auto_under" ? eur(cur.autonomy.thresholdCents) : "50");
-  const [describe, setDescribe] = useState("");
-  const [draft, setDraft] = useState<Draft>();
-  // Requests, not limits: the limits are drafted from them. The demo catalog has shoes, socks, balls, bags and clothing; the live one has everything.
-  const examples = live
-    ? [
-        `Indoor futsal shoes for men, max ${sym}90`,
-        `Running shoes for men, max ${sym}70, only from shoebacca.com`,
-        `Wireless earbuds under ${sym}60. It may buy alone if the cart is under ${sym}40.`,
-      ]
-    : [
-        `Indoor futsal shoes, size 43, non-marking sole, max 90 ${sym}`,
-        `Grip socks, max 15 ${sym}`,
-        `A futsal ball, max 40 ${sym}, only from sportdirect.example`,
-      ];
-  /** Fills the form from a draft. Nothing is signed: the person reviews every field and signs. */
-  const applyDraft = (d: Draft) => {
-    const m = d.mandate;
-    setBudget(String(m.totalBudgetCents / 100));
-    setCap(String(m.perItemCapCents / 100));
-    setCats(m.allowedCategories);
-    setMerchants(m.allowedMerchants ?? []);
-    setQty(String(m.maxQuantityPerItem));
-    setHours(d.hours);
-    if (m.autonomy.mode === "auto_under") { setAuto(true); setThreshold(String(m.autonomy.thresholdCents / 100)); } else setAuto(false);
-    setDraft(d);
-    window.setTimeout(() => document.getElementById("mandate-form")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }), 50);
-  };
-
-  /** Sign the reviewed mandate, then search for what was asked: the agent only starts after the person signed. */
-  const signAndSearch = () => run(async () => {
-    await api.setMandate(m);
-    onSigned();
-    return api.ask(describe.trim());
-  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, describe.trim()));
-
-  const mandate = (): Mandate => ({
-    currency: config.currency,
-    totalBudgetCents: toCents(budget),
-    perItemCapCents: toCents(cap),
-    allowedCategories: cats,
-    ...(merchants.length ? { allowedMerchants: merchants } : {}),
-    maxQuantityPerItem: Number(qty),
-    expiresAt: new Date(Date.now() + hours * 3600 * 1000).toISOString(),
-    autonomy: auto ? { mode: "auto_under", thresholdCents: toCents(threshold) } : { mode: "ask_always" },
-  });
-  const m = mandate();
-  const problems: string[] = [];
-  if (!(m.totalBudgetCents > 0)) problems.push("Enter a total budget above 0.");
-  if (!(m.perItemCapCents > 0)) problems.push("Enter a per-item cap above 0.");
-  if (m.allowedCategories.length === 0) problems.push("Add at least one category.");
-  if (!Number.isInteger(m.maxQuantityPerItem) || m.maxQuantityPerItem < 1) problems.push("Quantity must be a whole number, 1 or more.");
-  if (auto && !(toCents(threshold) > 0)) problems.push("Enter the amount under which it may buy alone.");
-  const hints: string[] = [];
-  if (m.perItemCapCents > m.totalBudgetCents) hints.push("The per-item cap is above the total budget, so the total is the real limit.");
-  if (auto && toCents(threshold) > m.totalBudgetCents) hints.push("The auto-buy amount is above the total budget.");
-
-  const signOnly = () => run(() => api.setMandate(m)).then((r) => { if (r) { onSigned(); onNext(); } });
-  const hasDraft = Boolean(draft) && describe.trim().length >= 3;
-  /** What Enter does in the limits form: the same as the primary button. */
-  const submitPrimary = () => (hasDraft ? signAndSearch() : signOnly());
-
-  const presets = [
-    { name: "One pair of shoes", note: `Up to ${sym}100. Asks you first.`, set: () => { setBudget("100"); setCap("100"); setQty("1"); setCats(shoeCats); setMerchants([]); setAuto(false); } },
-    live
-      ? { name: "A cheap pair, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}50.`, set: () => { setBudget("60"); setCap("60"); setQty("1"); setCats(shoeCats); setMerchants([]); setAuto(true); setThreshold("50"); } }
-      : { name: "Small extras, buys alone", note: `Up to ${sym}60. Buys alone under ${sym}30.`, set: () => { setBudget("60"); setCap("40"); setQty("2"); setCats(["socks", "balls"]); setMerchants([]); setAuto(true); setThreshold("30"); } },
-  ];
-
-  return (
-    <section className="card">
-      <h2>What should it buy?</h2>
-      <p className="muted hint">Say it in your words, with how much you can spend. I draft the limits for you to review. Nothing is searched or bought until you sign.</p>
-
-      <div className="describe">
-        <label htmlFor="describe" className="sr-only">What should it buy?</label>
-        <textarea
-          id="describe" className="ask" rows={3} value={describe} onChange={(e) => setDescribe(e.target.value)}
-          placeholder={examples[0]}
-          onKeyDown={(e) => { if (sendKey(e) && !busy && describe.trim().length >= 3) { e.preventDefault(); run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d)); } }}
-        />
-        <div className="examples" role="group" aria-label="Examples">
-          {examples.map((x) => <button key={x} type="button" className="example" onClick={() => setDescribe(x)}><b>{x}</b></button>)}
-        </div>
-        {busy && <Working live={config.agent === "llm"} />}
-        <div className="actions tight">
-          <button type="button" className="primary" disabled={busy || describe.trim().length < 3} onClick={() => run(() => api.draftMandate(describe.trim())).then((d) => d && applyDraft(d))}>{busy ? "Drafting…" : "Draft the limits"}</button>
-          <span className="muted small">The assistant only drafts. You review and sign; the agent does not search before that.</span>
-        </div>
-        {draft && !busy && (
-          <div className="understood" role="status">
-            <h3>Here is what I understood</h3>
-            <ul>{draft.understood.map((u) => <li key={u}><Icon name="check" size={14} /> {u}</li>)}</ul>
-            {draft.warnings.map((w) => <p key={w} className="hintline">{w}</p>)}
-            <p className="muted small">Drafted by the {draft.mode === "llm" ? "AI model" : "rules reader"}. Review and change anything below.</p>
-          </div>
-        )}
-      </div>
-
-      <h3 id="mandate-form" className="orhand">{draft ? "Review the limits" : "Or set the limits by hand"}</h3>
-      <div className="presets" role="group" aria-label="Start from a preset">
-        {presets.map((p) => (
-          <button key={p.name} type="button" className="preset" onClick={p.set}><b>{p.name}</b><span>{p.note}</span></button>
-        ))}
-      </div>
-
-      <div className="mform" onKeyDown={(e) => { if (e.key === "Enter" && !e.defaultPrevented && !e.nativeEvent.isComposing && e.target instanceof HTMLInputElement && e.target.type === "text" && !busy && problems.length === 0) { e.preventDefault(); submitPrimary(); } }}>
-        <fieldset className="fgroup">
-          <legend>Spending limits</legend>
-          <label>Total budget<MoneyInput sym={sym} value={budget} onChange={setBudget} /></label>
-          <label>Max per item<MoneyInput sym={sym} value={cap} onChange={setCap} /></label>
-          <label>Max quantity per item<input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} /></label>
-          <label>Valid for
-            <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>{HOURS.map((o) => <option key={o.h} value={o.h}>{o.label}</option>)}</select>
-          </label>
-        </fieldset>
-
-        <fieldset className="fgroup">
-          <legend>What it may buy</legend>
-          <TagInput
-            id="cats" label="Categories" hint="(what kind of thing)" values={cats} onChange={setCats}
-            normalize={normalizeCategory} format={humanize} placeholder="Type a category and press Enter"
-            suggestions={catSuggestions} suggestionsLabel={seenCats.length ? "Seen in your searches and known:" : "Known categories:"}
-            search={searchCategories}
-            groups={live ? [{ label: "All shoes", values: shoeCats }] : []}
-          />
-          <p className="catnote">Allowing a category allows everything inside it: allow "Shoes" and its subcategories (athletic shoes, sneakers...) come with it. Anything outside is blocked, even if it is cheap. Type a name to see the catalog's categories; a blocked product can also be allowed with one click.</p>
-          <TagInput
-            id="shops" label="Shops" hint="(optional: any shop if empty)" values={merchants} onChange={setMerchants}
-            normalize={normalizeShop} placeholder={live ? "e.g. shoebacca.com" : "e.g. futsalstore.example"}
-            suggestions={shopSuggestions} suggestionsLabel="Seen in your searches:"
-          />
-        </fieldset>
-
-        <fieldset className="fgroup autonomy">
-          <legend>What may it do alone?</legend>
-          <label className={`opt ${!auto ? "on" : ""}`}><input type="radio" name="auto" checked={!auto} onChange={() => setAuto(false)} /> Nothing: ask me every time</label>
-          <label className={`opt ${auto ? "on" : ""}`}>
-            <input type="radio" name="auto" checked={auto} onChange={() => setAuto(true)} /> Buy alone when the cart is under
-            <MoneyInput sym={sym} value={threshold} onChange={setThreshold} disabled={!auto} inline label="Auto-buy amount" />
-          </label>
-        </fieldset>
-      </div>
-
-      {hints.map((h) => <p key={h} className="hintline">{h}</p>)}
-      <p className="sentence" aria-live="polite">{problems.length ? problems[0] : describeMandate(m)}</p>
-
-      {signed && <Seal signed={signed} spentCents={config.spentCents} />}
-
-      <div className="actions">
-        {signed && <button className="ghost" onClick={onNext} disabled={busy}>Keep the signed mandate</button>}
-        {hasDraft ? (
-          <>
-            <button className="ghost" disabled={busy || problems.length > 0} onClick={signOnly}>Sign only</button>
-            <button className="primary" disabled={busy || problems.length > 0} onClick={signAndSearch}>Sign and search</button>
-          </>
-        ) : (
-          <button className="primary" disabled={busy || problems.length > 0} onClick={signOnly}>
-            {signed ? "Sign a new mandate" : "Sign mandate"}
-          </button>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/** The signed mandate, drawn as the document it is. */
-function Seal({ signed, spentCents = 0, stamp }: { signed: SignedMandate; spentCents?: number; stamp?: boolean }) {
-  const m = signed.mandate;
-  return (
-    <div className={`seal ${stamp ? "stamp" : ""}`} aria-label="Signed mandate">
-      <div className="seal-hash"><span className="seal-title"><Icon name="shield" size={16} /> Signed mandate</span><b className="mono">{signed.hash}</b></div>
-      <dl>
-        <dt>Budget</dt><dd>{money(m.totalBudgetCents, m.currency)}{spentCents > 0 && <span className="left"> · {money(Math.max(m.totalBudgetCents - spentCents, 0), m.currency)} left</span>}</dd>
-        <dt>Per item</dt><dd>{money(m.perItemCapCents, m.currency)}</dd>
-        <dt>Categories</dt><dd>{m.allowedCategories.join(", ")}</dd>
-        {m.allowedMerchants?.length ? <><dt>Shops</dt><dd>{m.allowedMerchants.join(", ")}</dd></> : null}
-        <dt>Quantity</dt><dd>up to {m.maxQuantityPerItem} per item</dd>
-        <dt>Expires</dt><dd>{new Date(m.expiresAt).toLocaleString()}</dd>
-        <dt>Alone</dt><dd>{m.autonomy.mode === "ask_always" ? "nothing, asks every time" : `buys carts under ${money(m.autonomy.thresholdCents, m.currency)}`}</dd>
-      </dl>
-    </div>
-  );
-}
-
-/* ---------- 2. Ask ---------- */
-function AskStep({ config, signed, busy, run, note, nearMisses, onSigned, onResult, onAttack, initialText, freshSeal }: { config: Config; signed: SignedMandate; busy: boolean; run: RunFn; note?: string; nearMisses: NearMiss[]; onSigned: () => void; onResult: (ps: Proposal[], summary: string, misses: NearMiss[], text: string) => void; onAttack: (p: Proposal) => void; initialText?: string; freshSeal?: boolean }) {
-  const sym = symbol(config.currency);
-  const live = config.demoMode === "live";
-  const examples = live
-    ? [
-        { text: `Indoor futsal shoes for men, max ${sym}90`, hint: "Inside the mandate" },
-        { text: `Running shoes for men, max ${sym}70`, hint: "Inside the mandate" },
-        { text: `Wireless earbuds under ${sym}60`, hint: "Outside the mandate: should not be proposed" },
-      ]
-    : [
-        { text: "Indoor futsal shoes, size 43, non-marking sole, max 90 €", hint: "Needs the shoes mandate" },
-        { text: "Grip socks, max 15 €", hint: "Needs socks in the mandate" },
-        { text: "A futsal ball, size 4", hint: "Needs balls in the mandate" },
-      ];
-  const [text, setText] = useState(initialText ?? examples[0].text);
-  const submit = () => run(() => api.ask(text.trim())).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, text.trim()));
-  /** The person widens their own mandate (it is re-signed, with a new hash) and the search runs again. */
-  const applyFix = (n: NearMiss) => run(async () => {
-    if (!n.fix) return undefined;
-    await api.setMandate({ ...signed.mandate, ...n.fix.patch });
-    onSigned();
-    return api.ask(text.trim());
-  }).then((r) => r && onResult(r.proposals, r.run.summary, r.nearMisses, text.trim()));
-  return (
-    <section className="card">
-      {freshSeal && <Seal signed={signed} spentCents={config.spentCents} stamp />}
-      <h2>What should it buy?</h2>
-      <p className="muted hint">Say it in your own words. The agent searches the catalog and proposes a cart. It cannot pay.</p>
-      <textarea
-        className="ask" rows={3} value={text} onChange={(e) => setText(e.target.value)} aria-label="What should the agent buy?"
-        onKeyDown={(e) => { if (sendKey(e) && !busy && text.trim().length >= 2) { e.preventDefault(); submit(); } }}
-      />
-      <div className="examples" role="group" aria-label="Examples">
-        {examples.map((x) => (
-          <button key={x.text} className={`example ${x.text === text ? "on" : ""}`} onClick={() => setText(x.text)}><b>{x.text}</b><span>{x.hint}</span></button>
-        ))}
-      </div>
-      <p className="muted small attackhint"><b>Try an attack</b> loads a product listing that tells the agent to buy 10 pairs. The model is fooled on purpose; watch what stops it.</p>
-      {busy && <Working live={live && config.agent === "llm"} />}
-      {note && !busy && <div className="alert warn" role="status">{note}</div>}
-      {!busy && nearMisses.length > 0 && <NearMisses items={nearMisses} onFix={applyFix} />}
-      <div className="actions">
-        <AttackButton busy={busy} run={run} onAttack={onAttack} />
-        <button className="primary" disabled={busy || text.trim().length < 2} onClick={submit}>{busy ? "Searching…" : "Find options"}</button>
-      </div>
-    </section>
-  );
-}
-
-/** Honest waiting state: we do not fake progress, we say what is going on and how long it can take. */
-function Working({ live }: { live: boolean }) {
-  const [s, setS] = useState(0);
-  useEffect(() => { const t = setInterval(() => setS((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  return (
-    <div className="working" role="status">
-      <span className="spinner" aria-hidden />
-      <div>
-        <b>The agent is searching and choosing… {s}s</b>
-        <p className="muted small">{live ? "With a live AI model this can take 10 to 20 seconds. Every step shows in the trace." : "This should take a moment."}</p>
-      </div>
-    </div>
-  );
-}
-
-function AttackButton({ busy, run, onAttack }: { busy: boolean; run: RunFn; onAttack: (p: Proposal) => void }) {
-  return (
-    <button className="ghost danger" disabled={busy} onClick={() => run(() => api.attack()).then((p) => p && onAttack(p))} title="Loads a poisoned listing that tells the agent to buy 10 units">
-      Try an attack
-    </button>
-  );
-}
-
-/* ---------- 3. Proposal ---------- */
-function ProposalStep({ proposals, busy, run, onReview, onAttack, onAskAgain, freshId }: { proposals: Proposal[]; busy: boolean; run: RunFn; onReview: (id: string) => void; onAttack: (p: Proposal) => void; onAskAgain: () => void; freshId?: string }) {
-  return (
-    <section>
-      <div className="card head">
-        <h2>Proposals</h2>
-        <p className="muted hint">Every cart is checked by code outside the model before anyone can approve it.</p>
-        <div className="actions tight"><button className="ghost" onClick={onAskAgain}>Ask again</button><AttackButton busy={busy} run={run} onAttack={onAttack} /></div>
-      </div>
-      {proposals.map((p) => <ProposalCard key={p.id} p={p} fresh={p.id === freshId} onReview={p.blocked ? undefined : () => onReview(p.id)} />)}
-    </section>
-  );
-}
-
-function Thumb({ src, title }: { src?: string; title: string }) {
-  const [broken, setBroken] = useState(false);
-  if (src && !broken) return <img className="thumb" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />;
-  return <span className="thumb ph" aria-hidden>{title.trim().charAt(0).toUpperCase() || "?"}</span>;
-}
-
-/** Only real http(s) links; the demo catalog's ".example" shops do not exist, so they are not linked. */
-const safeHref = (u: string) => (/^https?:\/\/(?![^/]*\.example(?:[:/]|$))/i.test(u) ? u : undefined);
-
-function CheckRow({ c, i }: { c: Check; i: number }) {
-  return (
-    <li className={c.ok ? "pass" : "fail"} style={{ ["--i" as string]: i }}>
-      <Icon name={c.ok ? "check" : "cross"} size={16} />
-      <span className="cname">{CHECK_LABEL[c.name]}</span>
-      {!c.ok && <span className="creason">{c.reason}</span>}
-      <span className="sr-only">{c.ok ? "passed" : "failed"}</span>
-    </li>
-  );
-}
-
-function AttackStory({ p }: { p: Proposal }) {
-  const story = explainAttack(p);
-  if (!story) return null;
-  return (
-    <section className="attackstory" aria-label="What happened in this attack">
-      <ol>
-        <li><span>The listing told the model</span><b>{story.told}</b></li>
-        <li><span>The fooled model proposed</span><b>{story.proposed}</b></li>
-        <li><span>Stopped by</span><b>{story.stoppedBy.length ? story.stoppedBy.join(" · ") : "nothing"}</b></li>
-      </ol>
-      <p className={p.blocked ? "safe" : "unsafe"}>{story.outcome}</p>
-    </section>
-  );
-}
-
-function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => void; fresh?: boolean }) {
-  const failed = p.checks.filter((c) => !c.ok);
-  const passed = p.checks.filter((c) => c.ok);
-  return (
-    <article className={`card pcard ${p.blocked ? "blocked" : ""}`}>
-      <div className={`verdict ${p.blocked ? "bad" : "good"} ${fresh && p.blocked ? "shake" : ""}`}>
-        <Icon name={p.blocked ? "cross" : "shield"} size={18} />
-        <b>{p.blocked ? `Blocked: ${failed.length} of ${p.checks.length} checks failed` : `Inside your mandate: ${passed.length} of ${p.checks.length} checks passed`}</b>
-      </div>
-      <AttackStory p={p} />
-      <div className="phead">
-        <span className={`pstatus ${p.status}`}>{STATUS_LABEL[p.status]}</span>
-        {p.source === "attack" && <span className="badge live">Attack demo</span>}
-        {p.agent && p.source === "agent" && <span className="badge">Picked by the {p.agent === "llm" ? "AI model" : "rules agent"}</span>}
-      </div>
-
-      <ul className="lines">
-        {p.lines.map((l) => (
-          <li key={l.productId}>
-            <Thumb src={l.imageUrl} title={l.title} />
-            <div className="ltext">
-              <b>{safeHref(l.url) ? <a href={safeHref(l.url)} target="_blank" rel="noreferrer noopener">{l.title}</a> : l.title}</b>
-              <span className="muted small">{l.merchant}{l.quantity !== 1 && <span className="qty"> ×{l.quantity}</span>}</span>
-              <span className="muted small why">{l.reason}</span>
-            </div>
-            <div className="amt">{money(l.priceCents * l.quantity, l.currency)}</div>
-          </li>
-        ))}
-      </ul>
-      {p.summary && p.source !== "attack" && <p className="muted small summary">{p.summary}</p>}
-
-      {failed.length > 0 && <ul className="checks failures" aria-label="Failed guardrail checks">{failed.map((c, i) => <CheckRow key={c.name} c={c} i={i} />)}</ul>}
-      {passed.length > 0 && (
-        <details className="passed" open={p.status === "pending" || p.blocked}>
-          <summary>{passed.length === p.checks.length ? "All 11 guardrail checks passed" : `${passed.length} checks passed`}</summary>
-          <ul className="checks" aria-label="Passed guardrail checks">{passed.map((c, i) => <CheckRow key={c.name} c={c} i={i} />)}</ul>
-        </details>
-      )}
-      {p.blocked && <p className="blockedmsg">Nothing can be approved or paid. The model can be fooled; this check cannot.</p>}
-      {onReview && <div className="actions"><button className="primary" onClick={onReview}>{p.status === "paid" ? "View receipt" : p.status === "pending" ? `Review ${money(p.totalCents, p.currency)}` : "See progress"}</button></div>}
-    </article>
-  );
-}
-
-/* ---------- 4. Approve & pay ---------- */
-const STAGES = ["Guardrails passed", "Approval", "Order created", "Buyer approves", "Payment captured"];
-
-/** Where the purchase is, as a sequence the person can read at a glance. */
-function stageOf(p: Proposal): { done: number; fail?: number; labels: string[] } {
-  const labels = STAGES.slice();
-  if (p.autoApproved) labels[1] = "Approved by the mandate";
-  switch (p.status) {
-    case "pending": return { done: 1, labels };
-    case "auto_approved":
-    case "awaiting_buyer": return { done: 3, labels };
-    case "paid": return { done: 5, labels };
-    case "rejected": return { done: 1, fail: 1, labels };
-    case "failed": return p.order ? { done: 3, fail: 4, labels } : { done: 1, fail: 2, labels };
-    default: return { done: 0, fail: 0, labels };
-  }
-}
-
-function Timeline({ p }: { p: Proposal }) {
-  const { done, fail, labels } = stageOf(p);
-  return (
-    <ol className="tl" aria-label="Purchase progress">
-      {labels.map((l, i) => {
-        const state = fail === i ? "fail" : i < done ? "done" : i === done && fail === undefined ? "now" : "todo";
-        return <li key={l} className={state}><span className="dot">{state === "done" ? <Icon name="check" size={13} /> : state === "fail" ? <Icon name="cross" size={13} /> : i + 1}</span><span>{l}</span></li>;
-      })}
-    </ol>
-  );
-}
-
-function PayStep({ p, config, busy, run, onChange, onAskAgain }: { p: Proposal; config: Config; busy: boolean; run: RunFn; onChange: (p: Proposal) => void; onAskAgain: () => void }) {
-  const mock = config.demoMode === "mock";
-  const link = p.order?.approveUrl?.startsWith("http") ? p.order.approveUrl : undefined;
-  // Feedback on the pressed button in the same frame (Doherty): the label says what is running, the other buttons stay disabled.
-  const [doing, setDoing] = useState<"approve" | "reject" | "pay">();
-  const [justPaid, setJustPaid] = useState(false);
-  const act = (what: "approve" | "reject" | "pay", fn: () => Promise<Proposal>) => { setDoing(what); return run(fn).then((r) => { if (r) { if (what === "pay" && r.status === "paid") setJustPaid(true); onChange(r); } }).finally(() => setDoing(undefined)); };
-  return (
-    <section>
-      <div className="card"><Timeline p={p} /></div>
-      <ProposalCard p={p} />
-      <div className="card">
-        {p.status === "pending" && (
-          <>
-            <h2>Approve this purchase?</h2>
-            <p className="muted hint">Nothing has been paid. Approving creates the order, after the price and the mandate are checked again.</p>
-            <div className="actions">
-              <button className="ghost" disabled={busy} aria-busy={doing === "reject"} onClick={() => act("reject", () => api.reject(p.id))}>{doing === "reject" ? "Rejecting…" : "Reject"}</button>
-              <button className="primary" disabled={busy} aria-busy={doing === "approve"} onClick={() => act("approve", () => api.approve(p.id))}>{doing === "approve" ? "Approving…" : `Approve ${money(p.totalCents, p.currency)}`}</button>
-            </div>
-          </>
-        )}
-        {(p.status === "awaiting_buyer" || p.status === "auto_approved") && p.order && (
-          <>
-            <h2>{mock ? "Order created" : "Now the buyer approves on PayPal"}</h2>
-            <p className="muted hint">{mock ? "Demo mode: simulate the buyer approving on PayPal, then capture the payment." : "Open PayPal, approve with the sandbox buyer account, come back and capture the payment."}</p>
-            {link && <p><a className="paylink" href={link} target="_blank" rel="noreferrer noopener"><Icon name="external" size={15} /> Approve in PayPal sandbox</a></p>}
-            <div className="actions">
-              <button className="primary" disabled={busy} aria-busy={doing === "pay"} onClick={() => act("pay", () => api.pay(p.id))}>{doing === "pay" ? "Capturing payment…" : mock ? "Simulate buyer and pay" : "Capture payment"}</button>
-            </div>
-          </>
-        )}
-        {p.status === "paid" && (
-          <div className={`receipt ${justPaid ? "just-paid" : ""}`}>
-            <h2>Paid <span className="badge good">{p.autoApproved ? "by the mandate" : "approved by you"}</span></h2>
-            <p className="bigamt mono">{money(p.totalCents, p.currency)}</p>
-            <dl>
-              <dt>Bought</dt><dd>{p.lines.map((l) => `${l.title}${l.quantity !== 1 ? ` ×${l.quantity}` : ""}`).join(", ")}</dd>
-              <dt>Order</dt><dd className="mono">{p.order?.id}</dd>
-              <dt>Capture</dt><dd className="mono">{p.order?.captureId ?? "n/a"}</dd>
-              <dt>Mandate</dt><dd className="mono">{p.mandateHash}</dd>
-            </dl>
-            <div className="actions">
-              <a className="ghost auditlink" href={`/api/proposals/${p.id}/audit`} download>Download audit (JSON)</a>
-              <button className="primary" onClick={onAskAgain}>Buy something else</button>
-            </div>
-          </div>
-        )}
-        {p.status === "failed" && (
-          <>
-            <h2>Stopped at checkout</h2>
-            <div className="alert">{p.error}</div>
-            <p className="muted hint">The guardrails ran again with live data and refused. No money moved.</p>
-            <div className="actions"><button className="primary" onClick={onAskAgain}>Ask again</button></div>
-          </>
-        )}
-        {p.status === "rejected" && (
-          <>
-            <h2>Rejected</h2>
-            <p className="muted hint">Nothing was paid.</p>
-            <div className="actions"><button className="primary" onClick={onAskAgain}>Ask again</button></div>
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/* ---------- Trace panel ---------- */
-type Json = Record<string, unknown> | undefined;
-/** One plain sentence per event, so the trace reads as a story. The raw JSON is one click away. */
-function describe(e: TraceEvent): string {
-  const a = (e.args ?? {}) as Json as Record<string, unknown>;
-  const r = (e.result ?? {}) as Record<string, unknown>;
-  switch (e.step) {
-    case "mandate.signed": return `Mandate signed (${String(r.hash ?? "")})`;
-    case "ask": return `You asked: "${String(a.text ?? "")}"`;
-    case "agent.start": return `Agent started (${a.mode === "llm" ? "AI model" : "rules"})`;
-    case "agent.search_products": return `Searched the catalog: ${Array.isArray(r.ids) ? r.ids.length : 0} results`;
-    case "agent.get_product": return "Looked up one product";
-    case "agent.propose_cart": return r.blocked ? "Agent proposed a cart (blocked)" : "Agent proposed a cart";
-    case "agent.refused": return `Agent step refused: ${e.error ?? ""}`;
-    case "agent.finish": return "Agent finished";
-    case "agent.llm_failed": return "AI model failed; the rules agent took over";
-    case "guardrails.checkCart": { const n = Array.isArray(r.checks) ? (r.checks as { ok: boolean }[]).filter((c) => !c.ok).length : 0; return r.blocked ? `Guardrails blocked the cart (${n} failed)` : "Guardrails: all checks passed"; }
-    case "approval.proposed": return "Waiting for approval";
-    case "approval.approved": return "You approved";
-    case "approval.auto_approved": return "The mandate approved it (under the auto-buy amount)";
-    case "approval.rejected": return "You rejected it";
-    case "approval.executed": return "Approval used";
-    case "execution.recheck": return r.ok ? "Re-checked live price and mandate: still fine" : `Re-check refused: ${String(((r.problems as string[]) ?? [])[0] ?? "")}`;
-    case "order.created": return "Order created";
-    case "payment.captured": return "Payment captured";
-    case "demo.reset": return "Demo reset";
-    default: return e.step.startsWith("paypal.") || e.step.startsWith("payments.") ? `Payments: ${e.step.split(".").slice(1).join(" ")}` : e.step;
-  }
-}
-
-function TracePanel({ active }: { active: boolean }) {
-  const [events, setEvents] = useState<TraceEvent[]>([]);
-  const [filter, setFilter] = useState("all");
-  const [open, setOpen] = useState<number>();
-  useEffect(() => {
-    if (!active) return;
-    let alive = true;
-    // A tab nobody is looking at does not poll; it catches up the moment it is shown again.
-    const tick = () => { if (!document.hidden) api.trace().then((e) => alive && setEvents(e)).catch(() => {}); };
-    tick();
-    const t = setInterval(tick, 1500);
-    document.addEventListener("visibilitychange", tick);
-    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", tick); };
-  }, [active]);
-  const shown = traceRows(events, filter);
-  return (
-    <aside className="trace" aria-label="Trace">
-      <h2>Trace</h2>
-      <p className="muted small">Everything the agent, the guardrails and PayPal did, in order. Click an event for the raw JSON.</p>
-      <div className="chips">
-        {["all", "llm", "tool", "decision", "approval", "error"].map((k) => (
-          <button key={k} className={`chip ${filter === k ? "sel" : ""}`} onClick={() => setFilter(k)}>{k}</button>
-        ))}
-      </div>
-      <ol>
-        {shown.map(({ n, e }) => (
-          <li key={n} className={`ev ${e.kind}`}>
-            <button className="evbtn" onClick={() => setOpen(open === n ? undefined : n)} aria-expanded={open === n}>
-              <div className="evh"><span className="kindtag">{e.kind}</span> <b>{describe(e)}</b> <time>{new Date(e.ts).toLocaleTimeString()}</time></div>
-              {e.error && <div className="everr">{e.error}</div>}
-            </button>
-            {open === n && <pre><span className="stepname">{e.step}</span>{"\n"}{JSON.stringify({ args: e.args, result: e.result }, null, 2)}</pre>}
-          </li>
-        ))}
-        {!active && <li className="muted">Sign a mandate to start.</li>}
-        {active && shown.length === 0 && <li className="muted">Nothing yet.</li>}
-      </ol>
-    </aside>
-  );
-}
-
-/** "Why nothing?": what the agent found, which guardrail stopped each product, and the change the person could make. */
-function NearMisses({ items, onFix }: { items: NearMiss[]; onFix: (n: NearMiss) => void }) {
-  return (
-    <div className="near" role="region" aria-label="Found but outside your mandate">
-      <h3>Found, but outside your mandate</h3>
-      <p className="muted small">The agent cannot widen the mandate. You can, and it is signed again.</p>
-      <ul>
-        {items.map((n) => (
-          <li key={n.productId}>
-            <Thumb src={n.imageUrl} title={n.title} />
-            <div className="ltext">
-              <b>{n.title}</b>
-              <span className="muted small">{n.merchant} · {n.category} · {money(n.priceCents, n.currency)}</span>
-              <ul className="whyblocked">{n.failed.map((f) => <li key={f.name}><Icon name="cross" size={14} /> <span><b>{CHECK_LABEL[f.name]}:</b> {f.reason}</span></li>)}</ul>
-              {n.fix && <button className="ghost small fix" onClick={() => onFix(n)}>{n.fix.label}, then search again</button>}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {traceOpen && <TracePanel active={Boolean(config)} />}
     </div>
   );
 }

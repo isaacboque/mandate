@@ -1,6 +1,6 @@
 # LinkedIn drafts
 
-Facts come only from this repo and are reproducible: `npm run eval` (46 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (197 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
+Facts come only from this repo and are reproducible: `npm run eval` (55 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (251 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
 
 Repo: https://github.com/isaacboque/mandate · Demo (no keys): https://mandate-gb6t.onrender.com
 
@@ -11,7 +11,7 @@ The model can propose. It has no tool that can pay.
 That is the whole design of Mandate, a shopping agent that spends only inside a mandate you sign: budget, per-item cap, categories, shops, quantity, expiry.
 
 - The agent has three tools: search, get product, propose cart. None of them pays.
-- Ten guardrails run as plain TypeScript outside the LLM, at proposal and again at checkout with the live price.
+- Eleven guardrails run as plain TypeScript outside the LLM, at proposal and again at checkout with the live price.
 - Product text never reaches the system prompt, only as quoted data.
 
 A poisoned listing can fool the model. In my eval it never moved money.
@@ -44,6 +44,22 @@ What it does not show: a real LLM (opt-in script, not run for this post), real m
 
 #AIAgents #TypeScript #Evals
 
+## Post D (technical, the agent version)
+
+What changes in the threat model when the agent can draft its own contract?
+
+I turned Mandate from a form-driven demo into an agent you talk to. It can now write the contract that limits it. So the question is what it must still never do.
+
+- Drafts and amendments are pending data. Nothing is spendable until a person signs.
+- Signing, amending, revoking, approving and paying are HTTP endpoints behind buttons. The agent has 8 tools and none of them is one of those; a call to any other tool is refused and traced.
+- Spend is cumulative over the amendment chain, so "amend the budget" cannot reset what was already spent.
+- A revoked or superseded contract fails an eleventh guardrail, at proposal and again at checkout.
+- The UI renders only typed cards built from server state. Agent text is plain text; an unknown card type renders nothing (there is a test for it).
+
+How I check it: 55 scenarios (9 of them about the agent), and a mutation run that switches each of the 11 guardrails off in turn. All 11 caught. Sandbox only; the eval does not use a real LLM.
+
+#AIAgents #TypeScript #Evals
+
 ## Post C (lessons, optional)
 
 What building an agent that handles money taught me:
@@ -61,7 +77,8 @@ Repo: https://github.com/isaacboque/mandate. No-keys demo: https://mandate-gb6t.
 
 ## Suggested visuals
 
-- `docs/screenshots/desktop-5-attack.png`: a poisoned listing blocked by the guardrails (already in the repo).
+- `docs/screenshots/desktop-5-paid.png` (chat + contracts) and `docs/screenshots/desktop-6-attack.png` (a poisoned listing blocked), both in the repo.
+- `docs/screenshots/mobile-7-amendment.png`: the amendment diff on a phone.
 - The table from `docs/MUTATION.md` as an image.
 - The Mermaid architecture diagram from the README.
 - TODO(Isaac): a 20-30 s screen recording of the "Try an attack" flow on the live demo.

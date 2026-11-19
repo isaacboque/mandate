@@ -1,6 +1,6 @@
 /**
- * Drives the whole web flow in a real browser (system Microsoft Edge, no download) against the demo/mock app:
- * sign a mandate, ask, approve, pay, plus "Try an attack". Takes desktop (1280) and mobile (380) screenshots into
+ * Drives the whole web flow in a real browser (system Microsoft Edge, or EXECUTABLE=/path/to/chromium) against the demo/mock app:
+ * ask in the chat, review and sign the drafted contract, buy, approve, pay, "Try an attack", an amendment diff, revoke and a refused approval. Takes desktop (1280) and mobile (380) screenshots into
  * docs/screenshots, checks for horizontal overflow at 380 px, checks that the stamp/pop/shake animations fire,
  * and that prefers-reduced-motion leaves no running animation.
  *
@@ -49,7 +49,6 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   const anims = (p: Page) => p.evaluate(() => document.getAnimations().map((a) => (a as CSSAnimation).animationName || a.constructor.name));
   const shot = async (name: string) => { if (!reduced) await page.screenshot({ path: `${OUT}/${vp.name}-${name}.png`, fullPage: true }); };
-  const shotEl = async (sel: string, name: string) => { if (!reduced) { await page.waitForTimeout(450); await page.locator(sel).first().screenshot({ path: `${OUT}/${vp.name}-${name}.png` }); } };
   /** Checks run on every step once it has settled. */
   const check = async (step: string) => {
     await page.waitForTimeout(450);
@@ -63,7 +62,6 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
       if (a.length) findings.push({ run: tag, step, what: `animations under reduced motion: ${a.join(",")}` });
     }
   };
-  /** Right after the action, the named flourish must be running (normal motion), and absent under reduced motion. */
   const fires = async (step: string, name: string, selector: string) => {
     const a = await page.evaluate((sel) => document.querySelector(sel)?.getAnimations({ subtree: true }).map((x) => (x as CSSAnimation).animationName) ?? [], selector);
     const ok = a.includes(name);
@@ -71,56 +69,85 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
     if (!reduced && !ok) findings.push({ run: tag, step, what: `${name} did not fire` });
     if (reduced && ok) findings.push({ run: tag, step, what: `${name} fired under reduced motion` });
   };
+  const must = async (step: string, ok: boolean, what: string) => { log(`  [${tag}] ${step}: ${what} ${ok ? "ok" : "FAILED"}`); if (!ok) findings.push({ run: tag, step, what }); };
+  /** On a phone the two panes are tabs: open the one that holds what the step needs. */
+  const tab = async (name: "Chat" | "Contracts") => { const t = page.getByRole("tab", { name: new RegExp(`^${name}`) }); if (await t.isVisible()) await t.click(); };
+  const say = async (text: string) => {
+    await tab("Chat");
+    const before = await page.locator(".msg.agent").count();
+    await page.locator("#chat-input").fill(text);
+    await page.locator("#chat-input").press("Enter");
+    await page.waitForFunction((n) => document.querySelectorAll(".msg.agent").length > n, before, { timeout: 15000 });
+  };
 
   await page.goto(url);
-  await page.getByRole("heading", { name: "What should it buy?" }).waitFor();
-  await check("0 form");
-  await shot("0-form");
+  await page.getByText("Tell the agent what to buy.").waitFor();
+  await check("0 empty chat");
+  await shot("0-chat");
 
-  // Draft from a sentence, review the form (existing name: 1-mandate), then sign only so the stamp shows on the Ask step.
-  await page.locator("#describe").fill("Indoor futsal shoes, size 43, non-marking sole, max 90 €");
-  await page.getByRole("button", { name: "Draft the limits" }).click();
-  await page.getByText("Here is what I understood").waitFor();
-  await page.waitForTimeout(500);
-  await check("0 drafted form");
-  await shot("1-mandate");
+  // 1. Ask in plain words: the agent drafts a contract. Nothing is signed.
+  await page.getByRole("button", { name: "Indoor futsal shoes, max 90 €" }).click();
+  await page.getByRole("group", { name: "draft card" }).waitFor();
+  await must("1 draft", (await page.locator(".statuschip.active").count()) === 0, "no active contract before a person signs");
+  await check("1 chat with draft card");
+  await shot("1-chat-draft");
+  await tab("Contracts");
+  await page.getByRole("button", { name: "Sign contract" }).waitFor();
+  await must("1 draft form", (await page.getByText("from the agent").count()) > 0, "fields filled by the agent are marked");
+  await check("1 draft form");
+  await shot("2-draft-form");
 
-  const signAnim = page.getByRole("button", { name: "Sign only" }).click();
-  await signAnim;
-  await page.locator(".seal.stamp, .seal").first().waitFor();
-  await fires("1 ask (just signed)", "stamp", ".seal");
-  await shotEl(".seal", "1-seal-stamp");
-  await check("1 ask");
-  await shot("1-ask");
-
-  await page.getByRole("button", { name: "Find options" }).click();
-  await page.getByRole("heading", { name: "Proposals" }).waitFor();
-  await check("2 proposal");
-  await shot("2-proposal");
-
-  await page.getByRole("button", { name: /^Review / }).first().click();
-  await page.getByRole("heading", { name: "Approve this purchase?" }).waitFor();
-  await check("3 approve");
-  await shot("3-approve");
-
-  await page.getByRole("button", { name: /^Approve / }).click();
-  await page.getByRole("button", { name: "Simulate buyer and pay" }).waitFor();
-  await check("3 order created");
-  await page.getByRole("button", { name: "Simulate buyer and pay" }).click();
+  // 2. Sign it (the person's button), then buy under it.
+  await page.getByRole("button", { name: "Sign contract" }).click();
+  await page.locator(".statuschip.active").first().waitFor();
+  await check("2 signed");
+  await shot("3-signed");
+  await say("Indoor futsal shoes, size 43, non-marking sole, max 90 €");
+  await page.getByRole("button", { name: /^Approve €/ }).waitFor();
+  await check("3 proposal in chat");
+  await shot("4-proposal");
+  await page.getByRole("button", { name: /^Approve €/ }).click();
+  await page.getByRole("button", { name: "Pay (simulate buyer)" }).click();
   await page.locator(".receipt").waitFor();
   await fires("3 paid", "pop", ".receipt");
-  await shotEl(".receipt", "4-receipt");
   await check("3 paid");
-  await shot("4-paid");
+  await shot("5-paid");
 
-  await page.getByRole("button", { name: "Buy something else" }).click();
-  await page.getByRole("button", { name: "Try an attack" }).waitFor();
+  // 3. The attack: the fooled model proposes 10, plain code says no.
+  await tab("Chat");
   await page.getByRole("button", { name: "Try an attack" }).click();
   await page.locator(".verdict.bad").first().waitFor();
-  await fires("2 attack blocked", "shake", ".verdict.bad");
-  await shotEl(".pcard.blocked", "5-blocked");
-  await check("2 attack");
-  await shot("5-attack");
+  await fires("4 attack blocked", "shake", ".verdict.bad");
+  await check("4 attack");
+  await shot("6-attack");
+
+  // 4. An amendment: the agent proposes, the diff shows before/after, the person signs. Spend carries over.
+  await say("raise the budget to 200 €");
+  await page.getByRole("group", { name: "amendment card" }).waitFor();
+  await tab("Contracts");
+  await page.getByRole("button", { name: "Sign amendment" }).waitFor();
+  await must("5 amendment", (await page.locator(".difftable .after").count()) > 0, "before/after diff shown");
+  await check("5 amendment diff");
+  await shot("7-amendment");
+  await page.getByRole("button", { name: "Sign amendment" }).click();
+  await page.locator(".statuschip.superseded").first().waitFor();
+  await check("5 after amendment");
+  await shot("8-after-amendment");
+
+  // 5. A second cart waits for approval; the person revokes; approving it now is refused at checkout.
+  await say("Indoor futsal shoes, size 43, non-marking sole, max 90 €");
+  await page.getByRole("button", { name: /^Approve €/ }).waitFor();
+  await tab("Contracts");
+  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm revoke" }).click();
+  await page.locator(".statuschip.revoked").first().waitFor();
+  await check("6 revoked");
+  await shot("9-revoked");
+  await tab("Chat");
+  await page.getByRole("button", { name: /^Approve €/ }).click();
+  await page.locator(".alert", { hasText: "Stopped at checkout" }).waitFor();
+  await check("6 refused after revoke");
+  await shot("10-refused");
 
   if (errors.length) { log(`  [${tag}] console/page errors: ${errors.join(" | ")}`); findings.push({ run: tag, step: "all", what: `console errors: ${errors.join(" | ")}` }); }
   await ctx.close();
@@ -137,11 +164,10 @@ async function bootStates(browser: Awaited<ReturnType<typeof chromium.launch>>, 
   log(`  waking-up message while the server is slow: ${waking ? "shown" : "MISSING"}`);
   if (!waking) findings.push({ run: "boot", step: "slow server", what: "no waking-up message while /api/config is slow" });
   else await page.screenshot({ path: `${OUT}/mobile-cold-start.png` });
-  await page.getByRole("heading", { name: "What should it buy?" }).waitFor();
-  const names = await page.getByRole("button", { name: /^(1|2|3|4)?\s*(Request & limits|Ask|Proposal|Approve & pay)$/ }).count();
-  log(`  stepper buttons with an accessible name at 380px: ${names} of 4`);
-  if (names !== 4) findings.push({ run: "boot", step: "stepper", what: `only ${names} of 4 stepper buttons have a name at phone width` });
-  await page.getByRole("button", { name: /Ask/ }).first().isDisabled().then((d) => log(`  step 2 disabled before signing: ${d}`));
+  await page.getByText("Tell the agent what to buy.").waitFor();
+  const tabs = await page.getByRole("tab").count();
+  log(`  tabs with an accessible name at 380px: ${tabs} of 2`);
+  if (tabs !== 2) findings.push({ run: "boot", step: "tabs", what: `only ${tabs} of 2 tabs at phone width` });
   await ctx.close();
 
   const down = await browser.newContext({ viewport: { width: 380, height: 800 }, deviceScaleFactor: 1 });
@@ -156,7 +182,7 @@ async function bootStates(browser: Awaited<ReturnType<typeof chromium.launch>>, 
   else {
     await p2.screenshot({ path: `${OUT}/mobile-server-down.png` });
     await retry.click();
-    const back = await p2.getByRole("heading", { name: "What should it buy?" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
+    const back = await p2.getByText("Tell the agent what to buy.").waitFor({ timeout: 5000 }).then(() => true, () => false);
     log(`  Try again recovers the page: ${back}`);
     if (!back) findings.push({ run: "boot", step: "retry", what: "Try again did not load the page" });
   }
@@ -169,7 +195,7 @@ async function main() {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const app = startApp(port);
-  const browser = await chromium.launch({ channel: process.env.CHANNEL ?? "msedge", args: process.env.NO_SANDBOX ? ["--no-sandbox"] : [] }); // NO_SANDBOX=1 when running as root (CI containers)
+  const browser = await chromium.launch({ ...(process.env.EXECUTABLE ? { executablePath: process.env.EXECUTABLE } : { channel: process.env.CHANNEL ?? "msedge" }), args: process.env.NO_SANDBOX ? ["--no-sandbox"] : [] }); // NO_SANDBOX=1 when running as root (CI containers)
   try {
     await waitUp(url);
     await bootStates(browser, url);

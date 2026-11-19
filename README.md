@@ -1,10 +1,10 @@
 # Mandate
 
-> Agents shouldn't be trusted with money. They should be trusted with a mandate.
+> An agent you talk to, bound by contracts it cannot sign.
 
 [![CI](https://github.com/isaacboque/mandate/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/mandate/actions/workflows/ci.yml)
 
-**In 30 seconds:** you sign a spending mandate (budget, caps, categories, shops, expiry). A shopping agent searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model, but the model has no tool that pays; in the eval no captured payment ever left the mandate. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
+**In 30 seconds:** you talk to a shopping agent in plain words. It drafts a spending contract (a *mandate*: budget, caps, categories, shops, expiry) that **only you can sign**, amend or revoke. Inside a signed contract it searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model, but the model has no tool that pays; in the eval no captured payment ever left the mandate. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
 
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
 
@@ -15,14 +15,20 @@ The guardrails are plain code **outside the LLM**. A poisoned product listing ca
 ```bash
 git clone https://github.com/isaacboque/mandate.git && cd mandate
 npm ci
-npm run build && npm start      # http://localhost:8787 (demo mode: fixture catalog, mock payments)
+npm run build && npm start      # http://localhost:8787 (demo mode: chat + contracts, fixture catalog, mock payments, no keys)
 npm run eval                    # 55 deterministic scenarios, prints the table below
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (234 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (251 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
-![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-5-attack.png)
+![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
+
+| Ask, get a draft | Edit and sign | Attack blocked | Amendment diff | Revoked, then refused |
+| --- | --- | --- | --- | --- |
+| ![](docs/screenshots/mobile-1-chat-draft.png) | ![](docs/screenshots/mobile-2-draft-form.png) | ![](docs/screenshots/mobile-6-attack.png) | ![](docs/screenshots/mobile-7-amendment.png) | ![](docs/screenshots/mobile-10-refused.png) |
+
+The poisoned-listing attack, blocked on the desktop layout: ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-6-attack.png)
 
 **Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
 
@@ -32,8 +38,10 @@ Started as a PayPal AI Hackathon project. Sandbox only: no real money moves. Mor
 
 ```mermaid
 flowchart LR
-  U[Person] -->|signs| M[Mandate<br/>sha256 hash]
-  U -->|asks| A[Agent<br/>LLM or rules]
+  U[Person] -->|chats| A[Agent<br/>LLM or rules]
+  A -->|drafts, amendments<br/>pending data only| D[Draft / amendment]
+  D -->|only the person signs| M[Mandate<br/>sha256 hash]
+  U -->|signs, amends, revokes| D
   A -->|search, get product| C[(Catalog<br/>Channel3 or fixtures)]
   A -->|propose cart<br/>only enqueues| G{{Guardrails<br/>checkCart, pure code}}
   M --> G
@@ -50,15 +58,16 @@ flowchart LR
   P -.-> T
 ```
 
+- **Chat + contracts UI** (`web/`): the agent is a chat; contracts are a panel. A draft is an editable form with the agent's fields marked "from the agent"; an amendment is a before/after diff. Sign, amend, revoke, approve and pay are buttons wired to human-only endpoints; the chat renders only typed cards from the server (unknown card types render nothing) and agent text as plain text. On a phone the two panes are tabs, with a dot when something needs you.
 - **Mandate** (`src/mandate`): typed, signed with a short sha256 of its canonical JSON. `checkCart` runs 11 named checks: total budget, per-item cap, category, merchant, quantity, expiry, currency, hard attributes (e.g. size), price freshness, injection flag, mandate active (not revoked or replaced).
-- **Agent** (`src/agent`): Vercel AI SDK, provider by `LLM_PROVIDER` (default Google `gemini-2.5-flash`). Tools: `search_products`, `get_product`, `propose_cart`. It can only propose, and only products the catalog returned in that run. With no LLM key, a deterministic rules agent does the same job, so the demo and the eval need no keys.
+- **Agent** (`src/agent`): Vercel AI SDK, provider by `LLM_PROVIDER` (default Google `gemini-2.5-flash`). The concierge has 8 tools (search, get product, propose cart, draft a contract, propose an amendment, list contracts, get spending, explain a block); none signs, amends, revokes, approves or pays. It can only propose, and only products the catalog returned in that run. With no LLM key, a deterministic rules agent does the same job, so the demo and the eval need no keys.
 - **Untrusted text** (`src/catalog`): product titles and descriptions are never put in the system prompt. They reach the model only as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them.
 - **Approval queue** (`src/approval`): a person approves, or the mandate's autonomy rule does (`ask_always`, or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval.
 - **Payments** (`src/payments`): PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules.
-- **One sentence is enough**: write what you want with how much you can spend ("indoor futsal shoes, max $90") and the assistant drafts the limits into a form for you to review, then **Sign and search** signs them and runs the search. The agent does not search before you sign. The draft covers budget, caps, categories (resolved against the catalog's own tree, not guessed by the model), shops, validity and what it may do alone. It only drafts: nothing is signed until you press Sign, and the signed mandate goes through the same validation as one typed by hand. Without an AI model, or if it fails, a simple rules reader does a plainer version and says so.
+- **One sentence is enough**: write what you want with how much you can spend ("indoor futsal shoes, max $90") and the agent drafts the limits into a form in the Contracts panel for you to review; **Sign contract** signs the fields as you left them. The agent does not search before a contract is signed. The draft covers budget, caps, categories (resolved against the catalog's own tree, not guessed by the model), shops, validity and what it may do alone. It only drafts: nothing is signed until you press Sign, and the signed mandate goes through the same validation as one typed by hand. Without an AI model, or if it fails, a simple rules reader does a plainer version and says so.
 - **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
 - **Category tree**: a mandate that allows a category allows everything inside it (allow "shoes" and athletic shoes and sneakers come with it); a product passes if its own category or any ancestor is allowed, and with no path from the catalog only its own category counts. The mandate form looks names up in the catalog's category tree as you type.
-- **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the mandate. The agent can never do this itself.
+- **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the contract (new hash). The agent can never do this itself.
 - **Audit**: each purchase can be downloaded as JSON (signed mandate, checks, approval and payment trace).
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
 
@@ -66,7 +75,7 @@ flowchart LR
 
 Start it as in the quickstart above (`npm ci`, `npm run build && npm start`, Node 20+), or for development `npm run dev` (API on :8787, UI on :5173).
 
-Then: type a request such as "Grip socks, max 15 €" → **Draft the limits** (review them) → **Sign and search** → **Review** → **Approve** → **Simulate buyer and pay**. Click **Try an attack** to see a poisoned listing blocked: the card says what the listing told the model, what the fooled model proposed and which guardrails stopped it.
+Then: click a suggestion such as "Indoor futsal shoes, max 90 €" (or type your own) → the agent answers with a **draft** card → in **Contracts** review the fields and press **Sign contract** → ask for the shoes → **Approve** → **Pay (simulate buyer)**. Click **Try an attack** to see a poisoned listing blocked: the card says what the listing told the model, what the fooled model proposed and which guardrails stopped it. Then type "raise the budget to 200 €": the agent proposes an amendment, you read the diff and press **Sign amendment**; or press **Revoke** and watch a waiting cart be refused at checkout. Without a key the agent runs in "Rules mode" (it says so in the chat header) and understands a few plain requests.
 
 Demo mode uses a fixture catalog (16 products, 3 of them poisoned, 1 with a price that rises at checkout) and mock payments. If you set an LLM key (below) the agent is the LLM instead of the rules agent.
 
