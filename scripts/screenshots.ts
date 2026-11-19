@@ -2,7 +2,9 @@
  * Drives the whole web flow in a real browser (system Microsoft Edge, or EXECUTABLE=/path/to/chromium) against the demo/mock app:
  * ask in the chat, review and sign the drafted contract, buy, approve, pay, "Try an attack", an amendment diff, revoke and a refused approval. Takes desktop (1280) and mobile (380) screenshots into
  * docs/screenshots, checks for horizontal overflow at 380 px, checks that the stamp/pop/shake animations fire,
- * and that prefers-reduced-motion leaves no running animation.
+ * and that prefers-reduced-motion leaves no running animation. It also fails on any Content-Security-Policy violation (and proves the policy
+ * is enforced by injecting an inline script that must be blocked), checks the category field keeps typed text with a hint, and checks the
+ * streaming bubble (a stubbed event stream; no model key is used).
  *
  * Mock payments, rules agent (LLM keys are blanked), fixture catalog: no keys, no paid calls.
  * Run: npm run build && npm run screenshots   (CHANNEL=chrome to use Chrome instead of Edge)
@@ -43,6 +45,10 @@ const log = (s: string) => console.log(s);
 async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: string, vp: (typeof VIEWPORTS)[number], reduced: boolean) {
   const tag = `${vp.name}${reduced ? "+reduced-motion" : ""}`;
   const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: reduced ? "reduce" : "no-preference", deviceScaleFactor: 1 });
+  await ctx.addInitScript(() => {
+    (window as unknown as { __csp: string[] }).__csp = [];
+    document.addEventListener("securitypolicyviolation", (e) => (window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
+  });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -53,6 +59,8 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   const check = async (step: string) => {
     await page.waitForTimeout(450);
     const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+    const csp = await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp);
+    if (csp.length) { log(`  [${tag}] ${step}: CSP VIOLATION ${csp.join(" | ")}`); findings.push({ run: tag, step, what: `Content-Security-Policy violation: ${csp.join(" | ")}` }); await page.evaluate(() => ((window as unknown as { __csp: string[] }).__csp = [])); }
     const over = o.sw > o.iw;
     log(`  [${tag}] ${step}: scrollWidth ${o.sw} / innerWidth ${o.iw}${over ? "  OVERFLOW" : ""}`);
     if (over) findings.push({ run: tag, step, what: `horizontal overflow ${o.sw} > ${o.iw}` });
@@ -80,10 +88,24 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
     await page.waitForFunction((n) => document.querySelectorAll(".msg.agent").length > n, before, { timeout: 15000 });
   };
 
-  await page.goto(url);
+  const first = await page.goto(url);
   await page.getByText("Tell the agent what to buy.").waitFor();
   await check("0 empty chat");
   await shot("0-chat");
+
+  // The policy is sent, and it is enforced: an injected inline script must be blocked (that one expected violation is not a finding).
+  const header = first?.headers()["content-security-policy"] ?? "";
+  await must("0 csp header", /default-src 'self'/.test(header) && /script-src 'self'(;|$)/.test(header) && !/unsafe-eval|script-src[^;]*unsafe-inline/.test(header), "Content-Security-Policy is sent, scripts limited to 'self', no unsafe-eval");
+  const before = errors.length;
+  const ran = await page.evaluate(() => {
+    const el = document.createElement("script");
+    el.textContent = "window.__pwned = 1";
+    document.body.append(el);
+    return new Promise<{ pwned: boolean; csp: string[] }>((r) => setTimeout(() => r({ pwned: Boolean((window as unknown as { __pwned?: number }).__pwned), csp: (window as unknown as { __csp: string[] }).__csp.slice() }), 300));
+  });
+  await must("0 csp enforced", !ran.pwned && ran.csp.some((c) => c.startsWith("script-src")), "an injected inline script is blocked and reported");
+  await page.evaluate(() => ((window as unknown as { __csp: string[] }).__csp = []));
+  errors.splice(before); // the console line for the blocked script is expected
 
   // 1. Ask in plain words: the agent drafts a contract. Nothing is signed.
   await page.getByRole("button", { name: "Indoor futsal shoes, max 90 €" }).click();
@@ -96,6 +118,14 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await must("1 draft form", (await page.getByText("from the agent").count()) > 0, "fields filled by the agent are marked");
   await check("1 draft form");
   await shot("2-draft-form");
+
+  // Ticket 12: text typed in the category field and not confirmed with Enter is kept on blur, with a visible hint.
+  const cats = page.getByLabel(/^Categories/);
+  await cats.fill("grip socks");
+  await page.getByRole("heading", { name: /contract/i }).first().click().catch(() => page.locator("legend").first().click());
+  await page.waitForTimeout(150);
+  await must("1 category hint", (await cats.inputValue()) === "grip socks" && (await page.getByText(/"grip socks" is not added yet/).isVisible()), "a typed category stays on blur with a \"not added yet\" hint");
+  await cats.fill("");
 
   // 2. Sign it (the person's button), then buy under it.
   await page.getByRole("button", { name: "Sign contract" }).click();
@@ -148,6 +178,36 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await page.locator(".alert", { hasText: "Stopped at checkout" }).waitFor();
   await check("6 refused after revoke");
   await shot("10-refused");
+
+  // The streaming bubble: a stubbed event stream (text pieces, a pause, then done). The pieces show as plain text, then the final reply replaces them.
+  await tab("Chat");
+  await page.evaluate(() => {
+    const orig = window.fetch.bind(window);
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).endsWith("/api/chat/stream")) return orig(input, init);
+      // No named helper functions in here: the page cannot see the transpiler's `__name`.
+      const enc = new TextEncoder();
+      return Promise.resolve(new Response(new ReadableStream({
+        async start(c) {
+          c.enqueue(enc.encode('event: text\ndata: {"delta":"Looking "}\n\n'));
+          await new Promise((r) => setTimeout(r, 200));
+          c.enqueue(enc.encode('event: text\ndata: {"delta":"around <b>now</b>"}\n\n'));
+          await new Promise((r) => setTimeout(r, 1500));
+          c.enqueue(enc.encode('event: done\ndata: {"messages":[{"role":"assistant","text":"Stub final answer."}],"cards":[]}\n\n'));
+          c.close();
+        },
+      }), { status: 200, headers: { "content-type": "text/event-stream" } }));
+    }) as typeof window.fetch;
+  });
+  await page.locator("#chat-input").fill("anything");
+  await page.locator("#chat-input").press("Enter");
+  const live = page.locator(".msg.agent.streaming .bubble");
+  await live.waitFor({ timeout: 4000 });
+  await page.waitForFunction(() => document.querySelector(".msg.agent.streaming .bubble")?.textContent === "Looking around <b>now</b>", undefined, { timeout: 4000 });
+  await must("7 streaming bubble", (await live.textContent()) === "Looking around <b>now</b>" && (await page.locator(".msg.agent.streaming b").count()) === 0 && (await page.locator(".msg.agent.streaming").getAttribute("aria-live")) === "off", "streamed words show as plain text (no HTML), not announced piece by piece");
+  await page.locator(".msg.agent .bubble", { hasText: "Stub final answer." }).waitFor({ timeout: 5000 });
+  await must("7 streaming replaced", (await page.locator(".msg.agent.streaming").count()) === 0, "the final reply replaces the streaming bubble");
+  await check("7 streaming");
 
   if (errors.length) { log(`  [${tag}] console/page errors: ${errors.join(" | ")}`); findings.push({ run: tag, step: "all", what: `console errors: ${errors.join(" | ")}` }); }
   await ctx.close();
