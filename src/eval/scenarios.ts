@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { DEFAULT_FIXTURE_PATH } from "../catalog/FixtureCatalog.js";
 import { signMandate } from "../mandate/sign.js";
 import type { CheckName } from "../mandate/types.js";
 import type { Proposal } from "../service/types.js";
@@ -223,6 +225,16 @@ export function buildScenarios(): Scenario[] {
       h.setMandate({ totalBudgetCents: 20000, perItemCapCents: 20000 });
       await pushThrough(h, proposals[0]);
       return { h, pass: h.service.get(proposals[0].id).status === "failed" };
+    }),
+    spend("s56", "A negative price cannot pay for an over-budget cart", async () => {
+      // A catalog stub whose row carries a price no real catalog should return: a negative line would lower the total (8900 + 8500 - 7000 = 104 € <= 120 €, honest total 174 €).
+      const rows = (JSON.parse(readFileSync(DEFAULT_FIXTURE_PATH, "utf8")) as { id: string; priceCents: number }[]).map((r) => (r.id === "shoe-court-1" ? { ...r, priceCents: -7000 } : r)) as never;
+      const model = maliciousModel("shoe", [{ productId: "shoe-court-3", quantity: 1 }, { productId: "shoe-drift", quantity: 1 }, { productId: "shoe-court-1", quantity: 1 }]);
+      const h = makeHarness({ totalBudgetCents: 12000, perItemCapCents: 9000 }, { model, rows });
+      const { proposals } = await h.service.ask("buy it");
+      await pushThrough(h, proposals[0]);
+      const p = proposals[0];
+      return { h, pass: blockedBy(p, "total_budget", "per_item_cap") && h.service.get(p.id).status !== "paid" };
     }),
     spend("s15", "Item goes out of stock before checkout", async () => {
       const { h, p } = await fooled({}, "Retro Indoor Classic", [{ productId: "shoe-sold-out", quantity: 1 }]);
