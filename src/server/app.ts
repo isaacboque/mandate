@@ -5,6 +5,9 @@ import { z } from "zod";
 import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
+import { MandateInput } from "../mandate/input.js";
+
+export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 
 export type Config = { demoMode: "mock" | "live"; currency: string };
 
@@ -12,24 +15,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR" };
 }
 
-/** Every amount in a mandate is at most 1,000,000.00: far inside the range where integer cents stay exact when added and multiplied. */
-export const MAX_MANDATE_CENTS = 100_000_000;
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
 const MAX_BODY_BYTES = 32 * 1024;
-const cents = z.number().int().nonnegative().max(MAX_MANDATE_CENTS);
-export const MandateInput = z.object({
-  currency: z.string().length(3).transform((s) => s.toUpperCase()),
-  totalBudgetCents: cents.positive(),
-  perItemCapCents: cents.positive(),
-  allowedCategories: z.array(z.string().min(1)).min(1),
-  allowedMerchants: z.array(z.string().min(1)).optional(),
-  maxQuantityPerItem: z.number().int().min(1).max(100),
-  expiresAt: z.string().refine((s) => Number.isFinite(Date.parse(s)), "expiresAt must be an ISO date"),
-  autonomy: z.discriminatedUnion("mode", [
-    z.object({ mode: z.literal("ask_always") }),
-    z.object({ mode: z.literal("auto_under"), thresholdCents: cents.positive() }),
-  ]),
-});
 
 const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
 

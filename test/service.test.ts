@@ -281,7 +281,7 @@ describe("audit", () => {
     await service.pay(p.id);
     const a = service.audit(p.id);
     expect(a.mandate).toMatchObject({ hash: p.mandateHash });
-    expect(a.proposal.checks).toHaveLength(10);
+    expect(a.proposal.checks).toHaveLength(11);
     expect(a.proposal.order?.captureId).toBeTruthy();
     const steps = a.trace.map((e) => e.step);
     expect(steps).toEqual(expect.arrayContaining(["mandate.signed", "guardrails.checkCart", "execution.recheck", "payments.capture"]));

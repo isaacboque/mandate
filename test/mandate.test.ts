@@ -23,7 +23,7 @@ const result = (m: Mandate, c: Cart, name: string) => checkCart(m, c, NOW).find(
 describe("checkCart", () => {
   it("passes every check for a cart inside the mandate", () => {
     const r = checkCart(mandate, cart(line()), NOW);
-    expect(r).toHaveLength(10);
+    expect(r).toHaveLength(11);
     expect(r.every((x) => x.ok)).toBe(true);
   });
 

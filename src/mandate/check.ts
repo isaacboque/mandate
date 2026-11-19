@@ -1,5 +1,5 @@
 import { formatCents } from "../core/money.js";
-import type { Cart, CheckName, CheckResult, Mandate } from "./types.js";
+import type { Cart, CheckName, CheckResult, Mandate, MandateStatus } from "./types.js";
 
 /** A price read from the catalog older than this is stale and must be re-read before paying. */
 export const MAX_PRICE_AGE_MS = 10 * 60 * 1000;
@@ -20,7 +20,7 @@ export function attributeMatches(have: string | undefined, need: string): boolea
     opt.split("/").some((part) => part.trim().toLowerCase().replace(/^[a-z]+/, "") === want));
 }
 
-export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spentCents?: number } = {}): CheckResult[] {
+export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spentCents?: number; status?: MandateStatus } = {}): CheckResult[] {
   const out: CheckResult[] = [];
   const add = (name: CheckName, bad: string[], good: string) =>
     out.push({ name, ok: bad.length === 0, reason: bad.length === 0 ? good : bad.join("; ") });
@@ -68,6 +68,9 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spent
   }).map((l) => `${l.productId} price was last checked at ${l.priceCheckedAt}`), "prices are fresh");
 
   add("injection_flag", lines.filter((l) => l.injectionFlag).map((l) => `${l.productId} listing looks like a prompt injection`), "no injection flags");
+
+  const status = opts.status ?? "active";
+  add("mandate_active", status === "active" ? [] : [`this mandate is ${status}`], "mandate is active");
 
   return out;
 }
