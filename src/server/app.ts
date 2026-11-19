@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { clientIpFrom } from "./clientIp.js";
 import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
@@ -9,16 +10,17 @@ import { MandateInput } from "../mandate/input.js";
 
 export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 
-export type Config = { demoMode: "mock" | "live"; currency: string };
+/** `trustedProxies`: how many proxies of our own sit in front of the app (0 = none: X-Forwarded-For is ignored). */
+export type Config = { demoMode: "mock" | "live"; currency: string; trustedProxies?: number };
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
-  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR" };
+  const proxies = Number(env.TRUSTED_PROXIES);
+  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0 };
 }
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
 const MAX_BODY_BYTES = 32 * 1024;
 
-const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
 
 /**
  * `source` is one MandateService (tests, single-user use) or a SessionStore (the server: one service per visitor).
@@ -26,6 +28,12 @@ const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?
  */
 export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter): Hono {
   const app = new Hono();
+  // The per-visitor key: never the first X-Forwarded-For entry (the client writes that one), see clientIp.ts.
+  const clientIp = (c: Context) => clientIpFrom({
+    forwardedFor: c.req.header("x-forwarded-for"),
+    socketIp: (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress,
+    trustedProxies: config.trustedProxies,
+  });
   const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c) : source);
 
   // Browser hardening for every answer, API and web page alike (the static files are mounted after this app is built).

@@ -1,6 +1,6 @@
 # LinkedIn drafts
 
-Facts come only from this repo and are reproducible: `npm run eval` (56 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (261 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
+Facts come only from this repo and are reproducible: `npm run eval` (56 scenarios), `npm run eval:mutants` ([docs/MUTATION.md](MUTATION.md)), `npm test` (268 tests). Mandate began as a PayPal AI Hackathon project; **no submission was made, so no post may claim a prize, a finalist place or a hackathon result**. Sandbox only, no users, no real money, and no measurement of a real LLM (`npm run eval:real` is opt-in and has not been published).
 
 Repo: https://github.com/isaacboque/mandate · Demo (no keys): https://mandate-gb6t.onrender.com
 
