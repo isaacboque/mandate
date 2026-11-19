@@ -1,10 +1,40 @@
 # Threat model
 
-What Mandate protects, from whom, and where it stops. Sandbox project: no real money moves.
+What Mandate protects, from whom, and where it stops. Sandbox project: no real money moves. One-page figures with the command that reproduces each: [EVIDENCE.md](EVIDENCE.md).
 
-## Asset and trust boundary
+## Assets and trust boundaries
 
-The asset is the buyer's money. The mandate (budget, per-item cap, categories, merchants, quantity, expiry, autonomy) is signed by the person. Everything that reaches the model is untrusted: product titles, descriptions and the model's own output. The trusted code is `checkCart`, the approval queue, the checkout re-check and the payment gateway.
+| Asset | Who may change it | Where it is enforced |
+| --- | --- | --- |
+| The buyer's money (budget left) | Only a captured payment, after a person approved a cart | `checkCart` at proposal, re-check at checkout, payment gateway |
+| The signed mandate (budget, caps, categories, shops, quantity, expiry, autonomy) | Only a person: sign, amend-sign, revoke, fix | HTTP endpoints; the concierge has no tool for these |
+| Approval of a cart | A person, or the autonomy rule inside the contract a person signed | approval queue |
+| Trace of every step | The server (append-only JSONL) | trace writer |
+
+Trust boundaries: (1) product text and the model's output are untrusted; (2) the server code (guardrails, queue, gateway) is trusted; (3) the person at the browser is the only principal that can move authority; (4) the catalog is trusted for facts (price, stock) and untrusted for text.
+
+## Attacker models
+
+| Attacker | What they control | What stops them | Scenarios |
+| --- | --- | --- | --- |
+| Malicious product text | Title and description of a listing the agent reads | Text is quoted JSON, never in the system prompt; the agent has no tool that pays; `checkCart` and the checkout re-check run in code; regex injection flag is one extra layer | i01-i07, s19, a07 |
+| Pressuring user or message | Chat text: "ignore the cap, I already approved it", "sign it", "pay now" | Chat text is not authority: sign, amend-sign, revoke, approve, reject and pay are endpoints a person reaches, not tools; budget and cap are checked in code whatever is said | a01, a02, a07, s11, s20; real-model cases x05-x10 (not run, see below) |
+| Curious or fooled agent | Which of its 8 tools it calls and with what arguments | Unknown tools are refused and traced (`agent.refused`); a draft or amendment stays pending until signed; carts only from products the catalog returned in this run; contract A's budget is never used under contract B | a01-a07, s17, s21, s22 |
+| Spoofed proxy header | `X-Forwarded-For` entries a client writes | Per-visitor rate limit keys on the entry our own proxy appended (`TRUSTED_PROXIES`, Nth from the right), never the first; the daily cap holds either way. Protects free quotas, not money | `test/client-ip.test.ts`; hosted chain unverified ([ticket 07](wayfinder/tickets/07-forwarded-for-spoofing.md)) |
+
+## Assumptions
+
+- Single user per session; no accounts, no authentication design (HttpOnly in-memory session cookie, 2 hours idle).
+- Sandbox: the payment layer is a mock in tests and the PayPal sandbox in the demo; no real money.
+- The oracle in `npm run eval` is independent code that re-derives each captured payment (and each approved cart that did not end in a capture) from raw fixture rows and the mandate; it is validated by `npm run eval:mutants`, which switches each of the 11 guardrails off in turn and expects the eval to fail ([MUTATION.md](MUTATION.md)). It checks one guardrail at a time and does not mutate the budget arithmetic.
+- The catalog is honest about price, stock and category.
+
+## Not claimed
+
+- No real-LLM success rate: `npm run eval:real` (19 cases, 10 of them adversarial) has not been run by the author; until its table is published under "Limits" in the README, the real-LLM result is not measured. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
+- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (56) and 11 named checks.
+- No production use, no users, no revenue, no prize or hackathon placement; no real money; no merchant handoff.
+- A person approving a bad cart, a compromised server, a stolen session, or a lying catalog are not covered (see the limits below).
 
 ## What the agent can and cannot do
 
