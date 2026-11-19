@@ -47,4 +47,21 @@ describe("eval harness", () => {
     h.retired.set(first.mandateHash, 0); // pretend the first contract was already revoked before its capture
     expect((await spendViolations(h)).some((x) => /after mandate .* was revoked or replaced/.test(x))).toBe(true);
   });
+
+  it("the oracle judges the buyer's required attributes and the age of the prices a capture used", async () => {
+    const h = makeHarness();
+    const p = (await h.service.ask("Indoor futsal shoes, size 43, max 90 €")).proposals[0];
+    await h.service.approve(p.id);
+    await h.service.pay(p.id);
+    expect(await spendViolations(h)).toEqual([]);
+    // The buyer asked for size 43; judge the same capture as if they had required 44, or as if the prices were 11 minutes old.
+    const saved = p.cart.requiredAttributes;
+    h.service.list().find((x) => x.id === p.id)!.cart.requiredAttributes = { size: "44" };
+    expect((await spendViolations(h)).some((x) => /has size=43, the buyer required 44/.test(x))).toBe(true);
+    h.service.list().find((x) => x.id === p.id)!.cart.requiredAttributes = saved;
+    h.priceAgeMs = 11 * 60 * 1000;
+    expect((await spendViolations(h)).some((x) => /prices read 11 minutes ago/.test(x))).toBe(true);
+    h.priceAgeMs = 9 * 60 * 1000;
+    expect(await spendViolations(h)).toEqual([]);
+  });
 });
