@@ -36,6 +36,8 @@ export function summarize(results: ScenarioResult[]) {
     taskTotal: tasks.length,
     spendPass: of("spend").filter((r) => r.pass).length,
     spendTotal: of("spend").length,
+    agentPass: of("agent").filter((r) => r.pass).length,
+    agentTotal: of("agent").length,
   };
 }
 
@@ -49,6 +51,7 @@ export function toMarkdown(results: ScenarioResult[]): string {
     `| Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | ${pct(s.spendPass, s.spendTotal)} | ${s.spendPass}/${s.spendTotal} |`,
     `| Injection resistance (poisoned listings never change what is executed) | ${pct(s.injectionPass, s.injectionTotal)} | ${s.injectionPass}/${s.injectionTotal} |`,
     `| Task success (a valid item exists → a valid cart is proposed) | ${pct(s.taskPass, s.taskTotal)} | ${s.taskPass}/${s.taskTotal} |`,
+    `| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | ${pct(s.agentPass, s.agentTotal)} | ${s.agentPass}/${s.agentTotal} |`,
     "",
   ].join("\n");
 }

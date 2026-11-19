@@ -1,16 +1,20 @@
 import type { LanguageModel } from "ai";
 import { runLlmAgent, runRulesAgent, type AgentCtx, type AgentRun } from "../agent/agent.js";
+import { runLlmConcierge, runRulesConcierge, type Card, type ConciergeOut, type ConciergePort } from "../agent/concierge.js";
 import type { ApprovalQueue } from "../approval/queue.js";
 import type { CatalogGateway, CategoryHit, Product } from "../catalog/types.js";
 import { allPass, checkCart } from "../mandate/check.js";
-import { draftMandate, type Draft } from "../mandate/draft.js";
+import { ancestry, type MandateRecord } from "../mandate/chain.js";
+import { draftFromSpec, draftMandate, type Draft, type DraftSpec } from "../mandate/draft.js";
+import { MandateInput } from "../mandate/input.js";
 import { signMandate, type SignedMandate } from "../mandate/sign.js";
 import type { Cart, CartLine, Mandate } from "../mandate/types.js";
 import { MockPayments } from "../payments/MockPayments.js";
 import { orderIdempotencyKey, type PaymentGateway } from "../payments/types.js";
 import type { Tracer } from "../trace/trace.js";
 import { formatCents } from "../core/money.js";
-import type { MandatePatch, NearMiss, Proposal, ProposeInput } from "./types.js";
+import { Conversation, type Turn } from "./conversation.js";
+import type { Amendment, AmendmentChanges, BlockedView, MandatePatch, MandateView, NearMiss, PendingDraft, Proposal, ProposeInput } from "./types.js";
 
 export type ServiceDeps = {
   catalog: CatalogGateway;
@@ -26,6 +30,8 @@ export type ServiceDeps = {
   idPrefix?: string;
   /** Longest wait for the AI model before the rules agent takes over (default 40 s). */
   llmTimeoutMs?: number;
+  /** Currency for drafts when no contract exists yet (default EUR). */
+  currency?: string;
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
@@ -34,12 +40,31 @@ const toCartLine = (p: Product, quantity: number): CartLine => ({
 });
 
 /**
+ * The exact mandate change that would let a product through, when every failure is a limit the person (not the agent)
+ * could raise or widen. Shared by "products the agent saw but could not propose" and "why was this blocked".
+ */
+function mandateFix(m: Mandate, spent: number, names: string[], p: { category: string; merchant: string; priceCents: number }): NearMiss["fix"] {
+  if (!names.every((n) => n === "category" || n === "merchant" || n === "per_item_cap" || n === "total_budget")) return undefined;
+  const patch: MandatePatch = {};
+  const parts: string[] = [];
+  if (names.includes("category")) { patch.allowedCategories = [...m.allowedCategories, p.category]; parts.push(`allow "${p.category}"`); }
+  if (names.includes("merchant")) { patch.allowedMerchants = [...(m.allowedMerchants ?? []), p.merchant]; parts.push(`allow ${p.merchant}`); }
+  if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
+  if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
+  return { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch };
+}
+
+/**
  * The orchestration layer. The agent only proposes. Guardrails (pure code) check every proposal,
  * a person or the mandate's autonomy rule approves, and money moves only after the mandate and the
  * live price are re-checked at execution time.
  */
 export class MandateService {
-  private signed: SignedMandate | null = null;
+  /** Every contract this visitor signed, in signing order. Several can be active at once. */
+  private records = new Map<string, MandateRecord>();
+  private pendingDrafts = new Map<string, PendingDraft>();
+  private pendingAmendments = new Map<string, Amendment>();
+  private conversation = new Conversation();
   private proposals = new Map<string, Proposal>();
   private seq = 0;
   /** Approve and Pay that are running right now, by proposal: a second click (or a retry) joins the first instead of repeating it. */
@@ -56,8 +81,9 @@ export class MandateService {
     this.d.tracer.log({ runId: this.d.runId, step, kind, ...extra });
   }
 
+  /** The newest active contract: what the one-contract screens (and the rules agent) work with. */
   get mandate(): SignedMandate | null {
-    return this.signed;
+    return [...this.records.values()].filter((r) => r.status === "active").at(-1)?.signed ?? null;
   }
   get agentMode(): "llm" | "rules" {
     return this.d.model ? "llm" : "rules";
@@ -77,10 +103,138 @@ export class MandateService {
     return this.d.payments instanceof MockPayments;
   }
 
+  /** Signs a mandate as one more active contract. A person did this (a form button or a draft's Sign), never the agent. */
+  addMandate(m: Mandate): SignedMandate {
+    const signed = signMandate(m);
+    const old = this.records.get(signed.hash);
+    if (old && old.status !== "active") throw new Error(`This exact mandate (${signed.hash}) was already signed and is ${old.status}. Change a field, for example the expiry, to sign a new one.`);
+    if (!old) this.records.set(signed.hash, { signed, status: "active", signedAt: this.now().toISOString() });
+    this.trace("mandate.signed", "decision", { args: m, result: { hash: signed.hash } });
+    return signed;
+  }
+
+  /** The one-form screen: signing a mandate replaces the contracts that were active (their proposals stop working). */
   setMandate(m: Mandate): SignedMandate {
-    this.signed = signMandate(m);
-    this.trace("mandate.signed", "decision", { args: m, result: { hash: this.signed.hash } });
-    return this.signed;
+    const signed = this.addMandate(m);
+    for (const r of this.records.values()) if (r.status === "active" && r.signed.hash !== signed.hash) r.status = "superseded";
+    return signed;
+  }
+
+  private record(hash: string | undefined): MandateRecord {
+    const r = hash ? this.records.get(hash) : undefined;
+    if (!r) throw new Error(hash ? `Unknown mandate ${hash}` : "Create a mandate first");
+    return r;
+  }
+
+  /** Every contract with the numbers a person needs to see: spent (across amendments), waiting for approval, left. */
+  mandates(): MandateView[] {
+    const now = this.now().getTime();
+    return [...this.records.values()].map((r) => {
+      const hash = r.signed.hash;
+      const own = this.list().filter((p) => p.mandateHash === hash);
+      const spentCents = this.spentCents(hash);
+      return {
+        hash, mandate: r.signed.mandate, signedAt: r.signedAt, revokedAt: r.revokedAt, supersedes: r.signed.mandate.supersedes,
+        status: r.status === "active" && now >= Date.parse(r.signed.mandate.expiresAt) ? "expired" : r.status,
+        spentCents, remainingCents: Math.max(0, r.signed.mandate.totalBudgetCents - spentCents),
+        paidCents: ancestry(this.records, hash).reduce((s, h) => s + this.list().filter((p) => p.mandateHash === h && p.status === "paid").reduce((a, p) => a + p.totalCents, 0), 0),
+        pendingCents: own.filter((p) => p.status === "pending").reduce((s, p) => s + p.totalCents, 0),
+      };
+    });
+  }
+
+  /** Revoking is a person's action: the agent has no tool for it. Anything not yet paid under it stops at the next check. */
+  revoke(hash: string): MandateView {
+    const r = this.record(hash);
+    if (r.status !== "active") throw new Error(`Mandate ${hash} is already ${r.status}`);
+    r.status = "revoked";
+    r.revokedAt = this.now().toISOString();
+    this.trace("mandate.revoked", "decision", { args: { hash }, result: { status: r.status } });
+    return this.mandates().find((m) => m.hash === hash)!;
+  }
+
+  // ---- drafts and amendments: pending objects a person turns into contracts ----
+
+  drafts(): PendingDraft[] {
+    return [...this.pendingDrafts.values()];
+  }
+  amendments(): Amendment[] {
+    return [...this.pendingAmendments.values()];
+  }
+  private nextId(kind: string) {
+    return `${kind}_${this.d.idPrefix ? this.d.idPrefix + "_" : ""}${++this.seq}`;
+  }
+
+  createDraft(d: Draft, source: PendingDraft["source"]): PendingDraft {
+    const draft: PendingDraft = { id: this.nextId("draft"), source, mandate: d.mandate, understood: d.understood, warnings: d.warnings, status: "pending", createdAt: this.now().toISOString() };
+    this.pendingDrafts.set(draft.id, draft);
+    this.trace("draft.created", "decision", { args: { id: draft.id, source }, result: { signed: false, totalBudgetCents: d.mandate.totalBudgetCents } });
+    return draft;
+  }
+
+  /** The person signs the draft with the fields as they left them. The same validation as a hand-typed mandate applies. */
+  signDraft(id: string, fields?: unknown): SignedMandate {
+    const draft = this.pendingDrafts.get(id);
+    if (!draft) throw new Error(`Unknown draft ${id}`);
+    if (draft.status !== "pending") throw new Error(`Draft ${id} is already ${draft.status}`);
+    const signed = this.addMandate(MandateInput.parse(fields ?? draft.mandate));
+    draft.status = "signed";
+    draft.signedHash = signed.hash;
+    return signed;
+  }
+
+  discardDraft(id: string): PendingDraft {
+    const draft = this.pendingDrafts.get(id);
+    if (!draft || draft.status !== "pending") throw new Error(`No pending draft ${id}`);
+    draft.status = "discarded";
+    return draft;
+  }
+
+  /**
+   * Proposes changing a contract. Nothing changes until a person signs it. Signing creates a successor with a new hash
+   * that supersedes the old one, and budget already spent still counts, so an amendment can never wipe the spend.
+   */
+  amend(baseHash: string, changes: AmendmentChanges, reason: string, source: Amendment["source"]): Amendment {
+    const base = this.record(baseHash);
+    if (base.status !== "active") throw new Error(`Mandate ${baseHash} is ${base.status}: it cannot be amended`);
+    const next = this.successor(base, { ...base.signed.mandate, ...changes });
+    const diff = (Object.keys(changes) as (keyof Mandate)[])
+      .filter((k) => JSON.stringify(base.signed.mandate[k]) !== JSON.stringify(next[k]))
+      .map((k) => ({ field: k, before: base.signed.mandate[k], after: next[k] }));
+    if (diff.length === 0) throw new Error("That amendment changes nothing");
+    const a: Amendment = { id: this.nextId("amd"), baseHash, mandate: next, diff, reason: reason.slice(0, 300), source, status: "pending", createdAt: this.now().toISOString() };
+    this.pendingAmendments.set(a.id, a);
+    this.trace("amendment.proposed", "decision", { args: { id: a.id, baseHash, source, diff }, result: { signed: false } });
+    return a;
+  }
+
+  /** Validates the successor like a hand-typed mandate and refuses a budget below what the chain already committed. */
+  private successor(base: MandateRecord, fields: unknown): Mandate {
+    const { supersedes: _ignored, ...plain } = fields as Mandate;
+    const next: Mandate = { ...MandateInput.parse(plain), supersedes: base.signed.hash };
+    const spent = this.spentCents(base.signed.hash);
+    if (next.totalBudgetCents < spent) throw new Error(`The budget ${formatCents(next.totalBudgetCents, next.currency)} is below the ${formatCents(spent, next.currency)} already committed under this contract`);
+    return next;
+  }
+
+  signAmendment(id: string, edited?: unknown): SignedMandate {
+    const a = this.pendingAmendments.get(id);
+    if (!a) throw new Error(`Unknown amendment ${id}`);
+    if (a.status !== "pending") throw new Error(`Amendment ${id} is already ${a.status}`);
+    const base = this.record(a.baseHash);
+    if (base.status !== "active") throw new Error(`Mandate ${a.baseHash} is ${base.status}: this amendment can no longer be signed`);
+    const signed = this.addMandate(this.successor(base, edited ?? a.mandate));
+    base.status = "superseded";
+    a.status = "signed";
+    a.signedHash = signed.hash;
+    return signed;
+  }
+
+  rejectAmendment(id: string): Amendment {
+    const a = this.pendingAmendments.get(id);
+    if (!a || a.status !== "pending") throw new Error(`No pending amendment ${id}`);
+    a.status = "rejected";
+    return a;
   }
 
   list(): Proposal[] {
@@ -95,13 +249,14 @@ export class MandateService {
     return this.d.tracer.read(this.d.runId);
   }
   /**
-   * Money committed against the current mandate's budget: carts that were approved (order created) or paid.
-   * Pending proposals are not counted until a person approves them; the re-check at execution then
-   * sees everything approved in the meantime. `exceptId` leaves one proposal out (the one being executed).
+   * Money committed against a mandate's budget: carts that were approved (order created) or paid, under this contract
+   * and under every contract it replaced. Pending proposals are not counted until a person approves them; the re-check
+   * at execution then sees everything approved in the meantime. `exceptId` leaves one proposal out (the one being executed).
    */
-  spentCents(hash = this.signed?.hash, exceptId?: string): number {
+  spentCents(hash = this.mandate?.hash, exceptId?: string): number {
+    const chain = hash ? ancestry(this.records, hash) : [];
     return this.list()
-      .filter((p) => p.mandateHash === hash && p.id !== exceptId && ["auto_approved", "awaiting_buyer", "paid"].includes(p.status))
+      .filter((p) => chain.includes(p.mandateHash) && p.id !== exceptId && ["auto_approved", "awaiting_buyer", "paid"].includes(p.status))
       .reduce((s, p) => s + p.totalCents, 0);
   }
 
@@ -127,7 +282,7 @@ export class MandateService {
     return {
       generatedAt: this.now().toISOString(),
       note: "Mandate, guardrail checks, approval and payment trace for one purchase. Re-hash the mandate JSON (canonical, sorted keys, sha256, first 12 hex) to verify the signature.",
-      mandate: this.signed && this.signed.hash === p.mandateHash ? this.signed : { hash: p.mandateHash, note: "this mandate has since been replaced" },
+      mandate: this.records.has(p.mandateHash) ? { ...this.records.get(p.mandateHash)!.signed, status: this.records.get(p.mandateHash)!.status } : { hash: p.mandateHash, note: "this mandate is unknown" },
       proposal: p,
       trace: events,
     };
@@ -136,19 +291,22 @@ export class MandateService {
   reset(): void {
     if (!this.isMock) throw new Error("Reset only exists in demo mode");
     this.proposals.clear();
+    this.pendingDrafts.clear();
+    this.pendingAmendments.clear();
+    this.conversation.clear();
     this.d.approvals.clear();
     this.trace("demo.reset", "decision", {});
   }
 
   /** Step 2: the agent searches and proposes. Returns what it proposed (blocked proposals included). */
-  async ask(text: string): Promise<{ proposals: Proposal[]; run: AgentRun; nearMisses: NearMiss[] }> {
-    const signed = this.requireMandate();
+  async ask(text: string, mandateHash?: string): Promise<{ proposals: Proposal[]; run: AgentRun; nearMisses: NearMiss[] }> {
+    const signed = mandateHash ? this.record(mandateHash).signed : this.requireMandate();
     const mine: Proposal[] = [];
     const seen = new Map<string, Product>();
     const ctx: AgentCtx = {
       mandate: signed.mandate, catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen,
       propose: async (input) => {
-        const p = this.createProposal("agent", text, seen, input);
+        const p = this.createProposal("agent", text, seen, input, "", signed.hash);
         mine.push(p);
         return p;
       },
@@ -169,15 +327,19 @@ export class MandateService {
     for (const p of mine) {
       p.agent = run.mode;
       p.summary = run.summary;
-      const a = signed.mandate.autonomy;
-      if (!p.blocked && a.mode === "auto_under" && p.totalCents <= a.thresholdCents && p.approvalId) {
-        this.d.approvals.decide(p.approvalId, true, "mandate-autonomy", `auto_under ${a.thresholdCents}`, true);
-        p.status = "auto_approved";
-        p.autoApproved = true;
-        await this.executeOrder(p);
-      }
+      await this.autoApprove(p);
     }
     return { proposals: mine, run, nearMisses: this.nearMisses(signed, seen, mine) };
+  }
+
+  /** The contract's own rule (signed by a person) may approve a small cart. The agent never does. */
+  async autoApprove(p: Proposal): Promise<void> {
+    const a = this.record(p.mandateHash).signed.mandate.autonomy;
+    if (p.blocked || a.mode !== "auto_under" || p.totalCents > a.thresholdCents || !p.approvalId) return;
+    this.d.approvals.decide(p.approvalId, true, "mandate-autonomy", `auto_under ${a.thresholdCents}`, true);
+    p.status = "auto_approved";
+    p.autoApproved = true;
+    await this.executeOrder(p);
   }
 
   /**
@@ -191,25 +353,74 @@ export class MandateService {
     const out: NearMiss[] = [];
     for (const p of seen.values()) {
       if (proposed.has(p.id) || p.injectionFlag || !p.inStock) continue;
-      const failed = checkCart(m, { lines: [toCartLine(p, 1)] }, this.now(), { spentCents: spent }).filter((c) => !c.ok);
+      const failed = checkCart(m, { lines: [toCartLine(p, 1)] }, this.now(), { spentCents: spent, status: this.record(signed.hash).status }).filter((c) => !c.ok);
       if (failed.length === 0) continue;
-      const names = failed.map((c) => c.name);
-      const fixable = names.every((n) => n === "category" || n === "merchant" || n === "per_item_cap" || n === "total_budget");
-      const patch: MandatePatch = {};
-      const parts: string[] = [];
-      if (fixable) {
-        if (names.includes("category")) { patch.allowedCategories = [...m.allowedCategories, p.category]; parts.push(`allow "${p.category}"`); }
-        if (names.includes("merchant")) { patch.allowedMerchants = [...(m.allowedMerchants ?? []), p.merchant]; parts.push(`allow ${p.merchant}`); }
-        if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
-        if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
-      }
+      const fix = mandateFix(m, spent, failed.map((c) => c.name), p);
       out.push({
         productId: p.id, title: p.title, merchant: p.merchant, category: p.category, priceCents: p.priceCents, currency: p.currency, url: p.url, imageUrl: p.imageUrl,
         failed: failed.map((c) => ({ name: c.name, reason: c.reason })),
-        fix: fixable ? { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch } : undefined,
+        fix,
       });
     }
     return out.sort((a, b) => a.failed.length - b.failed.length || a.priceCents - b.priceCents).slice(0, 4);
+  }
+
+  /** Why a proposal did not go through, from the guardrail results (default: the latest blocked or failed one). */
+  explain(id?: string): BlockedView | null {
+    const p = id ? this.get(id) : [...this.proposals.values()].reverse().find((x) => x.blocked || x.status === "failed");
+    if (!p) return null;
+    const failed = p.checks.filter((c) => !c.ok).map((c) => ({ name: c.name, reason: c.reason }));
+    const rec = this.records.get(p.mandateHash);
+    const line = p.cart.lines.length === 1 ? p.cart.lines[0] : undefined;
+    const fix = rec?.status === "active" && line && failed.length
+      ? mandateFix(rec.signed.mandate, this.spentCents(p.mandateHash), failed.map((f) => f.name), { category: line.category, merchant: line.merchant, priceCents: line.unitPriceCents })
+      : undefined;
+    return { proposalId: p.id, title: p.lines.map((l) => l.title).join(", "), status: p.status, failed, error: p.error, fix };
+  }
+
+  history(): Turn[] {
+    return this.conversation.history();
+  }
+
+  /**
+   * One chat turn. The agent can draft, propose and explain; every action that moves authority or money is an
+   * endpoint a person calls. Cards come from server state, never from the model's words.
+   */
+  async chat(text: string): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+    const out: ConciergeOut = { refused: [], cards: [] };
+    const seen = new Map<string, Product>();
+    const mode = this.agentMode;
+    const port: ConciergePort = {
+      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs,
+      mandates: () => this.mandates(),
+      draftFromSpec: async (spec: DraftSpec) => this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent"),
+      draftFromText: async (t) => this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent"),
+      amend: (id, changes, reason) => this.amend(id, changes, reason, "agent"),
+      proposeCart: async (hash, input, ask) => {
+        const p = this.createProposal("agent", ask, seen, input, "", hash);
+        p.agent = mode;
+        await this.autoApprove(p);
+        return p;
+      },
+      explain: (id) => this.explain(id),
+    };
+    this.trace("chat.turn", "decision", { args: { chars: text.length, mode } });
+    let reply: string;
+    try {
+      reply = this.d.model ? await runLlmConcierge(this.conversation.history(), text, this.d.model, port, out) : await runRulesConcierge(text, port, out);
+    } catch (e) {
+      if (!this.d.model || out.cards.length) throw e; // after a tool already acted, a second try would repeat it
+      this.trace("concierge.llm_failed", "error", { args: { chars: text.length }, error: (e as Error).message.slice(0, 160) });
+      reply = "The AI model was unavailable, so the built-in rules mode answered. " + (await runRulesConcierge(text, port, out));
+    }
+    for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
+    this.conversation.add("user", text);
+    this.conversation.add("assistant", reply);
+    return { messages: [{ role: "assistant", text: reply }], cards: out.cards };
+  }
+
+  private currencyOf(): string {
+    return this.mandate?.mandate.currency ?? this.d.currency ?? "EUR";
   }
 
   /** The attack demo: a model fooled by a poisoned listing proposes buying 10. The guardrails must stop it. */
@@ -280,20 +491,22 @@ export class MandateService {
   // ---- internals ----
 
   private requireMandate(): SignedMandate {
-    if (!this.signed) throw new Error("Create a mandate first");
-    return this.signed;
+    const m = this.mandate;
+    if (!m) throw new Error("Create a mandate first");
+    return m;
   }
 
   /** Builds the proposal from what the catalog returned (never from model-supplied prices) and runs the guardrails. */
-  createProposal(source: Proposal["source"], ask: string, seen: Map<string, Product>, input: ProposeInput, summary = ""): Proposal {
-    const signed = this.requireMandate();
+  createProposal(source: Proposal["source"], ask: string, seen: Map<string, Product>, input: ProposeInput, summary = "", mandateHash?: string): Proposal {
+    const rec = mandateHash ? this.record(mandateHash) : this.record(this.requireMandate().hash);
+    const signed = rec.signed;
     const products = input.lines.map((l) => {
       const prod = seen.get(l.productId);
       if (!prod) throw new Error(`Product ${l.productId} was not returned by the catalog`);
       return { prod, l };
     });
     const cart: Cart = { lines: products.map(({ prod, l }) => toCartLine(prod, l.quantity)), requiredAttributes: input.requiredAttributes };
-    const checks = checkCart(signed.mandate, cart, this.now(), { spentCents: this.spentCents(signed.hash) });
+    const checks = checkCart(signed.mandate, cart, this.now(), { spentCents: this.spentCents(signed.hash), status: rec.status });
     const blocked = !allPass(checks);
     const totalCents = cart.lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
     const p: Proposal = {
@@ -315,14 +528,15 @@ export class MandateService {
   private async recheck(p: Proposal): Promise<{ ok: boolean; problems: string[]; live: { product: Product; quantity: number }[] }> {
     const problems: string[] = [];
     const live: { product: Product; quantity: number }[] = [];
-    if (!this.signed || this.signed.hash !== p.mandateHash) problems.push("the mandate changed since this was proposed");
+    const rec = this.records.get(p.mandateHash);
+    if (!rec) problems.push("the mandate is unknown");
     for (const l of p.lines) {
       const prod = await this.d.catalog.getProduct(l.productId);
       if (!prod || !prod.inStock) problems.push(`${l.productId} is no longer available`);
       else live.push({ product: prod, quantity: l.quantity });
     }
-    if (this.signed) {
-      const checks = checkCart(this.signed.mandate, { lines: live.map((x) => toCartLine(x.product, x.quantity)), requiredAttributes: p.cart.requiredAttributes }, this.now(), { spentCents: this.spentCents(p.mandateHash, p.id) });
+    if (rec) {
+      const checks = checkCart(rec.signed.mandate, { lines: live.map((x) => toCartLine(x.product, x.quantity)), requiredAttributes: p.cart.requiredAttributes }, this.now(), { spentCents: this.spentCents(p.mandateHash, p.id), status: rec.status });
       for (const c of checks) if (!c.ok) problems.push(`${c.name}: ${c.reason}`);
     }
     const liveTotal = live.reduce((s, x) => s + x.product.priceCents * x.quantity, 0);

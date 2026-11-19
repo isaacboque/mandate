@@ -13,7 +13,12 @@ export type Mandate = {
   /** ISO timestamp. */
   expiresAt: string;
   autonomy: Autonomy;
+  /** Hash of the mandate this one replaces (set when an amendment is signed). Spend counts across the whole chain. */
+  supersedes?: string;
 };
+
+/** `expired` is not stored: it is derived from `expiresAt` when a mandate is listed. */
+export type MandateStatus = "active" | "revoked" | "superseded";
 
 export type CartLine = {
   productId: string;
@@ -40,6 +45,6 @@ export type Cart = {
 
 export type CheckName =
   | "total_budget" | "per_item_cap" | "category" | "merchant" | "quantity"
-  | "expiry" | "currency" | "hard_attributes" | "price_freshness" | "injection_flag";
+  | "expiry" | "currency" | "hard_attributes" | "price_freshness" | "injection_flag" | "mandate_active";
 
 export type CheckResult = { name: CheckName; ok: boolean; reason: string };

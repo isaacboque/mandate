@@ -5,6 +5,9 @@ import { z } from "zod";
 import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
+import { MandateInput } from "../mandate/input.js";
+
+export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 
 export type Config = { demoMode: "mock" | "live"; currency: string };
 
@@ -12,24 +15,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR" };
 }
 
-/** Every amount in a mandate is at most 1,000,000.00: far inside the range where integer cents stay exact when added and multiplied. */
-export const MAX_MANDATE_CENTS = 100_000_000;
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
 const MAX_BODY_BYTES = 32 * 1024;
-const cents = z.number().int().nonnegative().max(MAX_MANDATE_CENTS);
-export const MandateInput = z.object({
-  currency: z.string().length(3).transform((s) => s.toUpperCase()),
-  totalBudgetCents: cents.positive(),
-  perItemCapCents: cents.positive(),
-  allowedCategories: z.array(z.string().min(1)).min(1),
-  allowedMerchants: z.array(z.string().min(1)).optional(),
-  maxQuantityPerItem: z.number().int().min(1).max(100),
-  expiresAt: z.string().refine((s) => Number.isFinite(Date.parse(s)), "expiresAt must be an ISO date"),
-  autonomy: z.discriminatedUnion("mode", [
-    z.object({ mode: z.literal("ask_always") }),
-    z.object({ mode: z.literal("auto_under"), thresholdCents: cents.positive() }),
-  ]),
-});
 
 const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
 
@@ -70,6 +57,27 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     return c.json(await service.draftMandate(text, config.currency));
   });
   app.post("/api/mandate", async (c) => c.json(svc(c).setMandate(MandateInput.parse(await c.req.json())), 201));
+
+  // contracts: several can be active; a person signs drafts and amendments and revokes. The agent has no route here.
+  app.get("/api/mandates", (c) => c.json(svc(c).mandates()));
+  app.get("/api/drafts", (c) => c.json(svc(c).drafts()));
+  app.get("/api/amendments", (c) => c.json(svc(c).amendments()));
+  const optionalJson = async (c: Context) => (await c.req.text()).trim() ? c.req.json() : undefined;
+  app.post("/api/drafts/:id/sign", async (c) => c.json(svc(c).signDraft(c.req.param("id"), await optionalJson(c)), 201));
+  app.post("/api/drafts/:id/discard", (c) => c.json(svc(c).discardDraft(c.req.param("id"))));
+  app.post("/api/amendments/:id/sign", async (c) => c.json(svc(c).signAmendment(c.req.param("id"), await optionalJson(c)), 201));
+  app.post("/api/amendments/:id/reject", (c) => c.json(svc(c).rejectAmendment(c.req.param("id"))));
+  app.post("/api/mandates/:hash/revoke", (c) => c.json(svc(c).revoke(c.req.param("hash"))));
+
+  // chat: plain text in, the agent's words plus typed cards out (built from server state, never from model text)
+  app.post("/api/chat", async (c) => {
+    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(await c.req.json());
+    const service = svc(c);
+    const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ error: hit.message }, 429);
+    return c.json(await service.chat(text));
+  });
+  app.get("/api/chat", (c) => c.json(svc(c).history()));
 
   // 2. ask → 3. proposals
   app.post("/api/ask", async (c) => {
