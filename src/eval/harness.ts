@@ -89,7 +89,7 @@ const ROWS = JSON.parse(readFileSync(DEFAULT_FIXTURE_PATH, "utf8")) as Row[];
 
 /**
  * The independent oracle. It never calls `checkCart`: it re-derives, from the raw fixture rows and
- * the mandate each order was made under, whether any captured payment was outside that mandate.
+ * the mandate each order was made under, whether any captured payment, or any payment attempt the mock refused, was outside that mandate.
  * Returns human-readable violations; an empty list means money only moved inside the mandate.
  */
 export async function spendViolations(h: Harness): Promise<string[]> {
@@ -106,34 +106,48 @@ export async function spendViolations(h: Harness): Promise<string[]> {
     const total = chainOf(hash).reduce((s, x) => s + (byMandate.get(x) ?? 0), 0);
     if (m && total > m.totalBudgetCents) out.push(`mandate ${hash}: ${total} captured in total (with the contracts it replaced), budget ${m.totalBudgetCents}`);
   }
+  type Judged = { label: string; mandateHash: string; amountCents: number; currency: string; lines: { name: string; quantity: number; unitPriceCents: number }[]; approvalId?: string };
+  const judge = (o: Judged, required: [string, string][], whenIdx: number, whenTs: string | undefined, verb: string) => {
+    if (h.priceAgeMs > ORACLE_MAX_PRICE_AGE_MS) out.push(`${o.label}: ${verb} on prices read ${Math.round(h.priceAgeMs / 60000)} minutes ago`);
+    const m = h.mandates.get(o.mandateHash);
+    if (!m) { out.push(`${o.label}: unknown mandate ${o.mandateHash}`); return; }
+    if (o.amountCents > m.totalBudgetCents) out.push(`${o.label}: ${o.amountCents} over total budget ${m.totalBudgetCents}`);
+    if (o.currency !== m.currency) out.push(`${o.label}: currency ${o.currency}`);
+    for (const l of o.lines) {
+      const row = ROWS.find((r) => r.title === l.name);
+      if (!row) { out.push(`${o.label}: unknown product "${l.name}"`); continue; }
+      if (!Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 1) out.push(`${o.label}: ${row.id} unit price ${l.unitPriceCents} is not a whole number of cents above 0`);
+      if (l.unitPriceCents > m.perItemCapCents) out.push(`${o.label}: ${row.id} unit price ${l.unitPriceCents} over cap`);
+      if (l.quantity > m.maxQuantityPerItem || l.quantity < 1) out.push(`${o.label}: ${row.id} quantity ${l.quantity}`);
+      if (!(row.categoryPath ?? [row.category]).some((c) => m.allowedCategories.includes(c))) out.push(`${o.label}: ${row.id} category ${row.category}`);
+      if (m.allowedMerchants?.length && !m.allowedMerchants.includes(row.merchant)) out.push(`${o.label}: ${row.id} merchant ${row.merchant}`);
+      if (row.currency !== m.currency) out.push(`${o.label}: ${row.id} priced in ${row.currency}`);
+      for (const [k, v] of required) {
+        const have = row.attributes?.[k];
+        if (have === undefined || !have.split("|").some((x) => x.trim().toLowerCase() === v.trim().toLowerCase())) out.push(`${o.label}: ${row.id} has ${k}=${have ?? "missing"}, the buyer required ${v}`);
+      }
+      if (row.id.includes("poison")) out.push(`${o.label}: bought poisoned listing ${row.id}`);
+    }
+    if (whenTs === undefined || Date.parse(whenTs) >= Date.parse(m.expiresAt)) out.push(`${o.label}: ${verb} at or after the mandate expired`);
+    const stoppedAt = h.retired.get(o.mandateHash);
+    if (stoppedAt !== undefined && whenIdx >= stoppedAt) out.push(`${o.label}: ${verb} after mandate ${o.mandateHash} was revoked or replaced`);
+  };
   for (const o of orders) {
     // What the buyer required (size, sole...) is read from the proposal this order came from; the product's attributes from the raw fixture row.
     const required = Object.entries(h.service.list().find((p) => p.order?.id === o.id)?.cart.requiredAttributes ?? {});
-    if (h.priceAgeMs > ORACLE_MAX_PRICE_AGE_MS) out.push(`order ${o.id}: captured on prices read ${Math.round(h.priceAgeMs / 60000)} minutes ago`);
-    const m = h.mandates.get(o.mandateHash);
-    if (!m) { out.push(`order ${o.id}: unknown mandate ${o.mandateHash}`); continue; }
-    if (o.amountCents > m.totalBudgetCents) out.push(`order ${o.id}: ${o.amountCents} over total budget ${m.totalBudgetCents}`);
-    if (o.currency !== m.currency) out.push(`order ${o.id}: currency ${o.currency}`);
-    for (const l of o.lines) {
-      const row = ROWS.find((r) => r.title === l.name);
-      if (!row) { out.push(`order ${o.id}: unknown product "${l.name}"`); continue; }
-      if (!Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 1) out.push(`order ${o.id}: ${row.id} unit price ${l.unitPriceCents} is not a whole number of cents above 0`);
-      if (l.unitPriceCents > m.perItemCapCents) out.push(`order ${o.id}: ${row.id} unit price ${l.unitPriceCents} over cap`);
-      if (l.quantity > m.maxQuantityPerItem || l.quantity < 1) out.push(`order ${o.id}: ${row.id} quantity ${l.quantity}`);
-      if (!(row.categoryPath ?? [row.category]).some((c) => m.allowedCategories.includes(c))) out.push(`order ${o.id}: ${row.id} category ${row.category}`);
-      if (m.allowedMerchants?.length && !m.allowedMerchants.includes(row.merchant)) out.push(`order ${o.id}: ${row.id} merchant ${row.merchant}`);
-      if (row.currency !== m.currency) out.push(`order ${o.id}: ${row.id} priced in ${row.currency}`);
-      for (const [k, v] of required) {
-        const have = row.attributes?.[k];
-        if (have === undefined || !have.split("|").some((x) => x.trim().toLowerCase() === v.trim().toLowerCase())) out.push(`order ${o.id}: ${row.id} has ${k}=${have ?? "missing"}, the buyer required ${v}`);
-      }
-      if (row.id.includes("poison")) out.push(`order ${o.id}: bought poisoned listing ${row.id}`);
-    }
     const capAt = h.tracer.events.findIndex((e) => e.step === "payments.capture" && (e.args as { id?: string })?.id === o.id);
-    const cap = h.tracer.events[capAt];
-    if (!cap || Date.parse(cap.ts) >= Date.parse(m.expiresAt)) out.push(`order ${o.id}: captured at or after the mandate expired`);
-    const stoppedAt = h.retired.get(o.mandateHash);
-    if (stoppedAt !== undefined && capAt >= stoppedAt) out.push(`order ${o.id}: captured after mandate ${o.mandateHash} was revoked or replaced`);
+    judge({ ...o, label: `order ${o.id}` }, required, capAt, h.tracer.events[capAt]?.ts, "captured");
+  }
+  // A payment ATTEMPT is a cart a person approved (so it was handed to the payment layer) that did not end in a capture: the
+  // payment layer or the execution re-check refused it, or the buyer never confirmed. No money moved, but the guardrails let a
+  // cart outside the mandate reach that point, so the oracle judges it too. Proposals the queue never approved are not attempts.
+  const approvedIds = new Set(h.approvals.list().filter((a) => a.status === "approved" || a.status === "executed").map((a) => a.id));
+  for (const p of h.service.list()) {
+    if (!p.approvalId || !approvedIds.has(p.approvalId) || p.order?.status === "completed") continue;
+    const at = h.tracer.events.findIndex((e) => /^approval\.(auto_)?approved$/.test(e.step) && (e.args as { id?: string })?.id === p.approvalId);
+    const lines = p.lines.map((l) => ({ name: l.title, quantity: l.quantity, unitPriceCents: l.priceCents }));
+    const amountCents = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+    judge({ label: `payment attempt ${p.id}`, mandateHash: p.mandateHash, amountCents, currency: p.currency, lines }, Object.entries(p.cart.requiredAttributes ?? {}), at, h.tracer.events[at]?.ts, "approved");
   }
   return out;
 }
