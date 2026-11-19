@@ -5,8 +5,13 @@ import { serviceFromEnv } from "../src/server/deps.js";
 
 describe("config", () => {
   it("defaults to mock mode and EUR", () => {
-    expect(configFromEnv({})).toEqual({ demoMode: "mock", currency: "EUR" });
-    expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD" });
+    expect(configFromEnv({})).toEqual({ demoMode: "mock", currency: "EUR", trustedProxies: 0 });
+    expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD", trustedProxies: 0 });
+  });
+  it("TRUSTED_PROXIES is a whole number of proxies; anything else means none", () => {
+    expect(configFromEnv({ TRUSTED_PROXIES: "1" }).trustedProxies).toBe(1);
+    expect(configFromEnv({ TRUSTED_PROXIES: "2" }).trustedProxies).toBe(2);
+    for (const bad of ["", "abc", "-1", "1.5", "0"]) expect(configFromEnv({ TRUSTED_PROXIES: bad }).trustedProxies).toBe(0);
   });
   it("mock mode needs no keys and uses the rules agent", () => {
     const service = serviceFromEnv({}).makeService("t");
