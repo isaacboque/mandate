@@ -4,8 +4,10 @@ The idea in one line: **the model can propose, never pay.** Spending authority l
 
 ```mermaid
 flowchart LR
-  U[Person] -->|signs| M[Mandate<br/>sha256 hash]
-  U -->|asks| A[Agent<br/>LLM or rules]
+  U[Person] -->|chats| A[Agent<br/>LLM or rules]
+  A -->|drafts, amendments<br/>pending data only| D[Draft / amendment]
+  D -->|only the person signs| M[Mandate<br/>sha256 hash]
+  U -->|signs, amends, revokes| D
   A -->|search, get product| C[(Catalog<br/>Channel3 or fixtures)]
   A -->|propose cart<br/>only enqueues| G{{Guardrails<br/>checkCart, pure code}}
   M --> G
@@ -31,13 +33,14 @@ flowchart LR
 | Catalog | `src/catalog` | Channel3 (live) or a fixture catalog (demo and eval). Product text is untrusted: it reaches the model only as quoted JSON, and a detector flags injection-looking listings. |
 | Approval queue | `src/approval` | A person approves, or the mandate's autonomy rule does (`ask_always` or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval. |
 | Payments | `src/payments` | PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules. |
+| Web UI | `web/src` | Chat (`Chat`, `ProposalCard`) beside a contracts panel (`ContractsPanel`, `DraftForm`, `AmendmentDiff`). Cards are parsed by `cards.ts`, which drops unknown types; agent text is plain text. Mobile: tabs with a dot for what needs you. |
 | Service | `src/service` | Glue: proposals, cumulative budget, execution-time re-check, audit export. |
 | Trace | `src/trace` | Every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI. |
 
 ## A purchase, step by step
 
-1. The person writes a request ("indoor futsal shoes, max $90"). An assistant drafts the limits into a form; nothing is signed yet.
-2. The person reviews and signs. Only now does the agent search.
+1. The person chats ("indoor futsal shoes, max $90"). The agent drafts a contract into the Contracts panel; nothing is signed yet.
+2. The person reviews, edits and presses Sign contract. Only now does the agent search. Later changes arrive as amendments the person signs; revoking is also the person's button.
 3. The agent calls the catalog and proposes a cart with a reason per line.
 4. `checkCart` runs outside the model. A blocked cart stops here and the UI says which guardrail stopped it.
 5. A passing cart waits for approval (a person, or the autonomy rule).

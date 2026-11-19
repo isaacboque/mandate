@@ -20,6 +20,12 @@ Mandate is an agent-first project (chat + contracts), with the guardrail re-prov
 - [13 AI SDK multi-turn](tickets/13-ai-sdk-multiturn.md), [14 chain walk](tickets/14-chain-walk-location.md), [15 reuse draft](tickets/15-reuse-draft.md), [16 rules intents](tickets/16-minimal-rules-intents.md): resolved.
 - Open: [17 agent auto-sign](tickets/17-agent-auto-sign.md) (HITL), [18 agent revoke](tickets/18-agent-revoke.md) (HITL), [19 near-miss amendments](tickets/19-near-miss-amendments.md) (HITL), [20 streaming](tickets/20-streaming.md) (AFK).
 
+## Destination 3
+The web app is agent-first: a chat beside a contracts panel, every authority-moving action a human button, verified by an end-to-end browser run (ask, draft, sign, buy, attack, amendment diff, revoke, refused).
+
+- [21 UI structure](tickets/21-ui-structure.md), [22 mobile tabs](tickets/22-mobile-tabs.md): resolved.
+- Open: [23 fix re-signs a new chain](tickets/23-fix-resigns-chain.md) (HITL), [24 per-contract audit](tickets/24-contract-audit.md) (AFK).
+
 ## Open
 - [Extend the oracle to size and price freshness](tickets/02-oracle-blind-spots.md) (AFK follow-up, not done here: changes the oracle's inputs)
 - [Run `eval:real` and publish the numbers?](tickets/04-real-model-numbers.md) (HITL: spends API credits)
