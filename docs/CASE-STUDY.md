@@ -36,7 +36,7 @@ In the eval a model that is fooled on purpose never moved money, and I can show 
 
 ### What changes in the threat model when the agent can draft its own contract
 
-Drafts and amendments are pending data; they authorise nothing. Signing is a human-only endpoint, and the UI never renders anything actionable from model text: the chat shows typed cards built from server state, and unknown card types render nothing. Spend is cumulative over the amendment chain. A new `mandate_active` guardrail refuses a revoked or superseded contract at proposal and again at checkout. The agent has exactly 8 tools and a call to any other is refused and traced. Figures the model writes in the chat are not verified; the cards carry the server's numbers. Eval: 55/56 scenarios (9 new for the agent), 11/11 mutants caught.
+Drafts and amendments are pending data; they authorise nothing. Signing is a human-only endpoint, and the UI never renders anything actionable from model text: the chat shows typed cards built from server state, and unknown card types render nothing. Spend is cumulative over the amendment chain. A new `mandate_active` guardrail refuses a revoked or superseded contract at proposal and again at checkout. The agent has exactly 8 tools and a call to any other is refused and traced. Figures the model writes in the chat are not verified; the cards carry the server's numbers. Eval: 56/56 scenarios (9 new for the agent), 11/11 mutants caught.
 
 ### What I learned
 
