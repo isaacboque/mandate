@@ -37,8 +37,8 @@ Architecture
 
 How I tested it, because "the guardrails work" is cheap to say
 1. 56 deterministic scenarios: over budget, expired mandate, price drift, bypassing the queue, poisoned listings. A scripted model is fooled on purpose and proposes what the mandate forbids.
-2. An independent oracle that never calls the guardrail code and re-derives, from the raw fixtures, whether any captured payment left the mandate. Result: 46/46 inside the mandate.
-3. A mutation run: switch off each of the eleven guardrails one at a time and require at least one scenario to fail. All eleven are caught (1 to 6 scenarios each). Nine of them also show money leaving the mandate; for size and price freshness the failure is on the scenario outcome, because my oracle does not yet judge those two. I wrote that down as an open ticket instead of hiding it.
+2. An independent oracle that never calls the guardrail code and re-derives, from the raw fixtures, whether any captured payment left the mandate. Result: 56/56 inside the mandate.
+3. A mutation run: switch off each of the eleven guardrails one at a time and require at least one scenario to fail. All eleven are caught (1 to 7 scenarios each), and every one of them also shows money leaving the mandate in the independent oracle. At first my oracle did not judge size and price freshness, so those two only failed on the scenario outcome; I wrote that down as an open ticket instead of hiding it, then extended the oracle.
 
 What it does not show: a real LLM (opt-in script, not run for this post), real money, or a merchant handoff. Injection detection is regex-based and only one layer; the structural ones are that the agent cannot pay and listing text never enters the system prompt.
 

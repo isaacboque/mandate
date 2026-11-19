@@ -109,7 +109,7 @@ On the fixture catalog, with a simulated clock and mock payments (no keys):
 - **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
 - **Guardrails 28/28**, **task success 12/12** and **agent scenarios 9/9** (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays).
 
-- **Every guardrail is load-bearing:** switching off any one of the 11 checks makes at least one scenario fail (11/11, [docs/MUTATION.md](docs/MUTATION.md)). For `hard_attributes` and `price_freshness` the failure is on the scenario outcome, not on the oracle.
+- **Every guardrail is load-bearing:** switching off any one of the 11 checks makes at least one scenario fail (11/11, [docs/MUTATION.md](docs/MUTATION.md)). Since the oracle also judges required attributes and price age (2026-11-19), a wrong size or a stale price shows up as money outside the mandate too.
 
 What this does not prove: it is not a test of a real LLM (see below), not a real-money test, and not a security review of the hosting. See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 

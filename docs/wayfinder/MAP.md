@@ -9,8 +9,8 @@ The repo is measurably better and LinkedIn-ready: each claim about the guardrail
 Mandate was a PayPal AI Hackathon project; the hackathon closed without a submission, so it is presented as a project. Sandbox only. No LLM key, PayPal or Channel3 call was used in this run.
 
 ## Decisions so far
-- [Is the claim "I broke two guardrails on purpose" reproducible?](tickets/01-mutation-claim.md): it was a manual, one-off claim. Now `npm run eval:mutants` switches off each of the 10 guardrails in turn and all 10 are caught (docs/MUTATION.md).
-- [Do README/docs numbers still match the repo?](tickets/03-claims-audit.md): yes: 10 named checks, 46 scenarios (27/7/12), 166 tests before this PR (177 after), CI runs typecheck, test, eval, build.
+- [Is the claim "I broke two guardrails on purpose" reproducible?](tickets/01-mutation-claim.md): it was a manual, one-off claim. Now `npm run eval:mutants` switches off each of the guardrails in turn and all are caught (10 at that date, 11 now; docs/MUTATION.md).
+- [Do README/docs numbers still match the repo?](tickets/03-claims-audit.md): yes at that date: 10 named checks, 46 scenarios (27/7/12), 166 tests before that PR (177 after). Today (2026-11-19): 11 checks, 56 scenarios (28/7/12/9), 281 tests; CI runs typecheck, test, eval, mutants, build.
 
 - [Full review before the LinkedIn post](../REVIEW-2026-11-17.md): code, UX, UI and claims; 25 findings, most fixed in the review PR (tests 177 → 197, eval and mutation unchanged).
 
@@ -26,17 +26,13 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - [21 UI structure](tickets/21-ui-structure.md), [22 mobile tabs](tickets/22-mobile-tabs.md): resolved.
 - Resolved 2026-11-19: [23 fix keeps the chain](tickets/23-fix-resigns-chain.md). Resolved 2026-11-19: [24 per-contract audit](tickets/24-contract-audit.md).
 
-## Open
-- [Extend the oracle to size and price freshness](tickets/02-oracle-blind-spots.md): resolved 2026-11-19
-- [Run `eval:real` and publish the numbers?](tickets/04-real-model-numbers.md) (HITL: spends API credits)
-- [Real merchant handoff](tickets/05-merchant-handoff.md): decided 2026-11-19, sandbox only, declared as a limit
-- [Check hosted demo links before posting](tickets/06-hosted-links.md) (HITL: needs a browser logged out)
-- [Forwarded-for spoofing of the per-visitor limit](tickets/07-forwarded-for-spoofing.md): resolved 2026-11-19, one manual check on the hosted proxy chain left
-- [`checkCart` and nonsense prices](tickets/08-checkcart-price-sanity.md): resolved 2026-11-19
-- [Trace retention](tickets/09-trace-retention.md): resolved 2026-11-19
-- [CI hygiene: `npm ci`, audit, Node 20, visible mutation step](tickets/10-ci-hygiene.md): resolved 2026-11-19
-- [Content-Security-Policy](tickets/11-content-security-policy.md): resolved 2026-11-19 (enforced, checked in a browser)
-- [Category text lost on blur](tickets/12-tag-input-lost-text.md): resolved 2026-11-19 (browser check done)
+## Open (needs Isaac)
+- [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): decided yes; Isaac runs `npm run eval:real` with his own key and the table goes in the README under Limits. Until then every doc says the real-LLM success rate is not measured.
+- [Check hosted demo links before posting](tickets/06-hosted-links.md): open (needs a browser logged out; free-tier servers wake in about 30 s).
+- [Forwarded-for spoofing](tickets/07-forwarded-for-spoofing.md): fixed in code; one manual check left, that `TRUSTED_PROXIES=1` matches Render's proxy chain (13 requests with different forged first entries, the 13th must be refused).
+
+## Resolved (2026-11-19 unless noted)
+- [02 oracle judges size and price age](tickets/02-oracle-blind-spots.md), [05 merchant handoff: sandbox only, declared as a limit](tickets/05-merchant-handoff.md), [08 nonsense prices](tickets/08-checkcart-price-sanity.md), [09 trace retention](tickets/09-trace-retention.md), [10 CI hygiene](tickets/10-ci-hygiene.md), [11 CSP enforced and checked in a browser](tickets/11-content-security-policy.md), [12 category text on blur](tickets/12-tag-input-lost-text.md).
 
 ## Out of scope
 - Any claim of prize, placement, users, revenue or production use.
