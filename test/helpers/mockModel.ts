@@ -31,3 +31,31 @@ export function scriptedModel(steps: Step[]) {
     },
   });
 }
+
+/** Like scriptedModel, but it also streams: each step's text arrives in the given pieces. doGenerate and doStream play the same script. */
+export function streamingModel(steps: (Step & { pieces?: string[] })[]) {
+  let g = 0;
+  let s = 0;
+  const finish = (tools: boolean) => ({ unified: tools ? "tool-calls" : "stop", raw: "x" });
+  return new MockLanguageModelV4({
+    doGenerate: async () => {
+      const st = steps[Math.min(g++, steps.length - 1)];
+      const content = st.tools
+        ? st.tools.map((t, k) => ({ type: "tool-call", toolCallId: `g${g}-${k}`, toolName: t.name, input: JSON.stringify(t.input) }))
+        : [{ type: "text", text: st.pieces ? st.pieces.join("") : st.text ?? "done" }];
+      return { content, finishReason: finish(Boolean(st.tools)), usage, warnings: [] } as never;
+    },
+    doStream: async () => {
+      const st = steps[Math.min(s++, steps.length - 1)];
+      const parts: unknown[] = [{ type: "stream-start", warnings: [] }];
+      if (st.tools) st.tools.forEach((t, k) => parts.push({ type: "tool-call", toolCallId: `s${s}-${k}`, toolName: t.name, input: JSON.stringify(t.input) }));
+      else {
+        parts.push({ type: "text-start", id: "t1" });
+        for (const piece of st.pieces ?? [st.text ?? "done"]) parts.push({ type: "text-delta", id: "t1", delta: piece });
+        parts.push({ type: "text-end", id: "t1" });
+      }
+      parts.push({ type: "finish", finishReason: finish(Boolean(st.tools)), usage });
+      return { stream: new ReadableStream({ start(c) { for (const p of parts) c.enqueue(p); c.close(); } }) } as never;
+    },
+  });
+}

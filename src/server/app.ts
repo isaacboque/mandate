@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { clientIpFrom } from "./clientIp.js";
 import type { MandateService } from "../service/service.js";
@@ -20,6 +21,13 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
 const MAX_BODY_BYTES = 32 * 1024;
+
+/**
+ * What the page really loads: its own bundle and API, inline `style` attributes from React, product photos from any https
+ * host (and the data: favicon). Nothing else may run or load, so an injected script or a remote stylesheet is refused.
+ * The PayPal approval page is reached by a normal navigation, which this policy does not restrict.
+ */
+export const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 
 /**
@@ -43,6 +51,7 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     c.header("x-frame-options", "DENY");
     c.header("referrer-policy", "no-referrer");
     c.header("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    c.header("content-security-policy", CSP);
   });
   app.use("/api/*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Request too large" }, 413) }));
 
@@ -90,6 +99,24 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
     if (!hit.ok) return c.json({ error: hit.message }, 429);
     return c.json(await service.chat(text));
+  });
+  // The same turn as /api/chat, as Server-Sent Events: `text` pieces while the model writes, then exactly one `done` (the same
+  // payload as /api/chat; the cards come only from it) or one `error`. Streamed text is model text and is only ever shown as text.
+  app.post("/api/chat/stream", async (c) => {
+    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(await c.req.json());
+    const service = svc(c);
+    const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ error: hit.message }, 429);
+    return streamSSE(c, async (stream) => {
+      let queue: Promise<unknown> = Promise.resolve(); // keeps the pieces in order, and the done after the last piece
+      try {
+        const result = await service.chat(text, (delta) => { queue = queue.then(() => stream.writeSSE({ event: "text", data: JSON.stringify({ delta }) })); });
+        await queue;
+        await stream.writeSSE({ event: "done", data: JSON.stringify(result) });
+      } catch (e) {
+        await stream.writeSSE({ event: "error", data: JSON.stringify({ error: (e as Error).message }) });
+      }
+    });
   });
   app.get("/api/chat", (c) => c.json(svc(c).history()));
 
