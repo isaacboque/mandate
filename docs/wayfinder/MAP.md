@@ -14,6 +14,12 @@ Mandate was a PayPal AI Hackathon project; the hackathon closed without a submis
 
 - [Full review before the LinkedIn post](../REVIEW-2026-11-17.md): code, UX, UI and claims; 25 findings, most fixed in the review PR (tests 177 → 197, eval and mutation unchanged).
 
+## Destination 2
+Mandate is an agent-first project (chat + contracts), with the guardrail re-proven: 11 checks, 55 scenarios (27/7/12/9), 11/11 mutants caught. Spec: [AGENT-SPEC](../AGENT-SPEC.md).
+
+- [13 AI SDK multi-turn](tickets/13-ai-sdk-multiturn.md), [14 chain walk](tickets/14-chain-walk-location.md), [15 reuse draft](tickets/15-reuse-draft.md), [16 rules intents](tickets/16-minimal-rules-intents.md): resolved.
+- Open: [17 agent auto-sign](tickets/17-agent-auto-sign.md) (HITL), [18 agent revoke](tickets/18-agent-revoke.md) (HITL), [19 near-miss amendments](tickets/19-near-miss-amendments.md) (HITL), [20 streaming](tickets/20-streaming.md) (AFK).
+
 ## Open
 - [Extend the oracle to size and price freshness](tickets/02-oracle-blind-spots.md) (AFK follow-up, not done here: changes the oracle's inputs)
 - [Run `eval:real` and publish the numbers?](tickets/04-real-model-numbers.md) (HITL: spends API credits)

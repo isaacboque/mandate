@@ -16,7 +16,7 @@ That is the whole design of Mandate, a shopping agent that spends only inside a 
 
 A poisoned listing can fool the model. In my eval it never moved money.
 
-How I check it: 46 deterministic scenarios with an oracle that never calls the guardrail code, and a mutation run that switches each of the 10 guardrails off in turn. The eval caught all 10.
+How I check it: 55 deterministic scenarios with an oracle that never calls the guardrail code, and a mutation run that switches each of the 11 guardrails off in turn. The eval caught all 11.
 
 Sandbox only; the eval does not test a real LLM. Repo and a no-keys demo in the first comment.
 
@@ -31,14 +31,14 @@ Mandate takes the opposite approach: decide what the model *cannot* do.
 Architecture
 - A signed mandate (sha256 of its canonical JSON): total budget, per-item cap, categories, merchants, max quantity, expiry, and what the agent may do alone.
 - The agent (Vercel AI SDK, or a deterministic rules agent with no key) has `search_products`, `get_product`, `propose_cart`. Propose only enqueues.
-- `checkCart` is a pure function with ten named checks: budget, cap, category, merchant, quantity, expiry, currency, hard attributes (size), price freshness, injection flag. It runs at proposal and again at checkout against the live price.
+- `checkCart` is a pure function with eleven named checks: budget, cap, category, merchant, quantity, expiry, currency, hard attributes (size), price freshness, injection flag, mandate active. It runs at proposal and again at checkout against the live price.
 - The budget is cumulative across carts, so two pending carts cannot both be approved past the limit.
 - Payments (PayPal Orders v2, sandbox) refuse to run without an approved, unused approval.
 
 How I tested it, because "the guardrails work" is cheap to say
-1. 46 deterministic scenarios: over budget, expired mandate, price drift, bypassing the queue, poisoned listings. A scripted model is fooled on purpose and proposes what the mandate forbids.
+1. 55 deterministic scenarios: over budget, expired mandate, price drift, bypassing the queue, poisoned listings. A scripted model is fooled on purpose and proposes what the mandate forbids.
 2. An independent oracle that never calls the guardrail code and re-derives, from the raw fixtures, whether any captured payment left the mandate. Result: 46/46 inside the mandate.
-3. A mutation run: switch off each of the ten guardrails one at a time and require at least one scenario to fail. All ten are caught (1 to 5 scenarios each). Eight of them also show money leaving the mandate; for size and price freshness the failure is on the scenario outcome, because my oracle does not yet judge those two. I wrote that down as an open ticket instead of hiding it.
+3. A mutation run: switch off each of the eleven guardrails one at a time and require at least one scenario to fail. All eleven are caught (1 to 6 scenarios each). Nine of them also show money leaving the mandate; for size and price freshness the failure is on the scenario outcome, because my oracle does not yet judge those two. I wrote that down as an open ticket instead of hiding it.
 
 What it does not show: a real LLM (opt-in script, not run for this post), real money, or a merchant handoff. Injection detection is regex-based and only one layer; the structural ones are that the agent cannot pay and listing text never enters the system prompt.
 
@@ -50,7 +50,7 @@ What building an agent that handles money taught me:
 1. Ask "what can the model not do at all?" before "how do I make it safer?".
 2. The budget belongs to the mandate, not to a cart.
 3. Fail closed on missing data; real catalogs are messy.
-4. An eval is only worth trusting if it goes red when you break something. Mine now shows that for each of the ten guardrails, one at a time.
+4. An eval is only worth trusting if it goes red when you break something. Mine now shows that for each of the eleven guardrails, one at a time.
 5. Say why something was blocked, and offer the one-click fix to the human, never to the agent.
 
 #AIAgents #TypeScript #Evals

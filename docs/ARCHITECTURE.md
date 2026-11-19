@@ -26,7 +26,7 @@ flowchart LR
 
 | Part | Where | Role |
 | --- | --- | --- |
-| Mandate | `src/mandate` | Typed spending limits, signed with a short sha256 of the canonical JSON. `checkCart` runs 10 named checks: total budget, per-item cap, category, merchant, quantity, expiry, currency, hard attributes, price freshness, injection flag. |
+| Mandate | `src/mandate` | Typed spending limits, signed with a short sha256 of the canonical JSON. `checkCart` runs 11 named checks: total budget, per-item cap, category, merchant, quantity, expiry, currency, hard attributes, price freshness, injection flag, mandate active. |
 | Agent | `src/agent` | Vercel AI SDK, provider chosen by `LLM_PROVIDER`. Three tools: `search_products`, `get_product`, `propose_cart`. None can pay; `propose_cart` only enqueues and only accepts products the catalog returned in that run. Without an LLM key a deterministic rules agent does the same job. |
 | Catalog | `src/catalog` | Channel3 (live) or a fixture catalog (demo and eval). Product text is untrusted: it reaches the model only as quoted JSON, and a detector flags injection-looking listings. |
 | Approval queue | `src/approval` | A person approves, or the mandate's autonomy rule does (`ask_always` or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval. |

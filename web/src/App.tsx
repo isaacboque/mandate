@@ -548,7 +548,7 @@ function ProposalCard({ p, onReview, fresh }: { p: Proposal; onReview?: () => vo
       {failed.length > 0 && <ul className="checks failures" aria-label="Failed guardrail checks">{failed.map((c, i) => <CheckRow key={c.name} c={c} i={i} />)}</ul>}
       {passed.length > 0 && (
         <details className="passed" open={p.status === "pending" || p.blocked}>
-          <summary>{passed.length === p.checks.length ? "All 10 guardrail checks passed" : `${passed.length} checks passed`}</summary>
+          <summary>{passed.length === p.checks.length ? "All 11 guardrail checks passed" : `${passed.length} checks passed`}</summary>
           <ul className="checks" aria-label="Passed guardrail checks">{passed.map((c, i) => <CheckRow key={c.name} c={c} i={i} />)}</ul>
         </details>
       )}
