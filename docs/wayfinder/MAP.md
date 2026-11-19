@@ -10,7 +10,7 @@ Mandate was a PayPal AI Hackathon project; the hackathon closed without a submis
 
 ## Decisions so far
 - [Is the claim "I broke two guardrails on purpose" reproducible?](tickets/01-mutation-claim.md): it was a manual, one-off claim. Now `npm run eval:mutants` switches off each of the guardrails in turn and all are caught (10 at that date, 11 now; docs/MUTATION.md).
-- [Do README/docs numbers still match the repo?](tickets/03-claims-audit.md): yes at that date: 10 named checks, 46 scenarios (27/7/12), 166 tests before that PR (177 after). Today (2026-11-19): 11 checks, 56 scenarios (28/7/12/9), 281 tests; CI runs typecheck, test, eval, mutants, build.
+- [Do README/docs numbers still match the repo?](tickets/03-claims-audit.md): yes at that date: 10 named checks, 46 scenarios (27/7/12), 166 tests before that PR (177 after). Today (2026-11-19): 11 checks, 56 scenarios (28/7/12/9), 289 tests; CI runs typecheck, test, eval, mutants, build.
 
 - [Full review before the LinkedIn post](../REVIEW-2026-11-17.md): code, UX, UI and claims; 25 findings, most fixed in the review PR (tests 177 → 197, eval and mutation unchanged).
 
@@ -33,6 +33,9 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 
 ## Resolved (2026-11-19 unless noted)
 - [02 oracle judges size and price age](tickets/02-oracle-blind-spots.md), [05 merchant handoff: sandbox only, declared as a limit](tickets/05-merchant-handoff.md), [08 nonsense prices](tickets/08-checkcart-price-sanity.md), [09 trace retention](tickets/09-trace-retention.md), [10 CI hygiene](tickets/10-ci-hygiene.md), [11 CSP enforced and checked in a browser](tickets/11-content-security-policy.md), [12 category text on blur](tickets/12-tag-input-lost-text.md).
+
+## Destination 4 (resolved 2026-11-19)
+- Evidence for a reviewer: [EVIDENCE.md](../EVIDENCE.md) (one page, every figure with its command) and the extended [THREAT-MODEL.md](../THREAT-MODEL.md) (assets, attacker models, assumptions, not claimed).
 
 ## Out of scope
 - Any claim of prize, placement, users, revenue or production use.

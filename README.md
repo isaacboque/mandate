@@ -4,6 +4,10 @@
 
 [![CI](https://github.com/isaacboque/mandate/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/mandate/actions/workflows/ci.yml)
 
+**For reviewers:** [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed.
+[docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) lists assets, attacker models, what stops each and the assumptions.
+The real-LLM success rate is not measured yet (`npm run eval:real` is opt-in).
+
 **In 30 seconds:** you talk to a shopping agent in plain words. It drafts a spending contract (a *mandate*: budget, caps, categories, shops, expiry) that **only you can sign**, amend or revoke. Inside a signed contract it searches real catalogs and can only *propose* a cart. Plain code outside the LLM checks every proposal against the mandate, a person (or the mandate's own rule) approves, and checkout re-checks the live price before PayPal moves any money. A poisoned product listing can fool the model, but the model has no tool that pays; in the eval no captured payment ever left the mandate. Try it in a minute with no keys: [live demo](https://mandate-gb6t.onrender.com).
 
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
@@ -20,7 +24,7 @@ npm run eval                    # 56 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (281 tests, mocks only), `npm run eval` (spend safety 56/56 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (289 tests, mocks only), `npm run eval` (spend safety 56/56 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
