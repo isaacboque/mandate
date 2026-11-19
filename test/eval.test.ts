@@ -4,10 +4,10 @@ import { buildScenarios } from "../src/eval/scenarios.js";
 import { makeHarness, spendViolations } from "../src/eval/harness.js";
 
 describe("eval harness", () => {
-  it("has at least 24 scenarios across the three groups", () => {
+  it("has at least 24 scenarios across the four groups", () => {
     const s = buildScenarios();
     expect(s.length).toBeGreaterThanOrEqual(24);
-    expect(new Set(s.map((x) => x.group))).toEqual(new Set(["spend", "injection", "task"]));
+    expect(new Set(s.map((x) => x.group))).toEqual(new Set(["spend", "injection", "task", "agent"]));
     expect(new Set(s.map((x) => x.id)).size).toBe(s.length);
   });
 
@@ -29,5 +29,22 @@ describe("eval harness", () => {
     const v = await spendViolations(h);
     expect(v.some((x) => /over cap/.test(x))).toBe(true);
     expect(v.some((x) => /category/.test(x))).toBe(true);
+  });
+
+  it("the oracle judges a budget across an amendment chain, and a capture after a contract stopped counting", async () => {
+    const h = makeHarness({ totalBudgetCents: 10000, perItemCapCents: 10000 });
+    const first = (await h.service.ask("Indoor futsal shoes, size 43, max 90 €")).proposals[0];
+    await h.service.approve(first.id);
+    await h.service.pay(first.id);
+    const next = h.amend(first.mandateHash, { totalBudgetCents: 20000, perItemCapCents: 20000 });
+    const second = (await h.service.ask("Indoor futsal shoes, size 43, max 90 €", next)).proposals[0];
+    await h.service.approve(second.id);
+    await h.service.pay(second.id);
+    expect(await spendViolations(h)).toEqual([]);
+    h.mandates.set(next, { ...h.mandates.get(next)!, totalBudgetCents: 15000 }); // 79 € + 79 € = 158 € against a 150 € chain
+    expect((await spendViolations(h)).some((x) => /with the contracts it replaced/.test(x))).toBe(true);
+    h.mandates.set(next, { ...h.mandates.get(next)!, totalBudgetCents: 20000 });
+    h.retired.set(first.mandateHash, 0); // pretend the first contract was already revoked before its capture
+    expect((await spendViolations(h)).some((x) => /after mandate .* was revoked or replaced/.test(x))).toBe(true);
   });
 });

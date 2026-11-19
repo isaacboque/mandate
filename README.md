@@ -121,10 +121,11 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 46/46 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 55/55 |
 | Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 27/27 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
+| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 9/9 |
 <!-- eval:end -->
 
 ### Try it against a real model (optional, paid calls)

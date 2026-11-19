@@ -17,7 +17,7 @@ const { runAll } = await import("../src/eval/run.js");
 
 const CHECKS: CheckName[] = [
   "total_budget", "per_item_cap", "category", "merchant", "quantity",
-  "expiry", "currency", "hard_attributes", "price_freshness", "injection_flag",
+  "expiry", "currency", "hard_attributes", "price_freshness", "injection_flag", "mandate_active",
 ];
 
 describe("mutation: the eval notices when a guardrail is switched off", () => {
