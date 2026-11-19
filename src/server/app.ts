@@ -58,6 +58,27 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   });
   app.post("/api/mandate", async (c) => c.json(svc(c).setMandate(MandateInput.parse(await c.req.json())), 201));
 
+  // contracts: several can be active; a person signs drafts and amendments and revokes. The agent has no route here.
+  app.get("/api/mandates", (c) => c.json(svc(c).mandates()));
+  app.get("/api/drafts", (c) => c.json(svc(c).drafts()));
+  app.get("/api/amendments", (c) => c.json(svc(c).amendments()));
+  const optionalJson = async (c: Context) => (await c.req.text()).trim() ? c.req.json() : undefined;
+  app.post("/api/drafts/:id/sign", async (c) => c.json(svc(c).signDraft(c.req.param("id"), await optionalJson(c)), 201));
+  app.post("/api/drafts/:id/discard", (c) => c.json(svc(c).discardDraft(c.req.param("id"))));
+  app.post("/api/amendments/:id/sign", async (c) => c.json(svc(c).signAmendment(c.req.param("id"), await optionalJson(c)), 201));
+  app.post("/api/amendments/:id/reject", (c) => c.json(svc(c).rejectAmendment(c.req.param("id"))));
+  app.post("/api/mandates/:hash/revoke", (c) => c.json(svc(c).revoke(c.req.param("hash"))));
+
+  // chat: plain text in, the agent's words plus typed cards out (built from server state, never from model text)
+  app.post("/api/chat", async (c) => {
+    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(await c.req.json());
+    const service = svc(c);
+    const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
+    if (!hit.ok) return c.json({ error: hit.message }, 429);
+    return c.json(await service.chat(text));
+  });
+  app.get("/api/chat", (c) => c.json(svc(c).history()));
+
   // 2. ask → 3. proposals
   app.post("/api/ask", async (c) => {
     const { text } = z.object({ text: z.string().min(2).max(500) }).parse(await c.req.json());
