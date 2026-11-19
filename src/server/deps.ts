@@ -6,7 +6,7 @@ import { MockPayments } from "../payments/MockPayments.js";
 import { PayPalOrders } from "../payments/PayPalOrders.js";
 import { RestOrdersInvoker } from "../payments/RestOrdersInvoker.js";
 import { MandateService } from "../service/service.js";
-import { JsonlTracer } from "../trace/trace.js";
+import { JsonlTracer, pruneTraces } from "../trace/trace.js";
 import { configFromEnv, type Config } from "./app.js";
 import { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
@@ -24,6 +24,10 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const live = config.demoMode === "live";
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const tracer = new JsonlTracer("traces");
+  // Trace files hold what visitors typed: delete the old ones at start-up and once an hour (TRACE_RETENTION_HOURS, default 24; 0 keeps them).
+  const retentionMs = num(env.TRACE_RETENTION_HOURS, 24) * 3600 * 1000;
+  pruneTraces("traces", retentionMs);
+  if (retentionMs > 0) setInterval(() => pruneTraces("traces", retentionMs), 3600 * 1000).unref();
   const catalog = live ? new Channel3Catalog(env.CHANNEL3_API_KEY ?? "", { currency: config.currency }) : new FixtureCatalog();
   const attackCatalog = new FixtureCatalog();
   const invoker = live ? new RestOrdersInvoker(env.PAYPAL_CLIENT_ID ?? "", env.PAYPAL_CLIENT_SECRET ?? "") : undefined;

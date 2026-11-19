@@ -11,8 +11,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      - name: Audit production dependencies (report only)
+        run: npm audit --omit=dev
+        continue-on-error: true
       - run: npm run typecheck
       - run: npm test
+      - name: Every guardrail is load-bearing (mutants)
+        run: npm run eval:mutants
       - run: npm run eval
       - run: npm run build

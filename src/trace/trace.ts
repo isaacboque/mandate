@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export type TraceKind = "llm" | "tool" | "decision" | "approval" | "error";
@@ -50,4 +50,28 @@ export class JsonlTracer implements Tracer {
     if (!existsSync(f)) return [];
     return readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as TraceEvent);
   }
+}
+
+/**
+ * Delete `*.jsonl` trace files in `dir` that were last written more than `maxAgeMs` ago. The traces hold what visitors
+ * typed, and the in-memory session that wrote them is gone after its TTL, so keeping them forever only fills the disk.
+ * Returns the number of files removed. A missing directory or an unreadable file is not an error.
+ */
+export function pruneTraces(dir: string, maxAgeMs: number, now: () => Date = () => new Date()): number {
+  if (!(maxAgeMs > 0) || !existsSync(dir)) return 0;
+  const cutoff = now().getTime() - maxAgeMs;
+  let removed = 0;
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith(".jsonl")) continue;
+    const f = join(dir, name);
+    try {
+      if (statSync(f).mtimeMs < cutoff) {
+        unlinkSync(f);
+        removed++;
+      }
+    } catch {
+      /* gone already, or not ours to delete: skip */
+    }
+  }
+  return removed;
 }

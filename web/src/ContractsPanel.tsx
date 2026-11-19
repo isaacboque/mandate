@@ -21,11 +21,10 @@ function Tags({ items, empty }: { items?: string[]; empty: string }) {
   return <span className="tags">{items?.length ? items.map((t) => <span key={t} className="tag ro">{t}</span>) : <span className="muted">{empty}</span>}</span>;
 }
 
-function ContractCard({ v, proposals, busy, run, onChanged, now }: { v: MandateView; proposals: Proposal[]; busy: boolean; run: RunFn; onChanged: () => void; now: number }) {
+function ContractCard({ v, busy, run, onChanged, now }: { v: MandateView; busy: boolean; run: RunFn; onChanged: () => void; now: number }) {
   const [confirm, setConfirm] = useState(false);
   const m = v.mandate;
   const bar = meter(v);
-  const audit = proposals.filter((p) => p.mandateHash === v.hash && !p.blocked).at(-1) ?? proposals.filter((p) => p.mandateHash === v.hash).at(-1);
   return (
     <article className={`card contract ${v.status}`} aria-label={`Contract ${v.hash}, ${STATUS_TEXT[v.status]}`}>
       <div className="chead">
@@ -51,7 +50,7 @@ function ContractCard({ v, proposals, busy, run, onChanged, now }: { v: MandateV
         <dt>Expires</dt><dd><span title={new Date(m.expiresAt).toLocaleString()}>{v.status === "revoked" ? "revoked" : countdown(m.expiresAt, now)}</span></dd>
       </dl>
       <div className="actions tight">
-        {audit && <a className="ghost small auditlink" href={`/api/proposals/${audit.id}/audit`} download>Download audit</a>}
+        <a className="ghost small auditlink" href={`/api/mandates/${v.hash}/audit`} download title="The chain of signed contracts, every proposal under it and the trace">Download audit</a>
         {v.status === "active" && !confirm && <button className="ghost small danger" disabled={busy} onClick={() => setConfirm(true)}>Revoke</button>}
       </div>
       {confirm && (
@@ -81,7 +80,7 @@ export function ContractsPanel({ config, contracts, drafts, amendments, proposal
       <div className="panebody">
         {pendingDrafts.map((d) => <DraftForm key={d.id} draft={d} config={config} busy={busy} run={run} onDone={onChanged} />)}
         {pendingAmendments.map((a) => <AmendmentDiff key={a.id} amendment={a} base={contracts.find((c) => c.hash === a.baseHash)} busy={busy} run={run} onDone={onChanged} />)}
-        {sorted.map((v) => <ContractCard key={v.hash} v={v} proposals={proposals} busy={busy} run={run} onChanged={onChanged} now={now} />)}
+        {sorted.map((v) => <ContractCard key={v.hash} v={v} busy={busy} run={run} onChanged={onChanged} now={now} />)}
         {empty && (
           <div className="emptystate">
             <b>No contracts yet.</b>

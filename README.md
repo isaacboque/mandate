@@ -20,7 +20,7 @@ npm run eval                    # 55 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (251 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (256 tests, mocks only), `npm run eval` (spend safety 55/55 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -68,7 +68,7 @@ flowchart LR
 - **Cumulative budget**: the budget belongs to the whole mandate, not to each cart. What was already approved or paid counts against it, at proposal and again at checkout, so two pending carts cannot both be approved past the limit.
 - **Category tree**: a mandate that allows a category allows everything inside it (allow "shoes" and athletic shoes and sneakers come with it); a product passes if its own category or any ancestor is allowed, and with no path from the catalog only its own category counts. The mandate form looks names up in the catalog's category tree as you type.
 - **Why nothing?**: when a product is found but blocked, the UI lists it with the guardrail that stopped it and, if it is something you could change (category, shop, cap, budget), a one-click fix that re-signs the contract (new hash). The agent can never do this itself.
-- **Audit**: each purchase can be downloaded as JSON (signed mandate, checks, approval and payment trace).
+- **Audit**: each purchase, and each contract as a whole (the chain of signed contracts, every proposal under it and the trace), can be downloaded as JSON.
 - **Trace**: every model call, tool call, guardrail decision, approval and PayPal response, as JSONL and in the UI.
 
 ## Try it in 2 minutes (demo mode, no keys)
@@ -143,7 +143,7 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 ## Limits
 
-- **Sandbox only.** The merchant of record in the demo is my PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a real merchant handoff) is the next step, not built.
+- **Sandbox only.** The merchant of record in the demo is my PayPal sandbox business account. Paying the real merchant behind a Channel3 listing is deliberately out of scope: it would need merchant onboarding, refunds, disputes and real money, which is a payments product, not this project.
 - **The main eval does not test a real LLM.** It uses the rules agent and scripted models. The guardrails hold whatever the model does, but how well a given LLM chooses products is only measured by the opt-in `npm run eval:real`.
 - **Injection detection is regex-based and conservative.** It is one layer. The ones that matter are structural: the agent cannot pay, product text never reaches the system prompt, and guardrails run in code at proposal and at checkout.
 - **Price units from Channel3** are assumed to be decimal major units (e.g. 49.99); `npm run smoke:channel3` prints prices so you can confirm with your key.
@@ -158,7 +158,7 @@ The trace, approval-queue pattern, PayPal OAuth refresh approach and the design 
 
 `render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint.
 
-Every visitor gets their own session (an HttpOnly cookie): their mandate, budget, proposals and trace are not visible to, or spent by, anyone else. Sessions are in memory and expire after 2 hours idle. **Reset demo** clears your own proposals.
+Every visitor gets their own session (an HttpOnly cookie): their mandate, budget, proposals and trace are not visible to, or spent by, anyone else. Sessions are in memory and expire after 2 hours idle. **Reset demo** clears your own proposals. Trace files on disk are deleted after `TRACE_RETENTION_HOURS` (default 24).
 
 `render.live.yaml` defines a second service in **live mode** (deployed at https://mandate-live-7q2i.onrender.com) (real Channel3 catalog, PayPal sandbox, optional AI model). Keys are entered in the Render dashboard, never in the repo. `LLM_TIMEOUT_SECONDS` (default 40) cuts off a model that does not answer, and the rules agent answers instead. To protect the free quotas it limits searches per visitor per hour and per day for the whole instance (`RATE_LIMIT_ASKS_PER_HOUR`, `DAILY_ASK_CAP`; 0 turns a limit off), and when a limit is hit the screen says so. PayPal sends the buyer back to the service's own URL (`APP_URL`, or Render's `RENDER_EXTERNAL_URL`).
 

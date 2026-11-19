@@ -112,6 +112,12 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     c.header("content-disposition", `attachment; filename="mandate-audit-${id.replace(/[^\w-]/g, "")}.json"`);
     return c.json(audit);
   });
+  app.get("/api/mandates/:hash/audit", (c) => {
+    const hash = c.req.param("hash");
+    const audit = svc(c).auditContract(hash);
+    c.header("content-disposition", `attachment; filename="mandate-contract-audit-${hash.replace(/[^\w-]/g, "")}.json"`);
+    return c.json(audit);
+  });
   app.get("/api/trace", (c) => c.json(svc(c).trail()));
   app.post("/api/reset", (c) => {
     svc(c).reset();
