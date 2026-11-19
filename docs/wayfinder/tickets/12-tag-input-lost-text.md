@@ -11,3 +11,7 @@ On blur with pending text, keep it as a visible, dismissible hint ("Press Enter 
 
 ## Resolution (2026-11-19)
 on blur with pending text and a catalog search the word stays and a "not added yet, press Enter" hint shows (no silent loss). Browser screenshot check still to do.
+
+
+## Resolution (2026-11-19)
+Browser check done 2026-11-19: with the draft form open, typing "grip socks" in Categories and clicking elsewhere leaves the word in the field and shows the "not added yet" hint (all four runs). The script clears the field afterwards.

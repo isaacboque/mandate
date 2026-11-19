@@ -35,8 +35,8 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - [`checkCart` and nonsense prices](tickets/08-checkcart-price-sanity.md): resolved 2026-11-19
 - [Trace retention](tickets/09-trace-retention.md): resolved 2026-11-19
 - [CI hygiene: `npm ci`, audit, Node 20, visible mutation step](tickets/10-ci-hygiene.md): resolved 2026-11-19
-- [Content-Security-Policy](tickets/11-content-security-policy.md) (AFK, needs a browser check)
-- [Category text lost on blur](tickets/12-tag-input-lost-text.md): resolved 2026-11-19 (screenshot check pending)
+- [Content-Security-Policy](tickets/11-content-security-policy.md): resolved 2026-11-19 (enforced, checked in a browser)
+- [Category text lost on blur](tickets/12-tag-input-lost-text.md): resolved 2026-11-19 (browser check done)
 
 ## Out of scope
 - Any claim of prize, placement, users, revenue or production use.
