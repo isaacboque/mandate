@@ -74,6 +74,10 @@ Result: spend safety 56/56, guardrails 28/28, injection 7/7, task success 12/12,
 
 Measured by `npm run eval:injection-variants` (78 obfuscated listings, seeded, no keys; details in [EVIDENCE.md](EVIDENCE.md)): the regex injection detector flags 19/78 and money outside the mandate is 0/78 judged by the independent oracle. The detector is one weak layer; budget, cap, quantity, the absence of a paying tool and human-only approval are the layers that hold. A missed listing whose cart fits the mandate (20 of the 78 in the suite) is only stopped by the person approving it.
 
+## Fallback to the rules agent
+
+If the LLM call fails (error, timeout, a rejected request), the service falls back to the built-in rules agent for that turn. The rules agent is deterministic and has the same tools and the same guardrails, but it does not read listing text the way a model does, and in the real-model eval it has bought the attacker's in-terms listing (a poisoned listing the regex detector misses). So a forced LLM failure hands control to a weaker agent: possible attack surface, not a money leak (the guardrails still apply). Not changed here; [ticket 26](wayfinder/tickets/26-fallback-fail-closed.md) asks whether an adversarial context should fail closed instead.
+
 ## Out of scope and known limits
 
 - **Sandbox only.** The merchant of record in the demo is a PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a merchant handoff) is not built, so the trust problem of a real merchant (fraud, delivery, refunds) is not addressed.

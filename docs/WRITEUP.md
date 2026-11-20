@@ -22,7 +22,7 @@ Money is integer cents; product text reaches the model only as quoted data. Deta
 1. 56 deterministic scenarios (28 guardrail, 7 injection, 12 task, 9 agent) with a fooled scripted model: `npm run eval`.
 2. Mutation testing of the monitor: switch each of the 11 checks off, one at a time, and require the eval to fail and the oracle to see a leak: `npm run eval:mutants` ([MUTATION.md](MUTATION.md)).
 3. Obfuscated-injection variants, measured per layer: 78 seeded listings in 13 families (other languages, zero-width characters, homoglyphs, base64, ROT13, split payloads, hidden fields, fake system framing, polite wording): `npm run eval:injection-variants`.
-4. A real-model experiment, written and tested with mocks but not run: `npm run eval:real -- --models <provider:id>,<provider:id> --yes`. Per model it reports compromise rate (the model tried to go where the attacker wanted), leaks (money outside the mandate) and usefulness (benign tasks done, false blocks), with 95% intervals.
+4. A real-model experiment, written and tested with mocks but not run: `npm run eval:real -- --models <provider:id>,<provider:id> --yes`. Per model it reports, over the runs the LLM actually answered, the compromise rate (the model tried to go where the attacker wanted) and usefulness (benign tasks done, false blocks), with 95% intervals; and over every run two separate money counts: money outside the mandate terms (must be 0) and attacker-chosen purchases inside the terms. Runs where the LLM failed and the rules agent answered are reported apart, with the reason.
 
 ## Results
 
