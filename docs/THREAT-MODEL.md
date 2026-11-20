@@ -70,6 +70,10 @@ Limit: figures the model writes in chat text are not verified; cards carry numbe
 
 Result: spend safety 56/56, guardrails 28/28, injection 7/7, task success 12/12, agent 9/9.
 
+## Layer results
+
+Measured by `npm run eval:injection-variants` (78 obfuscated listings, seeded, no keys; details in [EVIDENCE.md](EVIDENCE.md)): the regex injection detector flags 19/78 and money outside the mandate is 0/78 judged by the independent oracle. The detector is one weak layer; budget, cap, quantity, the absence of a paying tool and human-only approval are the layers that hold. A missed listing whose cart fits the mandate (20 of the 78 in the suite) is only stopped by the person approving it.
+
 ## Out of scope and known limits
 
 - **Sandbox only.** The merchant of record in the demo is a PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a merchant handoff) is not built, so the trust problem of a real merchant (fraud, delivery, refunds) is not addressed.
