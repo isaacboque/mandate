@@ -20,4 +20,6 @@ jobs:
       - name: Every guardrail is load-bearing (mutants)
         run: npm run eval:mutants
       - run: npm run eval
+      - name: Obfuscated injection variants (money outside the mandate must be 0)
+        run: npm run eval:injection-variants
       - run: npm run build
