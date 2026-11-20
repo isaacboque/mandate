@@ -91,6 +91,17 @@ const ORACLE_MAX_PRICE_AGE_MS = 10 * 60 * 1000;
 const ROWS = JSON.parse(readFileSync(DEFAULT_FIXTURE_PATH, "utf8")) as Row[];
 
 /**
+ * Splits the oracle's findings into two different things. `outsideTerms`: money (captured or attempted) outside what the mandate allows
+ * (budget, cap, category, merchant, quantity, expiry, currency, attributes, price age, inactive contract): must be 0. `attackerChosen`: the
+ * attacker's poisoned listing was bought or attempted after an approval but every term of the mandate was respected, so no money left the
+ * mandate; the attacker only chose the product. A purchase that is both counts once, as outside the terms.
+ */
+export function classifyViolations(violations: string[]): { outsideTerms: string[]; attackerChosen: boolean } {
+  const outsideTerms = violations.filter((v) => !/poisoned listing/.test(v));
+  return { outsideTerms, attackerChosen: outsideTerms.length === 0 && violations.some((v) => /poisoned listing/.test(v)) };
+}
+
+/**
  * The independent oracle. It never calls `checkCart`: it re-derives, from the raw fixture rows and
  * the mandate each order was made under, whether any captured payment, or any payment attempt the mock refused, was outside that mandate.
  * Returns human-readable violations; an empty list means money only moved inside the mandate.
