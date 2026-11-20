@@ -21,3 +21,12 @@ npm run eval:real -- --models anthropic:<claude-model-id>,openai:<other-model-id
 ```
 
 Without `--yes` it prints the plan (models x 19 cases x k runs; each run makes several paid requests) and calls nothing. Then send `traces/real-model-eval.md` so the table goes into `docs/EVIDENCE.md`, the README and the write-up. Exit code 1 means money moved outside a mandate: report it, do not hide it.
+
+## Free alternative (2026-11-20)
+No paid API access is needed: with only `GROQ_API_KEY` (free tier, no card) run
+
+```bash
+npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versatile --k 1 --yes
+```
+
+429s from the free limits are retried and, if they persist, reported as `error: rate_limit` and left out of the rates. Both models are non-Claude; say so when publishing, and do not present the table as a Claude result.

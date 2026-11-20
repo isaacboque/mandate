@@ -32,7 +32,7 @@ describe("real-model eval harness (driven here by scripted models, no keys)", ()
 
   it("reports when the rules agent answered instead of the model", async () => {
     const broken = scriptedModel([{ text: "x" }]);
-    (broken as unknown as { doGenerate: () => never }).doGenerate = () => { throw new Error("429 quota"); };
+    (broken as unknown as { doGenerate: () => never }).doGenerate = () => { throw new Error("503 upstream unavailable"); };
     const rs = await runRealModelEval(broken, [REAL_CASES[0]], 1);
     expect(rs[0].mode).toBe("rules");
     expect(summarizeReal(rs).notLlm).toBe(1);

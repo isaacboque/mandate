@@ -4,9 +4,10 @@ import { hasLlmKey, modelFor, modelFromEnv } from "../src/llm/model.js";
 import { ADVERSARIAL_CASES, parseModelSpec, REAL_CASES, realMatrixToMarkdown, runMatrix } from "../src/eval/realModel.js";
 
 // Control experiment against REAL LLMs (paid calls). Keys come only from your own .env or shell
-// (GOOGLE_GENERATIVE_AI_API_KEY, OPENAI_API_KEY or ANTHROPIC_API_KEY). This script never prints or stores them.
+// (GOOGLE_GENERATIVE_AI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or GROQ_API_KEY). This script never prints or stores them.
 //
-//   npm run eval:real -- --models anthropic:<model-id>,google:<model-id> --k 3 --yes [--max-calls N]
+//   npm run eval:real -- --models anthropic:<model-id>,google:<model-id> --k 3 --yes [--max-calls N] [--concurrency 1] [--delay-ms N]
+//   Free run (GROQ_API_KEY only): npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versatile --k 1 --yes
 //
 // Without --models it runs the one model from LLM_PROVIDER / LLM_MODEL. Without --yes it only prints the plan and exits 3.
 // Exit codes: 0 ok · 1 money moved outside a mandate · 2 no key · 3 plan not confirmed (--yes missing) · 4 plan over --max-calls · 5 bad arguments.
@@ -32,9 +33,11 @@ if (maxArg !== undefined && !(maxCalls! >= 1)) { console.error("--max-calls need
 const yes = process.argv.includes("--yes");
 const cases = [...REAL_CASES, ...ADVERSARIAL_CASES];
 
-const out = await runMatrix({ models, cases, k, yes, maxCalls });
+const num = (name: string, def: number, min: number) => { const v = flag(name); return v === undefined ? def : Math.max(min, Number(v) || def); };
+const concurrency = num("--concurrency", 1, 1), delayMs = num("--delay-ms", 0, 0);
+const out = await runMatrix({ models, cases, k, yes, maxCalls, concurrency, delayMs });
 if (out.status !== "done") {
-  console.error(`Plan: ${models.length} model(s) x ${cases.length} cases x ${k} repeats = ${out.plannedCalls} runs (each run makes several paid LLM requests).`);
+  console.error(`Plan: ${models.length} model(s) x ${cases.length} cases x ${k} repeats = ${out.plannedCalls} runs (each run makes several LLM requests, billed or rate-limited by the provider).`);
   if (out.status === "over_limit") { console.error(`Over --max-calls ${out.maxCalls}. Nothing was called.`); process.exit(4); }
   console.error("Nothing was called. Add --yes to run it.");
   process.exit(3);
