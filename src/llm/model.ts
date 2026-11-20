@@ -2,17 +2,19 @@ import type { LanguageModel } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGroq } from "@ai-sdk/groq";
 
-export type Provider = "google" | "openai" | "anthropic";
+export type Provider = "google" | "openai" | "anthropic" | "groq";
 
 const DEFAULT_MODEL: Record<Provider, string> = {
   google: "gemini-2.5-flash",
   openai: "gpt-4.1-mini",
   anthropic: "claude-haiku-4-5",
+  groq: "openai/gpt-oss-120b",
 };
 
 export const hasLlmKey = (e: NodeJS.ProcessEnv = process.env) =>
-  Boolean(e.GOOGLE_GENERATIVE_AI_API_KEY || e.OPENAI_API_KEY || e.ANTHROPIC_API_KEY);
+  Boolean(e.GOOGLE_GENERATIVE_AI_API_KEY || e.OPENAI_API_KEY || e.ANTHROPIC_API_KEY || e.GROQ_API_KEY);
 
 /** One model by provider and id. The key comes from the provider's own variable in `env`. */
 export function modelFor(provider: Provider, id: string, env: NodeJS.ProcessEnv = process.env): LanguageModel {
@@ -20,11 +22,14 @@ export function modelFor(provider: Provider, id: string, env: NodeJS.ProcessEnv 
     case "google":
       return createGoogleGenerativeAI({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })(id);
     case "openai":
-      return createOpenAI({ apiKey: env.OPENAI_API_KEY })(id);
+      // OPENAI_BASE_URL: any OpenAI-compatible endpoint.
+      return createOpenAI({ apiKey: env.OPENAI_API_KEY, ...(env.OPENAI_BASE_URL ? { baseURL: env.OPENAI_BASE_URL } : {}) })(id);
     case "anthropic":
       return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(id);
+    case "groq":
+      return createGroq({ apiKey: env.GROQ_API_KEY })(id);
     default:
-      throw new Error(`Unknown LLM_PROVIDER "${provider}" (use google, openai or anthropic)`);
+      throw new Error(`Unknown LLM_PROVIDER "${provider}" (use google, openai, anthropic or groq)`);
   }
 }
 

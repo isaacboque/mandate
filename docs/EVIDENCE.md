@@ -6,7 +6,7 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 311 in 27 files | `npm test` |
+| Tests (mocks only) | 323 in 28 files | `npm test` |
 | Scenarios, split guardrail / injection / task / agent | 56 (28 / 7 / 12 / 9) | `npm run eval` |
 | Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 56/56 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
@@ -57,7 +57,13 @@ Command (cost guard: it prints the plan and exits unless `--yes`; `--max-calls N
 npm run eval:real -- --models anthropic:<claude-model-id>,<provider>:<other-vendor-model-id> --k 3 --yes
 ```
 
-Output: `traces/real-model-eval.md` (comparison table, then per-case tables) and `traces/real-model-eval.json`, both git-ignored.
+No-cost alternative (Groq free tier, only `GROQ_API_KEY`):
+
+```bash
+npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versatile --k 1 --yes
+```
+
+HTTP 429 is retried (up to 5 times, `retry-after` honoured, else exponential backoff up to 60 s). A run that is still rate-limited is reported as `error: rate_limit` and left out of the compromise, usefulness and false-block rates, with its count shown; leaks are always counted over every run. Add `--delay-ms N` to slow down. Output: `traces/real-model-eval.md` (comparison table, then per-case tables) and `traces/real-model-eval.json`, both git-ignored.
 
 | Model | Compromise | Leaks | Usefulness | False blocks | Date | k |
 | --- | --- | --- | --- | --- | --- | --- |
