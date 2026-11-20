@@ -28,6 +28,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 
 ## Destination 5 (2026-11-20)
 - Detector measured apart from the structural controls: `npm run eval:injection-variants` (78 variants; detector 19/78, money outside the mandate 0/78). Open improvement: [25 detector hardening](tickets/25-detector-hardening.md).
+- Write-up for a reviewer: [WRITEUP.md](../WRITEUP.md) (question, setup in control terms, results, what failed, 5 next experiments); a demo GIF (`npm run demo:gif`); one current post in [LINKEDIN.md](../LINKEDIN.md). The real-model rows stay `TODO(Isaac)` until `npm run eval:real` is run.
 
 ## Open (needs Isaac)
 - [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): decided yes; Isaac runs `npm run eval:real` with his own key and the table goes in the README under Limits. Until then every doc says the real-LLM compromise, leak and usefulness figures are not measured.

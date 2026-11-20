@@ -4,7 +4,9 @@
 
 [![CI](https://github.com/isaacboque/mandate/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/mandate/actions/workflows/ci.yml)
 
-**For reviewers:** [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed.
+![A poisoned listing is blocked, with the reasons](docs/demo.gif)
+
+**For reviewers:** a two-minute research-style note is in [docs/WRITEUP.md](docs/WRITEUP.md). [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed.
 [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) lists assets, attacker models, what stops each and the assumptions.
 The real-LLM success rate is not measured yet (`npm run eval:real` is opt-in).
 
