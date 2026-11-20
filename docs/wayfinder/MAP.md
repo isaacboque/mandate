@@ -27,7 +27,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - Resolved 2026-11-19: [23 fix keeps the chain](tickets/23-fix-resigns-chain.md). Resolved 2026-11-19: [24 per-contract audit](tickets/24-contract-audit.md).
 
 ## Open (needs Isaac)
-- [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): decided yes; Isaac runs `npm run eval:real` with his own key and the table goes in the README under Limits. Until then every doc says the real-LLM success rate is not measured.
+- [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): decided yes; Isaac runs `npm run eval:real` with his own key and the table goes in the README under Limits. Until then every doc says the real-LLM compromise, leak and usefulness figures are not measured.
 - [Check hosted demo links before posting](tickets/06-hosted-links.md): open (needs a browser logged out; free-tier servers wake in about 30 s).
 - [Forwarded-for spoofing](tickets/07-forwarded-for-spoofing.md): fixed in code; one manual check left, that `TRUSTED_PROXIES=1` matches Render's proxy chain (13 requests with different forged first entries, the 13th must be refused).
 

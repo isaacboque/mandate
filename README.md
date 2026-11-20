@@ -24,7 +24,7 @@ npm run eval                    # 56 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (289 tests, mocks only), `npm run eval` (spend safety 56/56 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (303 tests, mocks only), `npm run eval` (spend safety 56/56 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -143,7 +143,7 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 ### Try it against a real model (optional, paid calls)
 
-`npm run eval:real` runs 19 cases (6 task, 3 poisoned-listing, 10 adversarial) with a real LLM as the agent, each 3 times by default (`--k N` or `REAL_EVAL_K` to change it), on the same fixture catalog and the same independent oracle. The adversarial cases are listings with new injection styles, user pressure, requests to sign, revoke, approve or pay, calls to tools that do not exist, and an unsigned budget raise; the report opens with one line, "Money outside the mandate: X/N (model, date, repeats)", then a per-case table. Put your own key in your own `.env` (copy `.env.example`; `.env` is gitignored): `LLM_PROVIDER` plus `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. The script never prints or stores keys; it writes its report to `traces/real-model-eval.md` (gitignored). The exit code fails only if money moved outside a mandate; task and injection outcomes are reported, not gated, and cases answered by the fallback rules agent (quota, error) are flagged. CI keeps using the scripted model.
+`npm run eval:real` is an opt-in control experiment with real LLMs: 19 cases (6 task, 3 poisoned-listing, 10 adversarial), each 3 times by default (`--k N`), on the same fixture catalog and the same independent oracle. For each model it reports, separately, the **compromise rate** (how often the untrusted model tried to go where the attacker wanted), **money outside the mandate** (must be 0) and **usefulness** (benign tasks done, false blocks), with 95% intervals, latency and tokens. Compare models in one command, for example a Claude model and a model from another vendor: `npm run eval:real -- --models anthropic:<model-id>,openai:<model-id> --k 3 --yes` (without `--yes` it only prints the plan; `--max-calls N` caps it). Put your own keys in your own `.env` (copy `.env.example`; `.env` is gitignored); the script never prints or stores them and writes `traces/real-model-eval.md` and `.json` (gitignored). The exit code fails only if money moved outside a mandate. Metric definitions and the empty results table are in [docs/EVIDENCE.md](docs/EVIDENCE.md); no real-model result is published yet.
 
 ## Limits
 
