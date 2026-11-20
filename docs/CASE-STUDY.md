@@ -20,7 +20,7 @@ There is a "Try an attack" button next to the chat input: it loads a poisoned li
 
 ### How I built it
 
-The key decision is where the power sits. The agent has three tools: search, get product, propose cart. It has no tool that pays. `propose_cart` only enqueues, and it only accepts products the catalog returned in that run, at the prices it saw. The guardrails (`checkCart`) are pure, deterministic TypeScript. A person or the mandate's autonomy rule approves. At checkout, I re-read the live price and re-run every guardrail and the mandate signature before creating the order, and again before capturing, so price drift, an expired mandate or an out-of-stock item stops the payment.
+The key decision is where the power sits. The agent has eight tools: search, get product, propose cart, and five more that draft contracts, propose amendments, list contracts, show spending and explain a block. It has no tool that pays. `propose_cart` only enqueues, and it only accepts products the catalog returned in that run, at the prices it saw. The guardrails (`checkCart`) are pure, deterministic TypeScript. A person or the mandate's autonomy rule approves. At checkout, I re-read the live price and re-run every guardrail and the mandate signature before creating the order, and again before capturing, so price drift, an expired mandate or an out-of-stock item stops the payment.
 
 Product titles and descriptions never go into the system prompt. They reach the model as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them. Payments go through PayPal Orders v2 in the sandbox with idempotency, and a mock gateway follows the same rules for the demo. Everything is traced to JSONL and shown live in the UI.
 
