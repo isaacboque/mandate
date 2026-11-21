@@ -30,7 +30,7 @@ export type MandateView = {
   hash: string; mandate: Mandate; status: "active" | "revoked" | "superseded" | "expired"; signedAt: string; revokedAt?: string; supersedes?: string;
   spentCents: number; paidCents: number; pendingCents: number; remainingCents: number;
 };
-export type PendingDraft = { id: string; source: "agent" | "user"; mandate: Mandate; understood: string[]; warnings: string[]; status: "pending" | "signed" | "discarded"; createdAt: string; signedHash?: string };
+export type PendingDraft = { id: string; source: "agent" | "user"; mandate: Mandate; understood: string[]; warnings: string[]; status: "pending" | "signed" | "discarded"; ask?: string; createdAt: string; signedHash?: string };
 export type Amendment = { id: string; baseHash: string; mandate: Mandate; diff: { field: string; before: unknown; after: unknown }[]; reason: string; source: "agent" | "user"; status: "pending" | "signed" | "rejected"; createdAt: string; signedHash?: string };
 export type BlockedView = { proposalId: string; title: string; status: ProposalStatus; failed: { name: CheckName; reason: string }[]; error?: string; fix?: { label: string; patch: MandatePatch } };
 /** What the person sees beside the agent's words. The server builds these from its own state; the UI renders only these six shapes. */
@@ -41,7 +41,8 @@ export type Card =
   | { type: "spending"; mandates: MandateView[] }
   | { type: "blocked"; blocked: BlockedView }
   | { type: "error"; message: string }
-  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string };
+  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string }
+  | { type: "note"; message: string };
 export type ChatResult = { messages: { role: "assistant"; text: string }[]; cards: unknown[] };
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
 
@@ -52,18 +53,22 @@ async function req<T>(path: string, json?: unknown, post = json !== undefined): 
   return data as T;
 }
 
-async function chatStream(text: string, onText: (delta: string) => void, onStatus?: (text: string) => void): Promise<ChatResult> {
+/** What a chat turn is: the person typed something, or the person signed this draft and the agent carries on with what they asked. */
+export type ChatInput = string | { afterSign: string };
+const chatBody = (i: ChatInput) => (typeof i === "string" ? { text: i } : i);
+
+async function chatStream(input: ChatInput, onText: (delta: string) => void, onStatus?: (text: string) => void): Promise<ChatResult> {
   let r: Response;
   try {
-    r = await fetch("/api/chat/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    r = await fetch("/api/chat/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(chatBody(input)) });
   } catch {
-    return api.chat(text); // nothing reached the server
+    return api.chat(input); // nothing reached the server
   }
   if (!r.ok) {
     const data = await r.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error ?? `HTTP ${r.status}`);
   }
-  if (!r.body || !(r.headers.get("content-type") ?? "").includes("text/event-stream")) return api.chat(text); // a proxy that cannot stream
+  if (!r.body || !(r.headers.get("content-type") ?? "").includes("text/event-stream")) return api.chat(input); // a proxy that cannot stream
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
@@ -104,13 +109,13 @@ export const api = {
   categories: (q: string) => req<{ categories: CategoryHit[] }>(`/api/categories?q=${encodeURIComponent(q)}`),
   attack: () => req<Proposal>("/api/attack", {}),
   trace: () => req<TraceEvent[]>("/api/trace"),
-  chat: (text: string) => req<ChatResult>("/api/chat", { text }),
+  chat: (input: ChatInput) => req<ChatResult>("/api/chat", chatBody(input)),
   /**
    * The same turn as `chat`, with the agent's words handed to `onText` as they are written (Server-Sent Events). Only the final
    * `done` payload counts: the cards and the reply come from it. If the stream cannot be used at all (no body, wrong content type,
    * network error before anything arrived) it falls back to `chat`; a turn that already ran or failed on the server is never repeated.
    */
-  chatStream: (text: string, onText: (delta: string) => void, onStatus?: (text: string) => void) => chatStream(text, onText, onStatus),
+  chatStream: (input: ChatInput, onText: (delta: string) => void, onStatus?: (text: string) => void) => chatStream(input, onText, onStatus),
   /** The person's switch between the AI model and the offline rules agent, for this session. */
   setOffline: (offline: boolean) => req<{ agent: "llm" | "rules"; offline: boolean }>("/api/agent/offline", { offline }),
   history: () => req<{ role: "user" | "assistant"; text: string }[]>("/api/chat"),

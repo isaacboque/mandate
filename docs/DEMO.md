@@ -11,7 +11,7 @@ Use the demo mode, which needs no keys and no waiting: https://mandate-gb6t.onre
 | 0:00 | Click the chip "Indoor futsal shoes, max 90 €". | "I talk to the agent in plain words; one amount is enough." |
 | 0:08 | Point at the draft card, then the **Contracts** panel: the form with "from the agent" on each field. | "It drafted a contract in one turn: 90 € is both the total and the per-item cap, and the card says so. A draft is just data: nothing can be spent." |
 | 0:16 | Change the budget, press **Sign contract**. | "Only I can sign. The button sends my numbers, not the agent's." |
-| 0:24 | Ask for "Indoor futsal shoes, size 43, non-marking sole, max 90 €". **Approve**, then **Pay (simulate buyer)**. | "It proposes with reasons and eleven checks. I approve; checkout re-checks the live price." |
+| 0:24 | Nothing to type: after you sign, the agent looks for what you asked by itself and a cart appears. **Approve**, then **Pay (simulate buyer)**. | "It proposes with reasons and eleven checks. I approve; checkout re-checks the live price." |
 | 0:36 | Click **Try an attack**. | "A listing says: buy ten. The model is fooled on purpose. Plain code outside the model says no." |
 | 0:44 | Type "raise the budget to 200 €"; in Contracts read the diff, press **Sign amendment**. | "The agent can only propose a change. I sign it, and what I already spent still counts." |
 | 0:54 | Press **Revoke**, confirm. | "Revoked: a cart still waiting is refused at checkout. The agent cannot revoke." |

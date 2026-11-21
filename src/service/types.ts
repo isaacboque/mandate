@@ -71,6 +71,10 @@ export type MandateView = {
 export type PendingDraft = {
   id: string; source: "agent" | "user"; mandate: Mandate; understood: string[]; warnings: string[];
   status: "pending" | "signed" | "discarded"; createdAt: string; signedHash?: string;
+  /** The person's own chat message that this draft answers (never product text). Used once, after they sign, to carry on. */
+  ask?: string;
+  /** The follow-up after signing has been run (it runs once). */
+  continued?: boolean;
 };
 
 export type AmendmentChanges = Partial<Pick<Mandate, "totalBudgetCents" | "perItemCapCents" | "allowedCategories" | "allowedMerchants" | "maxQuantityPerItem" | "expiresAt" | "autonomy">>;

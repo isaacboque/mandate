@@ -106,26 +106,35 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.post("/api/mandates/:hash/fix", async (c) => c.json(svc(c).applyFix(c.req.param("hash"), FixInput.parse(await c.req.json()).patch), 201));
   app.post("/api/mandates/:hash/revoke", (c) => c.json(svc(c).revoke(c.req.param("hash"))));
 
-  // chat: plain text in, the agent's words plus typed cards out (built from server state, never from model text)
+  // chat: plain text in, the agent's words plus typed cards out (built from server state, never from model text).
+  // The body is exactly one of { text } (the person typed something) or { afterSign } (the person signed the draft with this id, so the
+  // agent carries on with what they originally asked; see MandateService.followUpAfterSign).
+  const ChatBody = z.union([
+    z.object({ text: z.string().min(1).max(500) }).strict(),
+    z.object({ afterSign: z.string().min(1).max(80) }).strict(),
+  ]);
+  const runChat = (service: MandateService, body: z.infer<typeof ChatBody>, onText?: (d: string) => void, onStatus?: (t: string) => void) =>
+    "afterSign" in body ? service.followUpAfterSign(body.afterSign, onText, onStatus) : service.chat(body.text, onText, onStatus);
   app.post("/api/chat", async (c) => {
-    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(await c.req.json());
+    const body = ChatBody.parse(await c.req.json());
     const service = svc(c);
     const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
     if (!hit.ok) return c.json({ error: hit.message }, 429);
-    return c.json(await service.chat(text));
+    return c.json(await runChat(service, body));
   });
-  // The same turn as /api/chat, as Server-Sent Events: `text` pieces while the model writes, then exactly one `done` (the same
-  // payload as /api/chat; the cards come only from it) or one `error`. Streamed text is model text and is only ever shown as text.
+  // The same turn as /api/chat, as Server-Sent Events: `text` pieces while the model writes, `status` lines while the server waits (a queue, a
+  // retry), then exactly one `done` (the same payload as /api/chat; the cards come only from it) or one `error`. Streamed text is model text
+  // and is only ever shown as text.
   app.post("/api/chat/stream", async (c) => {
-    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(await c.req.json());
+    const body = ChatBody.parse(await c.req.json());
     const service = svc(c);
     const hit = limiter?.hit(clientIp(c)) ?? { ok: true as const };
     if (!hit.ok) return c.json({ error: hit.message }, 429);
     return streamSSE(c, async (stream) => {
       let queue: Promise<unknown> = Promise.resolve(); // keeps the pieces in order, and the done after the last piece
       try {
-        const result = await service.chat(
-          text,
+        const result = await runChat(
+          service, body,
           (delta) => { queue = queue.then(() => stream.writeSSE({ event: "text", data: JSON.stringify({ delta }) })); },
           // "waiting for the model" / "busy, retrying in N s": status lines from the server, shown as status, never as the agent's words
           (status) => { queue = queue.then(() => stream.writeSSE({ event: "status", data: JSON.stringify({ text: status }) })); },

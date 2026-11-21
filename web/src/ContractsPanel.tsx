@@ -66,8 +66,8 @@ function ContractCard({ v, busy, run, onChanged, now }: { v: MandateView; busy: 
   );
 }
 
-export function ContractsPanel({ config, contracts, drafts, amendments, proposals, busy, run, onChanged, id }: {
-  config: Config; contracts: MandateView[]; drafts: PendingDraft[]; amendments: Amendment[]; proposals: Proposal[]; busy: boolean; run: RunFn; onChanged: () => void; id?: string;
+export function ContractsPanel({ config, contracts, drafts, amendments, proposals, busy, run, onChanged, onDraftSigned, id }: {
+  config: Config; contracts: MandateView[]; drafts: PendingDraft[]; amendments: Amendment[]; proposals: Proposal[]; busy: boolean; run: RunFn; onChanged: () => void; onDraftSigned?: (draft: PendingDraft) => void; id?: string;
 }) {
   const now = useNow();
   const pendingDrafts = drafts.filter((d) => d.status === "pending");
@@ -78,7 +78,7 @@ export function ContractsPanel({ config, contracts, drafts, amendments, proposal
     <section id={id} className="contracts" aria-label="Contracts">
       <div className="panehead"><h2><Icon name="shield" size={18} /> Contracts</h2></div>
       <div className="panebody">
-        {pendingDrafts.map((d) => <DraftForm key={d.id} draft={d} config={config} busy={busy} run={run} onDone={onChanged} />)}
+        {pendingDrafts.map((d) => <DraftForm key={d.id} draft={d} config={config} busy={busy} run={run} onDone={onChanged} onSigned={onDraftSigned} />)}
         {pendingAmendments.map((a) => <AmendmentDiff key={a.id} amendment={a} base={contracts.find((c) => c.hash === a.baseHash)} busy={busy} run={run} onDone={onChanged} />)}
         {sorted.map((v) => <ContractCard key={v.hash} v={v} busy={busy} run={run} onChanged={onChanged} now={now} />)}
         {empty && (

@@ -1,6 +1,6 @@
 import type { LanguageModel } from "ai";
 import { runLlmAgent, runRulesAgent, type AgentCtx, type AgentRun } from "../agent/agent.js";
-import { runLlmConcierge, runRulesConcierge, type Card, type ConciergeOut, type ConciergePort } from "../agent/concierge.js";
+import { looksLikeContractRequest, runLlmConcierge, runRulesConcierge, type Card, type ConciergeOut, type ConciergePort } from "../agent/concierge.js";
 import type { ApprovalQueue } from "../approval/queue.js";
 import type { CatalogGateway, CategoryHit, Product } from "../catalog/types.js";
 import { allPass, checkCart } from "../mandate/check.js";
@@ -14,7 +14,7 @@ import { orderIdempotencyKey, type PaymentGateway } from "../payments/types.js";
 import type { Tracer } from "../trace/trace.js";
 import { formatCents } from "../core/money.js";
 import { LlmGate } from "../llm/gate.js";
-import { runGuardedLlmTurn } from "../llm/turn.js";
+import { partialNote, runGuardedLlmTurn, type Produced } from "../llm/turn.js";
 import { Conversation, type Turn } from "./conversation.js";
 import type { Amendment, AmendmentChanges, BlockedView, MandatePatch, MandateView, NearMiss, PendingDraft, Proposal, ProposeInput } from "./types.js";
 
@@ -60,6 +60,16 @@ function mandateFix(m: Mandate, spent: number, names: string[], p: { category: s
   if (names.includes("per_item_cap")) { patch.perItemCapCents = p.priceCents; parts.push(`raise the per-item cap to ${formatCents(p.priceCents, m.currency)}`); }
   if (names.includes("total_budget")) { patch.totalBudgetCents = spent + p.priceCents; parts.push(`raise the total budget to ${formatCents(spent + p.priceCents, m.currency)}`); }
   return { label: parts.join(" and ").replace(/^./, (c) => c.toUpperCase()), patch };
+}
+
+/** What a turn produced that a person has to look at (read-only cards do not count). */
+function producedBy(cards: Card[]): Produced {
+  const kinds: Produced = [];
+  for (const c of cards) {
+    const k = c.type === "proposal" ? "cart" : c.type === "draft" ? "draft contract" : c.type === "amendment" ? "proposed change" : undefined;
+    if (k && !kinds.includes(k)) kinds.push(k);
+  }
+  return kinds;
 }
 
 /**
@@ -189,8 +199,8 @@ export class MandateService {
     return `${kind}_${this.d.idPrefix ? this.d.idPrefix + "_" : ""}${++this.seq}`;
   }
 
-  createDraft(d: Draft, source: PendingDraft["source"]): PendingDraft {
-    const draft: PendingDraft = { id: this.nextId("draft"), source, mandate: d.mandate, understood: d.understood, warnings: d.warnings, status: "pending", createdAt: this.now().toISOString() };
+  createDraft(d: Draft, source: PendingDraft["source"], ask?: string): PendingDraft {
+    const draft: PendingDraft = { id: this.nextId("draft"), source, mandate: d.mandate, understood: d.understood, warnings: d.warnings, status: "pending", createdAt: this.now().toISOString(), ...(ask ? { ask: ask.slice(0, 500) } : {}) };
     this.pendingDrafts.set(draft.id, draft);
     this.trace("draft.created", "decision", { args: { id: draft.id, source }, result: { signed: false, totalBudgetCents: d.mandate.totalBudgetCents } });
     return draft;
@@ -376,10 +386,11 @@ export class MandateService {
       const turn = await runGuardedLlmTurn({
         gate: this.gate, sleep: this.d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), label: this.d.llmLabel ?? "free tier",
         run: () => runLlmAgent(text, this.d.model!, ctx), canRetry: () => mine.length === 0,
-        onFailure: (kind, message) => this.traceFailure("agent", kind, message, { text }),
+        onFailure: (kind, message) => this.traceFailure("agent", kind, message, { text, partial: mine.length > 0 }),
       });
-      // Fail closed. Whatever the model had already proposed before it failed stays visible (it passed the same checks).
-      run = turn.ok ? turn.value : { summary: turn.failure.text, mode: "llm", refused: [], failedClosed: true, failure: turn.failure.kind };
+      // Fail closed. Whatever the model had already proposed before it failed stays visible (it passed the same checks), and the summary
+      // says so: it never claims nothing was proposed when a cart exists.
+      run = turn.ok ? turn.value : { summary: mine.length ? partialNote(turn.failure.kind, ["cart"]) : turn.failure.text, mode: "llm", refused: [], failedClosed: true, failure: turn.failure.kind };
     } else {
       run = await runRulesAgent(text, ctx);
     }
@@ -447,18 +458,22 @@ export class MandateService {
    * endpoint a person calls. Cards come from server state, never from the model's words.
    */
   /** `onText` (streaming) gets the model's words as they are written; the returned reply and the cards are the only things that count. */
-  async chat(text: string, onText?: (delta: string) => void, onStatus?: (text: string) => void): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+  async chat(text: string, onText?: (delta: string) => void, onStatus?: (text: string) => void, opts: { historyText?: string; askText?: string } = {}): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
     const out: ConciergeOut = { refused: [], cards: [] };
+    // Side-effecting tools (a draft, a proposed cart, a proposed change) must never run twice, so a failed turn is retried only while none has run.
+    let sideEffects = 0;
+    const ask = opts.askText ?? text;
     const seen = new Map<string, Product>();
     const mode = this.agentMode;
     const port: ConciergePort = {
       catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs, onText, offline: this.offlineChoice,
       mandates: () => this.mandates(),
-      draftFromSpec: async (spec: DraftSpec) => this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent"),
-      draftFromText: async (t) => this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent"),
-      amend: (id, changes, reason) => this.amend(id, changes, reason, "agent"),
-      proposeCart: async (hash, input, ask) => {
-        const p = this.createProposal("agent", ask, seen, input, "", hash);
+      draftFromSpec: async (spec: DraftSpec) => { sideEffects++; return this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent", ask); },
+      draftFromText: async (t) => { sideEffects++; return this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent", ask); },
+      amend: (id, changes, reason) => { sideEffects++; return this.amend(id, changes, reason, "agent"); },
+      proposeCart: async (hash, input, askText) => {
+        sideEffects++;
+        const p = this.createProposal("agent", askText, seen, input, "", hash);
         p.agent = mode;
         await this.autoApprove(p);
         return p;
@@ -470,22 +485,56 @@ export class MandateService {
     if (this.llmActive) {
       const turn = await runGuardedLlmTurn({
         gate: this.gate, sleep: this.d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), label: this.d.llmLabel ?? "free tier", onStatus,
-        run: () => runLlmConcierge(this.conversation.history(), text, this.d.model!, port, out), canRetry: () => out.cards.length === 0,
-        onFailure: (kind, message) => this.traceFailure("concierge", kind, message, { chars: text.length }),
+        run: () => runLlmConcierge(this.conversation.history(), text, this.d.model!, port, out), canRetry: () => sideEffects === 0,
+        onRetry: () => { out.cards.length = 0; out.refused.length = 0; }, // read-only cards of the failed attempt: the retry makes them again
+        onFailure: (kind, message) => this.traceFailure("concierge", kind, message, { chars: text.length, partial: producedBy(out.cards).length > 0 }),
       });
       if (turn.ok) reply = turn.value;
       else {
-        // Fail closed. Cards built before the failure are real server state and stay; the explanatory card is added after them.
-        reply = turn.failure.text;
-        out.cards.push(turn.failure.card);
+        // Fail closed. Cards built before the failure are real server state and stay. If the turn already produced a cart, a draft or a
+        // proposed change, a short note says so and that it is ready (never "nothing was proposed"); the limit card is only for a turn that produced nothing.
+        const made = producedBy(out.cards);
+        if (made.length) {
+          reply = partialNote(turn.failure.kind, made);
+          out.cards.push({ type: "note", message: reply });
+        } else {
+          reply = turn.failure.text;
+          out.cards.push(turn.failure.card);
+        }
       }
     } else {
       reply = await runRulesConcierge(text, port, out);
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
-    this.conversation.add("user", text);
+    this.conversation.add("user", opts.historyText ?? text);
     this.conversation.add("assistant", reply);
     return { messages: [{ role: "assistant", text: reply }], cards: out.cards };
+  }
+
+  /**
+   * After the person signs a draft the chat made, carry on: ONE follow-up turn on their behalf that looks for what they originally asked,
+   * under the contract they just signed. The ask is their own message, stored with the draft; it is never taken from product text. The turn can
+   * only search and propose: nothing is approved, paid or signed. Runs once per draft; an amendment or a form draft has nothing to continue.
+   */
+  async followUpAfterSign(draftId: string, onText?: (delta: string) => void, onStatus?: (text: string) => void): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+    const draft = this.pendingDrafts.get(draftId);
+    if (!draft) throw new Error(`Unknown draft ${draftId}`);
+    if (draft.status !== "signed" || !draft.signedHash) throw new Error(`Draft ${draftId} is not signed yet`);
+    if (draft.continued) throw new Error(`Draft ${draftId} was already continued`);
+    if (!draft.ask) throw new Error("That draft has nothing to continue: it was not made from a chat request");
+    draft.continued = true;
+    const line = "Contract signed. Looking for what you asked…";
+    if (this.llmActive) {
+      const text = `Contract signed (mandateId ${draft.signedHash}). Now look for what I originally asked: ${JSON.stringify(draft.ask)}. Use that contract: search, then propose a cart under it. Do not draft another contract. If my original message names no product, ask me what to look for instead.`;
+      return this.chat(text, onText, onStatus, { historyText: line, askText: draft.ask });
+    }
+    if (looksLikeContractRequest(draft.ask)) {
+      const reply = "Contract signed. What would you like me to look for? For example: indoor futsal shoes, size 43.";
+      this.conversation.add("user", line);
+      this.conversation.add("assistant", reply);
+      return { messages: [{ role: "assistant", text: reply }], cards: [] };
+    }
+    return this.chat(draft.ask, onText, onStatus, { historyText: line });
   }
 
   /** `<where>.failed_closed` with the class and the provider's words; an auth failure is also logged for the owner (never the key). */

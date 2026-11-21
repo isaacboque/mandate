@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Amendment, type BlockedView, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
+import { api, type Amendment, type BlockedView, type ChatInput, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
 import { Booting } from "./Booting";
 import { attention, parseCards } from "./cards";
 import { Chat, type ChatItem } from "./Chat";
@@ -53,7 +53,7 @@ export default function App() {
     setBootError(undefined);
     Promise.all([load(), api.history()])
       .then(([{ d, a, p }, hist]) => {
-        const restored: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? "user" : "agent", text: t.text, cards: [] }));
+        const restored: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? (t.text.startsWith("Contract signed. Looking for what you asked") ? "note" : "user") : "agent", text: t.text, cards: [] }));
         const waiting = waitingItem(d, a, p, nextId());
         setItems(waiting ? [...restored, waiting] : restored);
         const back = new URLSearchParams(window.location.search).get("paypal");
@@ -69,23 +69,40 @@ export default function App() {
   const proposalMap = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
   const add = (role: ChatItem["role"], text: string, cards: ChatItem["cards"] = []) => setItems((all) => [...all, { id: nextId(), role, text, cards }]);
 
-  const onSend = async (text: string): Promise<boolean> => {
-    const userId = nextId();
-    setItems((all) => [...all, { id: userId, role: "user", text, cards: [] }]);
+  /**
+   * One chat turn: `input` is what the person typed, or { afterSign: draftId } (the person signed a draft, so the agent carries on with what
+   * they asked). `userText` is the bubble to show for what they typed; a follow-up shows a small note instead. Returns false if it failed.
+   */
+  const runTurn = async (input: ChatInput, shown: { role: "user" | "note"; text: string }): Promise<boolean> => {
+    const shownId = nextId();
+    setItems((all) => [...all, { id: shownId, role: shown.role, text: shown.text, cards: [] }]);
     setSending(true);
     setStreamed("");
     setStatus(undefined);
-    const r = await run(() => api.chatStream(text, (d) => setStreamed((t) => t + d), (st) => setStatus(st)));
+    // A status line (waiting in line, retrying) means the server paused: any text streamed so far belongs to an attempt that will be redone.
+    const r = await run(() => api.chatStream(input, (d) => setStreamed((t) => t + d), (st) => { setStatus(st); setStreamed(""); }));
     setSending(false);
     setStreamed("");
     setStatus(undefined);
-    if (!r) { setItems((all) => all.filter((i) => i.id !== userId)); return false; }
+    if (!r) { setItems((all) => all.filter((i) => i.id !== shownId)); return false; }
     const cards = parseCards(r.cards);
     for (const c of cards) if (c.type === "proposal") upsert(c.proposal);
     const reply = r.messages.map((m) => m.text).join("\n\n");
     setItems((all) => [...all, { id: nextId(), role: "agent", text: reply, cards }]);
     refresh();
     return true;
+  };
+  const onSend = (text: string) => runTurn(text, { role: "user", text });
+
+  /**
+   * The person signed a draft the chat made: carry on. ONE follow-up turn on their behalf, visible as a small note, in which the agent looks
+   * for what they originally asked under the new contract and proposes a cart. It can only search and propose; the person still approves.
+   * Amendments and drafts from the form have no `ask`, so nothing runs for them.
+   */
+  const onDraftSigned = (draft: PendingDraft) => {
+    if (draft.source !== "agent" || !draft.ask) return;
+    setTab("chat");
+    void runTurn({ afterSign: draft.id }, { role: "note", text: "Contract signed. Looking for what you asked…" });
   };
 
   const lastAsk = () => items.slice().reverse().find((i) => i.role === "user")?.text;
@@ -153,7 +170,7 @@ export default function App() {
         </header>
 
         {error && <div className="alert" role="alert">{error}</div>}
-        {config && <Tour done={stepsDone({ asked: items.some((i) => i.role === "user"), contracts, proposals })} />}
+        {config && <Tour done={stepsDone({ asked: items.some((i) => i.role === "user"), contracts, proposals })} pendingCart={proposals.some((p) => !p.blocked && p.source === "agent" && ["pending", "awaiting_buyer", "auto_approved"].includes(p.status))} />}
         {!config && <Booting error={bootError} onRetry={() => setBootTry((n) => n + 1)} />}
 
         {config && (
@@ -174,7 +191,7 @@ export default function App() {
                 />
               </div>
               <div id="contracts-pane" className="pane contractspane" role="tabpanel" aria-labelledby="tab-contracts" tabIndex={-1}>
-                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} proposals={proposals} busy={busy || sending} run={run} onChanged={refresh} />
+                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} proposals={proposals} busy={busy || sending} run={run} onChanged={refresh} onDraftSigned={onDraftSigned} />
               </div>
             </div>
           </>

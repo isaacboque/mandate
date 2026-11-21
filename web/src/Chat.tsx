@@ -8,7 +8,8 @@ import { ProposalCard } from "./ProposalCard";
 import { Working, sendKey, symbol } from "./shared";
 import type { RunFn } from "./useRun";
 
-export type ChatItem = { id: number; role: "user" | "agent"; text: string; cards: Card[] };
+/** `note`: a short line the app adds on the person's behalf (for example after they sign), shown small and centred, not as a message. */
+export type ChatItem = { id: number; role: "user" | "agent" | "note"; text: string; cards: Card[] };
 
 type Ctx = {
   config: Config; busy: boolean; run: RunFn;
@@ -79,6 +80,8 @@ function CardView({ card, ctx }: { card: Card; ctx: Ctx }) {
         </div>
       );
     }
+    case "note":
+      return <p className="inline-note" role="note">{card.message}</p>;
     case "spending":
       return (
         <div className="minicard spendingcard" role="group" aria-label="Spending">
@@ -132,7 +135,8 @@ export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: 
         {items.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             {/* The limit card says it all itself: the server's sentence is not repeated as a bubble. */}
-            {m.text && !m.cards.some((c) => c.type === "llm_limited") && <p className="bubble">{m.text}</p>}
+            {m.text && m.role !== "note" && !m.cards.some((c) => c.type === "llm_limited" || c.type === "note") && <p className="bubble">{m.text}</p>}
+            {m.role === "note" && <p className="sysline">{m.text}</p>}
             {m.cards.map((c, i) => <CardView key={i} card={c} ctx={ctx} />)}
           </div>
         ))}

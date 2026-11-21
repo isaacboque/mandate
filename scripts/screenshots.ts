@@ -133,13 +133,20 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
 
   // 2. Sign it (the person's button), then buy under it.
   await page.getByRole("button", { name: "Sign contract" }).click();
+  // After signing, the agent carries on by itself (no second request to type): a small note, then a cart to approve. Only search and propose.
+  // On a phone the app moves the person to the Chat tab, where the cart will appear.
+  await page.locator(".sysline", { hasText: "Contract signed. Looking for what you asked" }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: /^Approve €/ }).waitFor({ timeout: 15000 });
+  await must("3 after sign", (await page.locator(".sysline").count()) === 1 && (await page.getByRole("button", { name: /^Approve €/ }).count()) === 1, "signing is followed by one note and one cart to approve, with no second request typed");
+  if (await page.locator(".tour-toggle").getAttribute("aria-expanded") === "false") await page.locator(".tour-toggle").click();
+  await must("3 tour hint", (await page.locator(".tour-steps li.next small", { hasText: "Approve the cart above." }).count()) === 1, "the tour's next step points at the cart above");
+  await check("3 proposal in chat");
+  await shot("4-proposal");
+  await tab("Contracts");
   await page.locator(".statuschip.active").first().waitFor();
   await check("2 signed");
   await shot("3-signed");
-  await say("Indoor futsal shoes, size 43, non-marking sole, max 90 €");
-  await page.getByRole("button", { name: /^Approve €/ }).waitFor();
-  await check("3 proposal in chat");
-  await shot("4-proposal");
+  await tab("Chat");
   await page.getByRole("button", { name: /^Approve €/ }).click();
   await page.getByRole("button", { name: "Pay (simulate buyer)" }).click();
   await page.locator(".receipt").waitFor();
@@ -225,14 +232,17 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
       if (!String(input).endsWith("/api/chat/stream")) return orig(input, init);
       calls++;
       const first = calls === 1;
+      const day = calls === 3;
       const enc = new TextEncoder();
       return Promise.resolve(new Response(new ReadableStream({
         async start(c) {
-          if (first) {
+          if (first || day) {
             c.enqueue(enc.encode('event: status\ndata: {"text":"The free model is busy, retrying in 3 s…"}\n\n'));
             await new Promise((r) => setTimeout(r, 1500));
-            const msg = "The demo's free model quota (Groq free tier) is busy right now. This is a usage limit, not a bug. Nothing was proposed or spent. Try again in about 20 s, or continue with the offline agent.";
-            c.enqueue(enc.encode("event: done\ndata: " + JSON.stringify({ messages: [{ role: "assistant", text: msg }], cards: [{ type: "llm_limited", variant: "minute", retryAfterSec: 20, message: msg }] }) + "\n\n"));
+            const msg = day
+              ? "Today's free model quota is used up; it resets in about 2 h. This is a usage limit of the Groq free tier, not a bug. Nothing was proposed or spent. You can continue with the offline agent."
+              : "The demo's free model quota (Groq free tier) is busy right now. This is a usage limit, not a bug. Nothing was proposed or spent. Try again in about 20 s, or continue with the offline agent.";
+            c.enqueue(enc.encode("event: done\ndata: " + JSON.stringify({ messages: [{ role: "assistant", text: msg }], cards: [{ type: "llm_limited", variant: day ? "day" : "minute", retryAfterSec: day ? 7200 : 20, message: msg }] }) + "\n\n"));
           } else {
             c.enqueue(enc.encode('event: done\ndata: {"messages":[{"role":"assistant","text":"Stub retry answer."}],"cards":[]}\n\n'));
           }
@@ -246,8 +256,12 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await page.locator(".working", { hasText: "busy, retrying in 3 s" }).waitFor({ timeout: 4000 });
   await must("8 status line", true, "the waiting line says why the turn waits (busy, retrying)");
   await page.locator(".limitcard").waitFor({ timeout: 5000 });
-  const limitText = (await page.locator(".msg.agent", { has: page.locator(".limitcard") }).textContent()) ?? "";
-  await must("8 limit card", /usage limit, not a bug/.test(limitText) && /Nothing was proposed or spent/.test(limitText), "the limit card says it is a usage limit, not a bug, and that nothing was done");
+  const limitText = (await page.locator(".limitcard").textContent()) ?? "";
+  await must("8 limit card", /usage limit of the free model, not a bug/.test(limitText) && /Nothing was proposed or spent/.test(limitText) && /Try again in about 20 s/.test(limitText), "the card itself says it is a usage limit, nothing was done, and how long to wait");
+  await must("8 limit once", (await page.getByText(/usage limit/).count()) === 1 && (await page.locator(".msg.agent .bubble", { hasText: "usage limit" }).count()) === 0, "the message is shown once, in the card, not also as a bubble");
+  await must("8 limit primary", (await page.locator(".limit-actions .primary", { hasText: "Try again" }).count()) === 1 && (await page.locator(".limit-actions .ghost", { hasText: "Use the offline agent" }).count()) === 1, "Try again is the primary button, the offline agent the secondary one");
+  await page.locator(".limit-actions .primary").focus();
+  await must("8 limit focus", await page.locator(".limit-actions .primary").evaluate((e) => { const cs = getComputedStyle(e); return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== "none"; }), "the primary button shows a visible focus ring");
   await must("8 limit buttons", (await page.getByRole("button", { name: "Try again" }).count()) === 1 && (await page.getByRole("button", { name: "Use the offline agent for this session" }).count()) === 1, "Try again and Use the offline agent are offered");
   await check("8 limit card");
   await shot("11-limit");
@@ -257,6 +271,15 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
 
   // Ask, sign, buy, attack, amend and revoke are all done by now: the tour has nothing left to say and hides itself.
   await must("8 tour done", (await page.locator(".tour").count()) === 0, "the tour is gone once all six steps are done");
+
+  // The day variant (third stubbed call): the wait is in hours.
+  await page.locator("#chat-input").fill("and now the daily quota is used up");
+  await page.locator("#chat-input").press("Enter");
+  await page.locator(".limitcard").nth(1).waitFor({ timeout: 6000 });
+  const dayText = (await page.locator(".limitcard").nth(1).textContent()) ?? "";
+  await must("8 limit day", /Today's free model quota is used up/.test(dayText) && /It resets in about 2 h/.test(dayText), "the day variant says the quota is used up and when it resets");
+  await check("8 limit day");
+  await shot("12-limit-day");
 
   if (errors.length) { log(`  [${tag}] console/page errors: ${errors.join(" | ")}`); findings.push({ run: tag, step: "all", what: `console errors: ${errors.join(" | ")}` }); }
   await ctx.close();

@@ -20,7 +20,7 @@ export function describeMandate(m: Mandate): string {
  * A pending draft as an editable form. Fields the agent filled say so; Sign sends the fields exactly as they are here.
  * Nothing is signed until the person presses the button, and the agent has no way to press it.
  */
-export function DraftForm({ draft, config, busy, run, onDone }: { draft: PendingDraft; config: Config; busy: boolean; run: RunFn; onDone: () => void }) {
+export function DraftForm({ draft, config, busy, run, onDone, onSigned }: { draft: PendingDraft; config: Config; busy: boolean; run: RunFn; onDone: () => void; onSigned?: (draft: PendingDraft) => void }) {
   const live = config.demoMode === "live";
   const sym = symbol(draft.mandate.currency);
   const [f, setF] = useState<FormState>(() => formFromMandate(draft.mandate));
@@ -39,7 +39,7 @@ export function DraftForm({ draft, config, busy, run, onDone }: { draft: Pending
     }));
   const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
   const id = draft.id;
-  const sign = () => run(() => api.signDraft(draft.id, m)).then((r) => r && onDone());
+  const sign = () => run(() => api.signDraft(draft.id, m)).then((r) => { if (r) { onDone(); onSigned?.(draft); } });
   const discard = () => run(() => api.discardDraft(draft.id)).then((r) => r && onDone());
 
   return (

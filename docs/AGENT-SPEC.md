@@ -30,6 +30,19 @@ Tool arguments from a model are normalised in code, not trusted: money and quant
 ## One amount is enough to draft (2026-11-21)
 A single amount in the person's ask ("Indoor futsal shoes, max 90 €", "white tee shirt, under 50 €") is the spending limit: the concierge calls `draft_mandate` in the same turn with that amount as `totalBudget` and no `perItemCap`, so it is both the total budget and the per-item cap, with quantity 1 and "asks before every purchase". The draft says so in its own lines ("Assumed: 90.00 EUR is both the total budget and the per-item cap; change it in Contracts before signing."), added by the code, not left to the model. With two amounts the model maps them (the one called total or budget, and the one called per item or each). It asks how much it can spend only when the message has no amount at all. Amounts come only from the person's message, never from product text; a draft stays a draft (nothing is spendable until a person signs). The rule is in the concierge system prompt and in the `draft_mandate` tool description (`test/one-amount.test.ts` pins both) and eval scenario a11 covers the result.
 
+## After signing, the agent carries on (2026-11-21)
+When the person signs a draft the chat made, the web sends ONE follow-up turn on their behalf (`POST /api/chat` or `/api/chat/stream` with `{ "afterSign": "<draft id>" }`; the body is exactly one of `{ text }` or `{ afterSign }`). It is visible as a small note in the chat ("Contract signed. Looking for what you asked…"). The draft keeps the person's own chat message (`PendingDraft.ask`, never product text); the follow-up asks the agent to look for it under the newly signed contract and propose a cart, to say if nothing fits, and to ask what to look for if the message named no product. It can only search and propose: nothing is signed, approved or paid. It runs once per draft (a second call is refused), and only for a draft made in the chat that is already signed: a draft from the form, and an amendment, have nothing to continue. The keyless rules agent does the same (it replies with a question when the ask was a contract request and not a product). On a phone the app moves the person to the Chat tab, where the cart appears.
+
+## A limit in the middle of a turn
+A failure after the turn already produced something never says nothing happened:
+
+| What the turn had done | What the person sees |
+| --- | --- |
+| Nothing (or only read-only steps) | The failure line or the `llm_limited` card ("Nothing was proposed or spent") |
+| Proposed a cart, drafted a contract or proposed a change | What was produced stays, and an inline `note` card follows it: "The free model hit its limit while writing the summary; the cart above is ready to review." (timeout, invalid tool call, bad key and other failures have their own wording; never "nothing was proposed") |
+
+Retries: a short per-minute limit (retry-after of 8 s or less) is retried automatically, **but only while no side-effecting tool has run** (a draft, a proposed cart or a proposed change would be made twice). Read-only tools (search, list, spending, explain) have no side effects, so a wait after them is retried and the cards the failed attempt made are dropped so they are not shown twice. Once a side-effecting tool has run, the turn is not repeated: it finishes with what it produced and the note. Root cause of the live bug: the retry guard was "any card exists" and the failure branch always appended the limit card, so a cart followed by a 1 s limit showed the cart and "Nothing was proposed" together (`test/mid-turn.test.ts`).
+
 ## API
 `GET /api/mandates`, `/api/mandates/:hash/audit` (the chain of signed contracts, every proposal under it and its trace, as a download), `/api/drafts`, `/api/amendments`, `/api/chat`; `POST /api/drafts/:id/sign|discard`, `/api/amendments/:id/sign|reject`, `/api/mandates/:hash/revoke`, `/api/mandates/:hash/fix` (human-only: the blocked card's one-click fix becomes an amendment signed in one step; chain and spend are kept), `/api/chat` (`{text}` 1..500 chars, rate limited), `/api/chat/stream` (same input and limit; Server-Sent Events).
 
@@ -37,7 +50,7 @@ A single amount in the person's ask ("Indoor futsal shoes, max 90 €", "white t
 `POST /api/chat/stream` runs the same turn as `/api/chat`. Events: `text` (`{delta}`, the model's words as they are written; LLM mode only, the rules agent answers at once), then exactly one `done` (the same `{messages, cards}` payload as `/api/chat`) or one `error` (`{error}`). A rate-limit or bad-body refusal is a normal 429/400 before the stream starts. The streamed text is model text: the chat shows it as plain text in a temporary bubble and replaces it with the `done` reply; cards, amounts and buttons come only from `done` (server state). Figures the model writes while streaming are not verified, like any chat text. If the model fails, `done` carries an `error` card and no proposal (traced as `concierge.failed_closed`; see Failure semantics). The web client falls back to `/api/chat` only when nothing reached the server or the response is not an event stream, and never repeats a turn that already ran or failed.
 
 ## Tests
-`test/chain.test.ts`, `mandates.test.ts`, `concierge.test.ts`, `chat-api.test.ts`; eval group `agent` (a01-a11); mutant `mandate_active` (a05, a06, s14).
+`test/chain.test.ts`, `mandates.test.ts`, `concierge.test.ts`, `chat-api.test.ts`; eval group `agent` (a01-a11); `test/after-sign.test.ts`, `test/mid-turn.test.ts`; mutant `mandate_active` (a05, a06, s14).
 
 ## Out of scope
 Agent-side auto-sign (ticket 17, recommend no), agent-callable revoke (ticket 18, recommend no).
