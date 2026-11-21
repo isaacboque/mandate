@@ -6,7 +6,7 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 409 in 36 files | `npm test` |
+| Tests (mocks only) | 416 in 37 files | `npm test` |
 | Scenarios, split guardrail / injection / task / agent | 57 (28 / 7 / 12 / 10) | `npm run eval` |
 | Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 57/57 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |

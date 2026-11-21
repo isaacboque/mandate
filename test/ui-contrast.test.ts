@@ -23,6 +23,7 @@ describe("UI contrast (WCAG AA 1.4.3): every text colour the design uses, on the
     ["ink", "card", "body text on a card"], ["ink", "paper", "body text on a quiet surface"], ["ink", "bg", "text on the page"],
     ["muted", "card", "secondary text on a card"], ["muted", "paper", "secondary text on a quiet surface (past contracts, chips)"], ["muted", "bg", "secondary text on the page"],
     ["brand", "brand-soft", "badge"], ["brand", "card", "link"], ["brand-ink", "brand", "primary button"],
+    ["ink", "warn-soft", "explanation on the limit card"], ["muted", "warn-soft", "secondary button on the limit card"],
     ["good", "good-soft", "approved, paid, active"], ["warn", "warn-soft", "limit card, draft"], ["bad", "bad-soft", "blocked, revoked"],
   ];
   for (const [fg, bg, where] of pairs) {
