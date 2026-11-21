@@ -23,6 +23,9 @@ export function stepsDone(s: { asked: boolean; contracts: MandateView[]; proposa
   };
 }
 
+/** The hint under the next step. With a cart already waiting, the "buy" step points at it instead of telling how to get one. */
+export const stepHint = (id: StepId, pendingCart: boolean): string => (id === "buy" && pendingCart ? "Approve the cart above." : STEPS.find((s) => s.id === id)!.hint);
+
 /** The first step not done yet (the one to highlight), or undefined when the tour is finished. */
 export const nextStep = (d: StepsDone): StepId | undefined => STEPS.find((s) => !d[s.id])?.id;
 

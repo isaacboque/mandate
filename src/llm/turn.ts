@@ -32,6 +32,23 @@ function limited(variant: "minute" | "day", retryAfterSec: number, label: string
   return { text, card: { type: "llm_limited", variant, retryAfterSec, message: text } };
 }
 
+/** What a turn produced before it failed (read-only cards do not count). */
+export type Produced = ("cart" | "draft contract" | "proposed change")[];
+
+/**
+ * The note shown after cards the turn already produced. It never says nothing happened: the cart, draft or change is there and ready.
+ * The `llm_limited` card (and its "Nothing was proposed or spent") is only for a turn that produced nothing.
+ */
+export function partialNote(kind: LlmFailureKind | "budget", produced: Produced): string {
+  const thing = produced.length > 1 ? `${produced.slice(0, -1).join(", ")} and ${produced.at(-1)}` : produced[0];
+  const ready = `the ${thing} above ${produced.length > 1 ? "are" : "is"} ready to review.`;
+  if (kind === "rate_limit_minute" || kind === "rate_limit_day" || kind === "budget") return `The free model hit its limit while writing the summary; ${ready}`;
+  if (kind === "timeout") return `The model took too long to finish its summary; ${ready}`;
+  if (kind === "invalid_tool_call") return `The model made an invalid tool call after that; the system refused it and did nothing more. This is the safety behaviour. ${ready.replace(/^the/, "The")}`;
+  if (kind === "auth") return `The demo's model key stopped working after that; tell the owner. ${ready.replace(/^the/, "The")}`;
+  return `The model stopped before finishing its summary; ${ready}`;
+}
+
 export function failureFor(kind: LlmFailureKind | "budget", retryAfterSec: number | undefined, label: string): TurnFailure {
   if (kind === "rate_limit_minute") return { kind, retryAfterSec: retryAfterSec ?? DEFAULT_MINUTE_WAIT_SEC, ...limited("minute", retryAfterSec ?? DEFAULT_MINUTE_WAIT_SEC, label) };
   if (kind === "rate_limit_day" || kind === "budget") return { kind, retryAfterSec: retryAfterSec ?? DEFAULT_DAY_WAIT_SEC, ...limited("day", retryAfterSec ?? DEFAULT_DAY_WAIT_SEC, label) };
@@ -46,8 +63,14 @@ export async function runGuardedLlmTurn<T>(o: {
   gate: LlmGate;
   sleep: (ms: number) => Promise<void>;
   run: () => Promise<T>;
-  /** Retrying repeats the turn, so only when nothing has acted yet (no card, no proposal). */
+  /**
+   * Retrying repeats the turn from the start, so it is allowed only while no side-effecting tool has run (a draft, a proposed cart or a
+   * proposed change would be made twice). Read-only tools (search, list, spending, explain) have no side effects: a short wait after them
+   * is retried. The caller says which case this is.
+   */
   canRetry: () => boolean;
+  /** Called just before a retry: drop whatever the failed attempt collected (read-only cards) so it is not shown twice. */
+  onRetry?: () => void;
   onStatus?: (text: string) => void;
   /** Called once per failed turn with the class and the provider's words (already scrubbed and short). */
   onFailure: (kind: LlmFailureKind | "budget", message: string) => void;
@@ -66,6 +89,7 @@ export async function runGuardedLlmTurn<T>(o: {
         const f = classifyLlmFailure(e);
         if (attempt === 0 && f.kind === "rate_limit_minute" && f.retryAfterSec !== undefined && f.retryAfterSec <= MAX_RETRY_WAIT_SEC && o.canRetry()) {
           o.onStatus?.(`The free model is busy, retrying in ${f.retryAfterSec} s…`);
+          o.onRetry?.();
           await o.sleep(f.retryAfterSec * 1000);
           continue;
         }

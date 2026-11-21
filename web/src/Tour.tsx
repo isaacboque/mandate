@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { nextStep, STEPS, type StepsDone } from "./stepper";
+import { nextStep, STEPS, stepHint, type StepsDone } from "./stepper";
 
 const KEY = "mandate-tour-hidden";
 const read = () => { try { return window.sessionStorage.getItem(KEY) === "1"; } catch { return false; } };
@@ -9,7 +9,7 @@ const write = () => { try { window.sessionStorage.setItem(KEY, "1"); } catch { /
  * "Try it in 60 s": the six steps of docs/DEMO.md. Each ticks from what the server shows (see stepper.ts). Dismissible for this tab,
  * gone once all six are done. On a phone it starts as a one-line strip you can open.
  */
-export function Tour({ done }: { done: StepsDone }) {
+export function Tour({ done, pendingCart = false }: { done: StepsDone; pendingCart?: boolean }) {
   const [hidden, setHidden] = useState(read);
   const [open, setOpen] = useState(() => !window.matchMedia?.("(max-width: 700px)").matches);
   const finished = STEPS.every((s) => done[s.id]);
@@ -29,7 +29,7 @@ export function Tour({ done }: { done: StepsDone }) {
           {STEPS.map((s, i) => (
             <li key={s.id} className={done[s.id] ? "done" : next === s.id ? "next" : ""} aria-current={next === s.id ? "step" : undefined}>
               <span className="tick" aria-hidden>{done[s.id] ? "✓" : i + 1}</span>
-              <span><b>{s.label}</b>{done[s.id] && <span className="sr-only"> (done)</span>}{next === s.id && <small className="muted">{s.hint}</small>}</span>
+              <span><b>{s.label}</b>{done[s.id] && <span className="sr-only"> (done)</span>}{next === s.id && <small className="muted">{stepHint(s.id, pendingCart)}</small>}</span>
             </li>
           ))}
         </ol>

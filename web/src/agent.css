@@ -120,3 +120,8 @@
 .tour-steps li.done .tick { background: var(--good-soft); color: var(--good); border-color: var(--good-soft); }
 @media (max-width: 900px) { .tour-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .tour-steps { grid-template-columns: 1fr; } .tour { padding: 8px 12px; } }
+
+/* ----- a note the app adds on the person's behalf, and the note after cards the turn produced ----- */
+.msg.note { justify-items: center; }
+.sysline { margin: 0; font-size: 13px; color: var(--muted); padding: 2px 10px; border: 1px dashed var(--line); border-radius: 99px; background: var(--paper); }
+.inline-note { margin: 0; font-size: 13px; color: var(--ink); background: var(--warn-soft); border-radius: 10px; padding: 6px 10px; width: 100%; }

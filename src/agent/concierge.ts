@@ -18,7 +18,9 @@ export type Card =
   /** The configured model failed: nothing was proposed by a fallback. Server text, never the model's. */
   | { type: "error"; message: string }
   /** The free model quota is used up or busy: a usage limit, not a bug. Server text; the person can retry or choose the offline agent. */
-  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string };
+  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string }
+  /** A short inline note after cards the turn DID produce (the model stopped before finishing its summary). Server text. */
+  | { type: "note"; message: string };
 
 export type ConciergeOut = { refused: string[]; cards: Card[] };
 
@@ -206,6 +208,9 @@ const AMEND = /\b(raise|increase|bump|amend|extend|change|set|lower|reduce)\b.*\
 const SPENDING = /\b(spent|spending|left|remaining|how much)\b|gastad|queda/i;
 const WHY = /\b(why|blocked|refused|rejected)\b|por qu/i;
 const CONTRACT = /\b(contract|mandate|authori[sz]e|allow)\b/i;
+
+/** True when a message asks for a contract rather than names a product to look for (the rules agent would draft again instead of searching). */
+export const looksLikeContractRequest = (text: string) => CONTRACT.test(text);
 
 /** No-key concierge: a few plain intents, said so openly. The same tools' facts, no model. */
 export async function runRulesConcierge(text: string, port: ConciergePort, out: ConciergeOut): Promise<string> {
