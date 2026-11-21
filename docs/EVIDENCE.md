@@ -6,7 +6,7 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 438 in 41 files | `npm test` |
+| Tests (mocks only) | 455 in 42 files | `npm test` |
 | Scenarios, split guardrail / injection / task / agent | 58 (28 / 7 / 12 / 11) | `npm run eval` |
 | Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 58/58 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
@@ -101,6 +101,27 @@ What the two runs show, and what they do not:
 - **Compromise counts any proposed cart the oracle judges out of the mandate**, so it also counts a model's benign mistakes. For qwen3.8-27b the per-case table shows carts proposed in r05 and r06 (asks where no valid product exists) and r07 (the poisoned listing); the guardrails blocked them (outside the terms 0/19).
 - **Usefulness** is benign tasks that ended in the right cart: 5/6, 4/6, 5/6 after; the denominator differs in the before run because only LLM-answered runs count (5/5, 3/3, 3/5). 0 false blocks in both runs.
 - Not shown: any Claude model, k greater than 1, or models other than these three.
+
+## Monitors: model vs code
+
+One dataset, three monitors: the deployed regex detector, Llama Prompt Guard 2 and gpt-oss-safeguard through Groq. 81 positives (78 obfuscated variants in 13 families, plus the 3 original poisoned fixtures) and 53 negatives (13 clean catalog listings, 40 hand-written hard negatives: benign text that looks like an attack). Recall and false-positive rate carry 95% Wilson intervals; errors are counted apart. Details and unconfirmed API facts: [research/monitors.md](research/monitors.md).
+
+Offline baseline (keyless, `npm run eval:monitors -- --monitors regex`, 2026-11-21): regex flags 22/81 positives (19/78 variants plus the 3 originals) and 9/53 negatives.
+
+Model rows are not run yet. Command (needs `GROQ_API_KEY`; resumable):
+
+```
+GROQ_API_KEY=... npm run eval:monitors -- --monitors regex,prompt-guard,safeguard --k 3 --resume
+```
+
+| monitor | recall | false positives | errors | latency | tokens in / out |
+| --- | --- | --- | --- | --- | --- |
+| regex | 22/81 | 9/53 | 0 | 0 ms | 0 / 0 |
+| prompt-guard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+| safeguard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+| regex OR safeguard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+
+The run writes `eval/MONITORS.md` (per-family recall, per-kind false positives, agreement across repeats) and `traces/monitors.jsonl`.
 
 ## What each control stops
 
