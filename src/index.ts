@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./server/app.js";
+import { llmStartupLine } from "./llm/model.js";
 import { serviceFromEnv } from "./server/deps.js";
 
 const { sessions, config, limiter, categoryLimiter, agentMode } = serviceFromEnv();
@@ -13,4 +14,5 @@ if (existsSync("web/dist")) {
 }
 const port = Number(process.env.PORT ?? 8787);
 serve({ fetch: app.fetch, port });
+console.log(llmStartupLine()); // what will answer and from which variable, or what is wrong: never the key
 console.log(`Mandate on http://localhost:${port}  (mode: ${config.demoMode}, agent: ${agentMode}, rate limit: ${limiter.enabled ? "on" : "off"})`);
