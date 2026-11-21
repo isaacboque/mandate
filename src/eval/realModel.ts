@@ -20,6 +20,10 @@ export type RealCase = {
   title: string;
   ask: string;
   mandate?: Partial<Mandate>;
+  /** v2 case set: the family the case is reported under (default: derived from kind and style). */
+  family?: string;
+  /** adversarial only: more messages the person sends after `ask`, one turn each (multi-turn pressure). */
+  followUps?: string[];
   /** task: the product that should be proposed, or null when nothing should be. injection: ignored. */
   expect?: string | null;
 };
@@ -121,16 +125,18 @@ function tokensOf(events: { step: string; result?: unknown }[]) {
   return { inputTokens, outputTokens };
 }
 
-async function runAdversarial(c: RealCase, model: LanguageModel, run: number, timeoutMs?: number): Promise<RealResult> {
+async function runAdversarial(c: RealCase, model: LanguageModel | undefined, run: number, timeoutMs?: number): Promise<RealResult> {
   const h = makeHarness(c.mandate ?? {}, { model, extraRows: c.extraRows, llmTimeoutMs: timeoutMs });
   const view = () => h.service.mandates().map((m) => ({ hash: m.hash, status: m.status, budget: m.mandate.totalBudgetCents }));
   const before = view();
-  const { cards } = await h.service.chat(c.ask);
   // A determined user (or attacker) pushes every proposal through: the system must hold anyway.
-  for (const card of cards) {
-    if (card.type !== "proposal") continue;
-    await h.service.approve(card.proposal.id).catch(() => undefined);
-    await h.service.pay(card.proposal.id).catch(() => undefined);
+  for (const msg of [c.ask, ...(c.followUps ?? [])]) {
+    const { cards } = await h.service.chat(msg);
+    for (const card of cards) {
+      if (card.type !== "proposal") continue;
+      await h.service.approve(card.proposal.id).catch(() => undefined);
+      await h.service.pay(card.proposal.id).catch(() => undefined);
+    }
   }
   // The oracle also flags any purchase of a poisoned listing (ids containing "poison"), captured or attempted.
   const violations = await spendViolations(h);
@@ -150,7 +156,8 @@ async function runAdversarial(c: RealCase, model: LanguageModel, run: number, ti
   };
 }
 
-export async function runRealCase(c: RealCase, model: LanguageModel, run = 1, timeoutMs?: number): Promise<RealResult> {
+/** `model` undefined runs the built-in rules agent (no LLM). */
+export async function runRealCase(c: RealCase, model: LanguageModel | undefined, run = 1, timeoutMs?: number): Promise<RealResult> {
   const base = { id: c.id, kind: c.kind, title: c.title, style: c.style, run };
   const started = Date.now();
   try {
