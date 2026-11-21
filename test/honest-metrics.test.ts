@@ -8,7 +8,7 @@ vi.mock("../src/mandate/check.js", async (importOriginal) => {
 });
 
 import { classifyViolations, makeHarness } from "../src/eval/harness.js";
-import { ADVERSARIAL_CASES, REAL_CASES, realMatrixToMarkdown, runMatrix, runRealModelEval, summarizeModel } from "../src/eval/realModel.js";
+import { ADVERSARIAL_CASES, REAL_CASES, realMatrixToMarkdown, runRealModelEval, summarizeModel } from "../src/eval/realModel.js";
 import { scriptedModel } from "../src/eval/scriptedModel.js";
 
 const x01 = ADVERSARIAL_CASES.find((c) => c.id === "x01")!;
@@ -37,25 +37,21 @@ describe("classifying oracle findings", () => {
 });
 
 describe("a model that always fails is not measured as the model", () => {
-  it("every run is a fallback: left out of the model rates, the reason is visible, leaks are still counted", async () => {
+  it("every run fails closed: left out of the model rates, the reason is visible, nothing is bought", async () => {
     const rs = await runRealModelEval(failing("400 tool_use_failed: Failed to call a function"), [r01, x01], 1);
-    expect(rs.every((r) => r.mode === "rules")).toBe(true);
+    expect(rs.every((r) => r.mode === "failed_closed")).toBe(true);
     expect(rs.every((r) => /tool_use_failed/.test(r.llmError ?? ""))).toBe(true);
     const s = summarizeModel(rs);
-    expect(s).toMatchObject({ runs: 0, fallbackOrError: 2, compromised: 0, taskTotal: 0, falseBlocks: 0 });
-    // The rules agent picked the attacker's listing in x01 (inside the terms): never hidden.
-    expect(s.attackerChosen).toBe(1);
-    expect(s.attackerChosenByRules).toBe(1);
-    expect(s.attackerChosenByLlm).toBe(0);
-    expect(s.leaks).toBe(0);
+    expect(s).toMatchObject({ runs: 0, failedClosed: 2, fallbackOrError: 0, compromised: 0, taskTotal: 0, falseBlocks: 0, leaks: 0, attackerChosen: 0 });
   });
 
-  it("the report names the reason per case and lists the fallback agent's findings", async () => {
-    const out = await runMatrix({ models: [{ name: "mock:down", model: failing("400 tool_use_failed: Failed to call a function") }], cases: [r01, x01], k: 1, yes: true });
-    if (out.status !== "done") throw new Error("expected done");
-    const md = realMatrixToMarkdown(out.results, { date: "2026-11-20", k: 1 });
+  it("a fallback that still happens (a rules-agent run) is counted apart and listed as a fallback-agent finding", () => {
+    const run = { id: "x01", kind: "adversarial", title: "t", run: 1, mode: "rules", attackerChosen: true, outsideTerms: false, noSpendOutsideMandate: true, rateLimited: false, compromised: true, latencyMs: 1, inputTokens: 0, outputTokens: 0, benign: false, falseBlock: false, pass: false, proposed: [], violations: [], refusedCalls: 0, authorityKept: true, llmError: "400 tool_use_failed" } as never;
+    const s = summarizeModel([run]);
+    expect(s).toMatchObject({ runs: 0, fallbackOrError: 1, attackerChosen: 1, attackerChosenByRules: 1, attackerChosenByLlm: 0 });
+    const md = realMatrixToMarkdown([{ name: "mock:fallback", results: [run], summary: s }], { date: "2026-11-21", k: 1 });
+    expect(md).toMatch(/Fallback-agent findings: mock:fallback/);
     expect(md).toContain("tool_use_failed");
-    expect(md).toMatch(/fallback-agent findings/i);
     expect(md).toContain("x01");
     expect(md).toMatch(/outside the mandate terms/i);
     expect(md).toMatch(/attacker-chosen/i);

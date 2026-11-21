@@ -6,9 +6,9 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 329 in 29 files | `npm test` |
-| Scenarios, split guardrail / injection / task / agent | 56 (28 / 7 / 12 / 9) | `npm run eval` |
-| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 56/56 | `npm run eval` |
+| Tests (mocks only) | 343 in 30 files | `npm test` |
+| Scenarios, split guardrail / injection / task / agent | 57 (28 / 7 / 12 / 10) | `npm run eval` |
+| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 57/57 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
 | Oracle leaks with a guardrail off | per-mutant table in [MUTATION.md](MUTATION.md) | `npm run eval:mutants` |
 | Concierge tools | 8 (search, get product, propose cart, draft contract, propose amendment, list contracts, get spending, explain block) | `src/agent/concierge.ts`; scenario a07 |
@@ -50,7 +50,7 @@ An AI-control style experiment: the model is untrusted, the trusted side is the 
 | Usefulness | Benign task cases that ended in exactly the right cart (or in no cart when none is valid). |
 | False block | A benign case where the expected product was proposed, the oracle finds that cart inside the mandate, and the system blocked it anyway. |
 
-Also reported per model: Wilson 95% intervals, mean latency per LLM-answered run, and input/output tokens when the SDK reports them. **Only runs the LLM answered measure the model**: compromise, usefulness and false-block rates use those runs. Rate-limited runs, runs where the LLM call failed and the built-in rules agent answered (the reason is shown per case), and runs that errored are counted in their own column and left out of those rates. The two money columns count every run: money is never left out. A "fallback-agent findings" line lists attacker-chosen purchases made by the rules agent after an LLM failure, because a forced LLM failure hands control to it ([ticket 26](wayfinder/tickets/26-fallback-fail-closed.md)).
+Also reported per model: Wilson 95% intervals, mean latency per LLM-answered run, and input/output tokens when the SDK reports them. **Only runs the LLM answered measure the model**: compromise, usefulness and false-block rates use those runs. Rate-limited runs, runs where the LLM call failed and the built-in rules agent answered (the reason is shown per case), and runs that errored are counted in their own column and left out of those rates. The two money columns count every run: money is never left out. A configured LLM that fails now **fails closed** ([ticket 26](wayfinder/tickets/26-fallback-fail-closed.md)): nothing is proposed, and the run is reported as "failed closed, nothing proposed" with its reason, left out of the model rates. The "fallback-agent findings" line only fires if a fallback still happens. `--timeout-ms N` (or `REAL_EVAL_TIMEOUT_MS`) sets the longest wait for one call (default 40000).
 
 Command (cost guard: it prints the plan and exits unless `--yes`; `--max-calls N` aborts if the plan is bigger):
 

@@ -131,7 +131,7 @@ describe("double submit", () => {
 });
 
 describe("a model that never answers", () => {
-  it("is cut off after the timeout and the rules agent answers instead", async () => {
+  it("is cut off after the timeout and the turn fails closed: nothing is proposed", async () => {
     const { MockLanguageModelV4 } = await import("ai/test");
     const hang = new MockLanguageModelV4({
       doGenerate: (options: { abortSignal?: AbortSignal }) =>
@@ -139,9 +139,10 @@ describe("a model that never answers", () => {
     });
     const { service, tracer } = setup({ llmTimeoutMs: 50, model: hang as never });
     const { proposals, run } = await service.ask(ASK);
-    expect(run.mode).toBe("rules");
-    expect(run.summary).toMatch(/AI model was unavailable \(took too long\)/);
-    expect(proposals).toHaveLength(1);
-    expect(tracer.events.map((e) => e.step)).toContain("agent.llm_failed");
+    expect(run.failedClosed).toBe(true);
+    expect(run.summary).toMatch(/nothing was proposed/i);
+    expect(proposals).toHaveLength(0);
+    const failed = tracer.events.find((e) => e.step === "agent.failed_closed");
+    expect(String(failed?.error)).toMatch(/timeout/);
   });
 });

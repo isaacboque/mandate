@@ -41,7 +41,7 @@ export type Harness = {
 };
 
 /** A fresh world: simulated clock, fixture catalog, mock payments, in-memory trace. No network, no keys. */
-export function makeHarness(over: Partial<Mandate> = {}, opts: { model?: LanguageModel; catalogAgeMs?: number; noMandate?: boolean; rows?: NonNullable<ConstructorParameters<typeof FixtureCatalog>[0]>["rows"]; extraRows?: Row[] } = {}): Harness {
+export function makeHarness(over: Partial<Mandate> = {}, opts: { model?: LanguageModel; llmTimeoutMs?: number; catalogAgeMs?: number; noMandate?: boolean; rows?: NonNullable<ConstructorParameters<typeof FixtureCatalog>[0]>["rows"]; extraRows?: Row[] } = {}): Harness {
   let t = new Date(T0).getTime();
   const now = () => new Date(t);
   const tracer = new MemoryTracer(now);
@@ -52,7 +52,7 @@ export function makeHarness(over: Partial<Mandate> = {}, opts: { model?: Languag
   const catalog = new FixtureCatalog({ now: catalogNow, rows: opts.rows ?? (extraRows.length ? ([...ROWS, ...extraRows] as never) : undefined) });
   const service = new MandateService({
     catalog, attackCatalog: new FixtureCatalog({ now: catalogNow }),
-    payments, approvals, tracer, runId: "eval", now, model: opts.model,
+    payments, approvals, tracer, runId: "eval", now, model: opts.model, llmTimeoutMs: opts.llmTimeoutMs,
   });
   const mandates = new Map<string, Mandate>();
   const setMandate = (m: Partial<Mandate>) => {

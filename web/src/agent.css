@@ -19,7 +19,7 @@
 .minicard { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: grid; gap: 8px; justify-items: start; background: #fff; }
 .minicard.draft, .minicard.amendment { grid-template-columns: auto 1fr; align-items: center; }
 .minicard.draft .ghost, .minicard.amendment .ghost { grid-column: 1 / -1; }
-.blockedcard { border-color: #efc4c1; background: var(--bad-soft); }
+.blockedcard, .errorcard { border-color: #efc4c1; background: var(--bad-soft); }
 .whyblocked { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
 .whyblocked li { display: flex; gap: 6px; align-items: flex-start; }
 .chips-row { margin: 6px 0 8px; display: flex; flex-wrap: wrap; gap: 6px; }

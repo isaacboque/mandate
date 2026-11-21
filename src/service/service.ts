@@ -59,6 +59,9 @@ function mandateFix(m: Mandate, spent: number, names: string[], p: { category: s
  * a person or the mandate's autonomy rule approves, and money moves only after the mandate and the
  * live price are re-checked at execution time.
  */
+/** What the person reads when a configured model fails. Server text, never the model's. */
+const FAILED_CLOSED = "The model failed, nothing was proposed. Try again.";
+
 export class MandateService {
   /** Every contract this visitor signed, in signing order. Several can be active at once. */
   private records = new Map<string, MandateRecord>();
@@ -352,10 +355,12 @@ export class MandateService {
       run = this.d.model ? await runLlmAgent(text, this.d.model, ctx) : await runRulesAgent(text, ctx);
     } catch (e) {
       if (!this.d.model) throw e;
+      // Fail closed. A configured model that fails (HTTP error, invalid tool call, timeout) does not hand the turn to the rules agent: an
+      // adversarial input could force that failure and get the most gullible agent. Whatever the model had already proposed stays visible
+      // (it passed the same checks); nothing more is proposed, and the person is told.
       const why = (e as Error).message.slice(0, 160);
-      this.trace("agent.llm_failed", "error", { args: { text }, error: why });
-      run = await runRulesAgent(text, ctx);
-      run.summary = `The AI model was unavailable (${/429|quota|rate|exhaust/i.test(why) ? "usage limit reached" : /timeout|timed out|abort/i.test(why) ? "took too long" : "error"}), so the built-in rules agent answered. ${run.summary}`;
+      this.trace("agent.failed_closed", "error", { args: { text }, error: why });
+      run = { summary: FAILED_CLOSED, mode: "llm", refused: [], failedClosed: true };
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     for (const p of mine) {
@@ -444,9 +449,11 @@ export class MandateService {
     try {
       reply = this.d.model ? await runLlmConcierge(this.conversation.history(), text, this.d.model, port, out) : await runRulesConcierge(text, port, out);
     } catch (e) {
-      if (!this.d.model || out.cards.length) throw e; // after a tool already acted, a second try would repeat it
-      this.trace("concierge.llm_failed", "error", { args: { chars: text.length }, error: (e as Error).message.slice(0, 160) });
-      reply = "The AI model was unavailable, so the built-in rules mode answered. " + (await runRulesConcierge(text, port, out));
+      if (!this.d.model) throw e;
+      // Fail closed (see ask). Cards already built this turn are real server state and stay; the error card is added after them.
+      this.trace("concierge.failed_closed", "error", { args: { chars: text.length }, error: (e as Error).message.slice(0, 160) });
+      reply = FAILED_CLOSED;
+      out.cards.push({ type: "error", message: FAILED_CLOSED });
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     this.conversation.add("user", text);

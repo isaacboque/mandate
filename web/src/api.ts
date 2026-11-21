@@ -24,7 +24,7 @@ export type Proposal = {
   id: string; source: "agent" | "attack"; mandateHash: string; ask: string; summary: string; createdAt: string; lines: ProposalLine[];
   totalCents: number; currency: string; checks: Check[]; blocked: boolean; agent?: "llm" | "rules"; status: ProposalStatus; autoApproved: boolean; order?: Order; error?: string;
 };
-export type AskResult = { proposals: Proposal[]; run: { summary: string; mode: "llm" | "rules"; refused: string[] }; nearMisses: NearMiss[] };
+export type AskResult = { proposals: Proposal[]; run: { summary: string; mode: "llm" | "rules"; refused: string[]; failedClosed?: boolean }; nearMisses: NearMiss[] };
 /** One signed contract with the numbers the server computed. Spend counts across the whole amendment chain. */
 export type MandateView = {
   hash: string; mandate: Mandate; status: "active" | "revoked" | "superseded" | "expired"; signedAt: string; revokedAt?: string; supersedes?: string;
@@ -33,13 +33,14 @@ export type MandateView = {
 export type PendingDraft = { id: string; source: "agent" | "user"; mandate: Mandate; understood: string[]; warnings: string[]; status: "pending" | "signed" | "discarded"; createdAt: string; signedHash?: string };
 export type Amendment = { id: string; baseHash: string; mandate: Mandate; diff: { field: string; before: unknown; after: unknown }[]; reason: string; source: "agent" | "user"; status: "pending" | "signed" | "rejected"; createdAt: string; signedHash?: string };
 export type BlockedView = { proposalId: string; title: string; status: ProposalStatus; failed: { name: CheckName; reason: string }[]; error?: string; fix?: { label: string; patch: MandatePatch } };
-/** What the person sees beside the agent's words. The server builds these from its own state; the UI renders only these four-plus-one shapes. */
+/** What the person sees beside the agent's words. The server builds these from its own state; the UI renders only these six shapes. */
 export type Card =
   | { type: "draft"; draft: PendingDraft }
   | { type: "amendment"; amendment: Amendment }
   | { type: "proposal"; proposal: Proposal }
   | { type: "spending"; mandates: MandateView[] }
-  | { type: "blocked"; blocked: BlockedView };
+  | { type: "blocked"; blocked: BlockedView }
+  | { type: "error"; message: string };
 export type ChatResult = { messages: { role: "assistant"; text: string }[]; cards: unknown[] };
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
 

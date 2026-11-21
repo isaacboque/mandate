@@ -52,6 +52,12 @@ function CardView({ card, ctx }: { card: Card; ctx: Ctx }) {
         </div>
       );
     }
+    case "error":
+      return (
+        <div className="minicard errorcard" role="alert" aria-label="Model failed">
+          <span className="verdict bad"><Icon name="cross" size={16} /> <b>{card.message}</b></span>
+        </div>
+      );
     case "spending":
       return (
         <div className="minicard spendingcard" role="group" aria-label="Spending">

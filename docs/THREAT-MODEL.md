@@ -32,7 +32,7 @@ Trust boundaries: (1) product text and the model's output are untrusted; (2) the
 ## Not claimed
 
 - No real-LLM success rate: `npm run eval:real` (19 cases, 10 of them adversarial) has not been run by the author; until its table is published under "Limits" in the README, the real-LLM result is not measured. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
-- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (56) and 11 named checks.
+- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (57) and 11 named checks.
 - No production use, no users, no revenue, no prize or hackathon placement; no real money; no merchant handoff.
 - A person approving a bad cart, a compromised server, a stolen session, or a lying catalog are not covered (see the limits below).
 
@@ -45,7 +45,7 @@ Trust boundaries: (1) product text and the model's output are untrusted; (2) the
 | Write a reason for each line | Approve, edit the mandate, or raise the budget |
 | | Read product text as instructions: it is quoted JSON, never part of the system prompt |
 
-## Attacks covered (56 scenarios, `npm run eval`)
+## Attacks covered (57 scenarios, `npm run eval`)
 
 An independent oracle re-derives every captured payment from the raw fixture rows and the mandate it was made under; it never calls the guardrail code.
 
@@ -68,15 +68,15 @@ The chat agent has exactly 8 tools: search, get product, propose cart, draft con
 
 Limit: figures the model writes in chat text are not verified; cards carry numbers from server state, and the approval of an `auto_under` cart follows the rule in the human-signed contract, not the agent.
 
-Result: spend safety 56/56, guardrails 28/28, injection 7/7, task success 12/12, agent 9/9.
+Result: spend safety 57/57, guardrails 28/28, injection 7/7, task success 12/12, agent 10/10.
 
 ## Layer results
 
 Measured by `npm run eval:injection-variants` (78 obfuscated listings, seeded, no keys; details in [EVIDENCE.md](EVIDENCE.md)): the regex injection detector flags 19/78 and money outside the mandate is 0/78 judged by the independent oracle. The detector is one weak layer; budget, cap, quantity, the absence of a paying tool and human-only approval are the layers that hold. A missed listing whose cart fits the mandate (20 of the 78 in the suite) is only stopped by the person approving it.
 
-## Fallback to the rules agent
+## LLM failure fails closed
 
-If the LLM call fails (error, timeout, a rejected request), the service falls back to the built-in rules agent for that turn. The rules agent is deterministic and has the same tools and the same guardrails, but it does not read listing text the way a model does, and in the real-model eval it has bought the attacker's in-terms listing (a poisoned listing the regex detector misses). So a forced LLM failure hands control to a weaker agent: possible attack surface, not a money leak (the guardrails still apply). Not changed here; [ticket 26](wayfinder/tickets/26-fallback-fail-closed.md) asks whether an adversarial context should fail closed instead.
+If a configured LLM call fails (error, timeout, a request the provider rejects), the turn proposes nothing, the person sees an error card and the failure is traced (`concierge.failed_closed`, `agent.failed_closed`). The deterministic rules agent answers only when no LLM is configured. This closes an attack surface found with a real model: a malformed tool argument made the provider reject the call, the service fell back to the rules agent, and the rules agent bought the attacker's in-terms listing (a poisoned listing the regex detector misses; the forced approval paid it). No money left the mandate terms, but an input could force the switch to the most gullible agent. Covered by scenario a10 and `test/fail-closed.test.ts`; tool arguments from a model are also rounded and checked in code ([AGENT-SPEC.md](AGENT-SPEC.md), Failure semantics). Ticket: [26](wayfinder/tickets/26-fallback-fail-closed.md), resolved.
 
 ## Out of scope and known limits
 

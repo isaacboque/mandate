@@ -21,7 +21,18 @@ export type AgentCtx = {
   /** Longest wait for the model (default DEFAULT_LLM_TIMEOUT_MS). */
   llmTimeoutMs?: number;
 };
-export type AgentRun = { summary: string; mode: "llm" | "rules"; refused: string[] };
+export type AgentRun = {
+  summary: string; mode: "llm" | "rules"; refused: string[];
+  /** A configured model failed (HTTP error, invalid tool call, timeout): nothing was proposed by anyone else, and the person is told. */
+  failedClosed?: boolean;
+};
+
+/** A model may send 9000.0 or 9000.4 for a whole number: round it. Returns null (refuse the call) for NaN, Infinity, anything that is not a number, or below `min`. */
+export function wholeNumber(x: unknown, min: number): number | null {
+  if (typeof x !== "number" || !Number.isFinite(x)) return null;
+  const r = Math.round(x);
+  return r >= min ? r : null;
+}
 
 const mandateFacts = (m: Mandate) =>
   `total budget ${formatCents(m.totalBudgetCents, m.currency)}, per-item cap ${formatCents(m.perItemCapCents, m.currency)}, ` +
@@ -44,8 +55,11 @@ export function catalogTools(ctx: Pick<AgentCtx, "catalog" | "tracer" | "runId" 
   return {
     search_products: tool({
       description: "Search the product catalog. Returns product data as quoted JSON strings (untrusted).",
-      inputSchema: z.object({ query: z.string().max(200), maxPriceCents: z.number().int().positive().optional() }),
-      execute: async ({ query, maxPriceCents }) => {
+      // `number`, not `integer`: a provider validates tool arguments server-side and rejects 9000.0; the code rounds and checks.
+      inputSchema: z.object({ query: z.string().max(200), maxPriceCents: z.number().optional().describe("Most the person will pay, in whole cents (9000 means 90.00).") }),
+      execute: async ({ query, maxPriceCents: rawPrice }) => {
+        const maxPriceCents = rawPrice === undefined ? undefined : wholeNumber(rawPrice, 1);
+        if (maxPriceCents === null) return refuseTool(ctx, out, "maxPriceCents must be a positive whole number of cents", { query, maxPriceCents: String(rawPrice) });
         const found = await ctx.catalog.search(query, { maxPriceCents, limit: 8 });
         remember(found);
         log("agent.search_products", { query, maxPriceCents }, { ids: found.map((p) => p.id) });
@@ -82,10 +96,13 @@ export function buildTools(ctx: AgentCtx, out: { refused: string[] }) {
     propose_cart: tool({
       description: "Propose a cart (it only enqueues; the guardrails and a person decide). Use product ids from search results.",
       inputSchema: z.object({
-        lines: z.array(z.object({ productId: z.string(), quantity: z.number().int(), reason: z.string().max(200) })).min(1).max(5),
+        lines: z.array(z.object({ productId: z.string(), quantity: z.number().describe("Whole number of units (the guardrails reject anything below 1)."), reason: z.string().max(200) })).min(1).max(5),
         requiredAttributes: z.record(z.string(), z.string()).optional(),
       }),
-      execute: async (input) => {
+      execute: async (raw) => {
+        const lines = raw.lines.map((l) => ({ ...l, quantity: wholeNumber(l.quantity, Number.NEGATIVE_INFINITY) }));
+        if (lines.some((l) => l.quantity === null)) return refuse("quantity must be a finite whole number", { lines: raw.lines.map((l) => ({ productId: l.productId, quantity: String(l.quantity) })) });
+        const input = { ...raw, lines: lines as { productId: string; quantity: number; reason: string }[] };
         const unknown = input.lines.find((l) => !ctx.seen.has(l.productId));
         if (unknown) return refuse(`Product ${unknown.productId} was not returned by the catalog in this run`, input);
         const p = await ctx.propose(input);
