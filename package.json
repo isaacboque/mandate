@@ -17,6 +17,7 @@
     "eval:mutants": "vitest run test/mutation.test.ts",
     "eval:injection-variants": "tsx scripts/eval-injection-variants.ts",
     "demo:gif": "tsx scripts/demo-gif.ts",
+    "doctor": "tsx scripts/doctor.ts",
     "eval:real": "tsx scripts/eval-real-model.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
