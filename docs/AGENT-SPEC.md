@@ -54,3 +54,7 @@ Retries: a short per-minute limit (retry-after of 8 s or less) is retried automa
 
 ## Out of scope
 Agent-side auto-sign (ticket 17, recommend no), agent-callable revoke (ticket 18, recommend no).
+
+## Amendment scope
+
+An amendment the agent proposes may change only the contract fields the person's message names (total budget, per-item cap, categories, merchants, quantity, expiry, autonomy; "limit" names both money fields). Any other field in the same call is refused as a tool call (`agent.refused`, reason `scope_creep`) and the agent is told which fields were not named, so it can propose again with only those. The check is code (`src/mandate/scope.ts`), not the prompt; if no message is available to compare with, no amendment is accepted. The person still signs every amendment. Source: seen live on 2026-11-21, "raise the budget to 200 €" also raised the per-item cap.

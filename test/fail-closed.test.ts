@@ -113,7 +113,7 @@ describe("tool arguments from a model are normalised, not trusted", () => {
     const out: ConciergeOut = { refused: [], cards: [] };
     const proposed: unknown[] = [];
     const port = {
-      catalog: h.catalog, tracer: h.tracer, runId: "t", seen: new Map(), now: () => new Date(), mandates: () => h.service.mandates(),
+      catalog: h.catalog, tracer: h.tracer, runId: "t", seen: new Map(), now: () => new Date(), ask: "raise the budget to 120 €", mandates: () => h.service.mandates(),
       proposeCart: async (_m: string, input: unknown) => { proposed.push(input); throw new Error("stop"); },
       amend: (_id: string, patch: unknown) => { proposed.push(patch); throw new Error("stop"); },
     } as unknown as ConciergePort;

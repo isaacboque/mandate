@@ -36,6 +36,8 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 
 - 2026-11-22: real-eval v2 harness built (65 cases, repeats, paired arms, resumable; `npm run eval:real -- --cases v2`, `npm run eval:real:report`); numbers pending Isaac's Groq runs.
 
+- 2026-11-22: threat model v2 ([THREAT-MODEL.md](../THREAT-MODEL.md): 10 attacker rows, each measured or marked not run); amendment scope creep (found live) closed in code; adaptive-attacker harness built (`npm run eval:adaptive`), results pending Isaac's Groq run.
+
 ## Open (needs Isaac)
 - [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): done 2026-11-21 on three open-weight models via Groq (not Claude), k = 1; table in [EVIDENCE.md](../EVIDENCE.md). Optional next: a Claude model and k greater than 1.
 - [Check hosted demo links before posting](tickets/06-hosted-links.md): open (needs a browser logged out; free-tier servers wake in about 30 s).

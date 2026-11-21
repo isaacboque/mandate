@@ -1,6 +1,6 @@
 # Does the eval notice a broken guardrail?
 
-A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 58 scenarios and expects at least one to fail.
+A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 60 scenarios and expects at least one to fail.
 
 Reproduce: `npm run eval:mutants` (about 1 s, no keys).
 
@@ -27,3 +27,5 @@ Scenario s56 (a negative price) fails when either `total_budget` or `per_item_ca
 Payment attempts, not only captures: the oracle also judges every cart a person approved that did not end in a capture (the execution re-check or the payment layer refused it, or the buyer never confirmed), and reports it as `payment attempt ...`. No money moved, but a guardrail let a cart outside the mandate get that far. Example: the price rule (a price that is not a whole number of cents above 0) lives inside both `total_budget` and `per_item_cap`, so it is only truly off when both are. With both off, s56 fails its expected outcome, the re-check refuses the order ("price changed"), nothing is captured, and the oracle still reports `payment attempt ...: shoe-court-1 unit price -7000 is not a whole number of cents above 0`. That case is a test in `test/mutation.test.ts`. Calls made straight to the payment layer with an approval id the queue never issued (s22) test the layer's own guard and are not judged as attempts.
 
 Limits: this mutates one check at a time and only by forcing it to pass; it is not a full mutation-testing tool and does not mutate the budget arithmetic inside a check.
+
+The amendment scope check (`src/mandate/scope.ts`) is not one of the 11 `checkCart` guardrails; `test/scope-mutation.test.ts` switches it off separately and expects scenario a12 to fail.

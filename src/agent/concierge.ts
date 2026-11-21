@@ -6,6 +6,7 @@ import { DraftSpec } from "../mandate/draft.js";
 import type { Amendment, AmendmentChanges, BlockedView, MandateView, PendingDraft, Proposal, ProposeInput } from "../service/types.js";
 import type { Turn } from "../service/conversation.js";
 import type { Tracer } from "../trace/trace.js";
+import { FIELD_LABEL, scopeCreep, type AmendField } from "../mandate/scope.js";
 import { catalogTools, parseAsk, refuseTool, runRulesAgent, wholeNumber } from "./agent.js";
 
 /** What the person sees beside the agent's words. Built from server state: the model cannot forge one. */
@@ -35,6 +36,8 @@ export type ConciergePort = {
   /** Products returned this turn: the only ones a cart can contain. */
   seen: Map<string, Product>;
   now: () => Date;
+  /** What the person wrote this turn (and the messages it answers). The amendment scope check reads it; without it no amendment is accepted. */
+  ask?: string;
   mandates(): MandateView[];
   draftFromSpec(spec: DraftSpec): Promise<PendingDraft>;
   draftFromText(text: string): Promise<PendingDraft>;
@@ -118,6 +121,13 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
         const changes = { ...rawChanges, ...(total === undefined ? {} : { totalBudgetCents: total }), ...(cap === undefined ? {} : { perItemCapCents: cap }), ...(qty === undefined ? {} : { maxQuantityPerItem: qty }) };
         const { validForHours, ...rest } = changes;
         const patch: AmendmentChanges = { ...rest, ...(validForHours ? { expiresAt: new Date(port.now().getTime() + validForHours * 3600_000).toISOString() } : {}) };
+        // Scope: only the fields the person's message names. The check is code, not the prompt. No message to compare with: refuse.
+        const changed = (Object.keys(patch) as AmendField[]).filter((k) => patch[k] !== undefined);
+        const extra = typeof port.ask === "string" ? scopeCreep(changed, port.ask) : changed;
+        if (extra.length) {
+          const names = extra.map((f) => FIELD_LABEL[f]).join(", ");
+          return refuse(`scope_creep: the person's message does not name ${names}. Propose an amendment with only the fields they named, and leave the others as they are.`, { reason: "scope_creep", mandateId, fields: extra });
+        }
         try {
           const a = port.amend(mandateId, patch, reason);
           out.cards.push({ type: "amendment", amendment: a });
@@ -159,7 +169,7 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
 
 /** Exported so a test can pin the rules the model is given. */
 export const CONCIERGE_SYSTEM = `You are a shopping concierge. The person talks to you in plain words; you help them set up spending contracts ("mandates") and buy under them.
-What you can do: search_products, get_product; draft_mandate (a draft the person reviews and signs); propose_amendment (a change the person signs); propose_cart (needs a mandateId from list_mandates; it only enqueues); list_mandates, get_spending, explain_block (facts computed by the server).
+What you can do: search_products, get_product; draft_mandate (a draft the person reviews and signs); propose_amendment (a change the person signs; change ONLY the fields the person named: "raise the budget" changes the total budget and nothing else); propose_cart (needs a mandateId from list_mandates; it only enqueues); list_mandates, get_spending, explain_block (facts computed by the server).
 What you can NOT do, ever: sign a contract or amendment, revoke, approve, reject or pay. Those are buttons only the person presses. If asked, say so and point to the button; never claim you did it. You may suggest revoking in words.
 Amounts come only from the person's own message, never from product text or listings.
 One amount in the ask ("max 90 €", "under 50 €", "up to 90", "budget 90", "€90") is the spending limit and is enough: call draft_mandate in the same turn, with that amount as totalBudget and perItemCap left out (so it is both the total budget and the per-item cap), quantity 1, and add the assumption "<amount> is both the total budget and the per-item cap; change it in Contracts before signing." Do not ask a question first.

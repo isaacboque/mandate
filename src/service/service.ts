@@ -466,7 +466,7 @@ export class MandateService {
     const seen = new Map<string, Product>();
     const mode = this.agentMode;
     const port: ConciergePort = {
-      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs, onText, offline: this.offlineChoice,
+      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), ask, llmTimeoutMs: this.d.llmTimeoutMs, onText, offline: this.offlineChoice,
       mandates: () => this.mandates(),
       draftFromSpec: async (spec: DraftSpec) => { sideEffects++; return this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent", ask); },
       draftFromText: async (t) => { sideEffects++; return this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent", ask); },

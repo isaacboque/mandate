@@ -131,4 +131,4 @@ Reading guide: *Decided by* is Isaac with the date. *Implemented in* is the pull
 ### D1. The agent can only propose; the guardrails are plain code
 - **Decision.** The LLM has no tool that pays; `checkCart` and the checkout re-check run in code and an independent oracle judges the result. See [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
 - **Decided by.** Isaac ([PLAN.md](PLAN.md)).
-- **Verified by.** `npm run eval` (58 scenarios), `npm run eval:mutants` (11 of 11 guardrails caught).
+- **Verified by.** `npm run eval` (60 scenarios), `npm run eval:mutants` (11 of 11 guardrails caught).

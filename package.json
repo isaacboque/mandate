@@ -21,6 +21,7 @@
     "doctor": "tsx scripts/doctor.ts",
     "eval:real": "tsx scripts/eval-real-model.ts",
     "eval:real:report": "tsx scripts/eval-real-report.ts",
+    "eval:adaptive": "tsx scripts/eval-adaptive.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""
   },
   "engines": {
