@@ -54,13 +54,15 @@ describe("POST /api/chat/stream (ticket 20)", () => {
     expect(events[0].data.messages[0].text.length).toBeGreaterThan(0);
   });
 
-  it("a model that fails mid-turn: the rules agent answers in done, no error leaks, the failure is traced", async () => {
+  it("a model that fails mid-turn: done carries an error card and no proposal, the failure is traced", async () => {
     const broken = new MockLanguageModelV4({ doStream: async () => { throw new Error("429 RESOURCE_EXHAUSTED"); } });
     const a = world(broken as never);
     const events = await readStream(await post(a.app, "/api/chat/stream", "how much have I spent?"));
     expect(events.at(-1)!.event).toBe("done");
-    expect(events.at(-1)!.data.messages[0].text).toMatch(/AI model was unavailable/);
-    expect(a.tracer.events.map((e) => e.step)).toContain("concierge.llm_failed");
+    expect(events.at(-1)!.data.messages[0].text).toMatch(/nothing was proposed/i);
+    expect(events.at(-1)!.data.cards.map((c: { type: string }) => c.type)).toEqual(["error"]);
+    expect(a.tracer.events.map((e) => e.step)).toContain("concierge.failed_closed");
+    expect(a.tracer.events.map((e) => e.step)).not.toContain("concierge.llm_failed");
   });
 
   it("injection in streamed text is only text: no card, no signed contract, no order", async () => {

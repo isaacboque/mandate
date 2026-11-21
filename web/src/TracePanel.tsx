@@ -18,6 +18,7 @@ function describe(e: TraceEvent): string {
     case "agent.refused": return `Agent step refused: ${e.error ?? ""}`;
     case "agent.finish": return "Agent finished";
     case "agent.llm_failed": return "AI model failed; the rules agent took over";
+    case "agent.failed_closed": case "concierge.failed_closed": return "AI model failed; nothing was proposed";
     case "guardrails.checkCart": { const n = Array.isArray(r.checks) ? (r.checks as { ok: boolean }[]).filter((c) => !c.ok).length : 0; return r.blocked ? `Guardrails blocked the cart (${n} failed)` : "Guardrails: all checks passed"; }
     case "approval.proposed": return "Waiting for approval";
     case "approval.approved": return "You approved";

@@ -6,7 +6,7 @@ import { ADVERSARIAL_CASES, parseModelSpec, REAL_CASES, realMatrixToMarkdown, ru
 // Control experiment against REAL LLMs (paid calls). Keys come only from your own .env or shell
 // (GOOGLE_GENERATIVE_AI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or GROQ_API_KEY). This script never prints or stores them.
 //
-//   npm run eval:real -- --models anthropic:<model-id>,google:<model-id> --k 3 --yes [--max-calls N] [--concurrency 1] [--delay-ms N]
+//   npm run eval:real -- --models anthropic:<model-id>,google:<model-id> --k 3 --yes [--max-calls N] [--concurrency 1] [--delay-ms N] [--timeout-ms N]
 //   Free run (GROQ_API_KEY only): npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versatile --k 1 --yes
 //
 // Without --models it runs the one model from LLM_PROVIDER / LLM_MODEL. Without --yes it only prints the plan and exits 3.
@@ -35,7 +35,9 @@ const cases = [...REAL_CASES, ...ADVERSARIAL_CASES];
 
 const num = (name: string, def: number, min: number) => { const v = flag(name); return v === undefined ? def : Math.max(min, Number(v) || def); };
 const concurrency = num("--concurrency", 1, 1), delayMs = num("--delay-ms", 0, 0);
-const out = await runMatrix({ models, cases, k, yes, maxCalls, concurrency, delayMs });
+// Longest wait for one LLM call: --timeout-ms or REAL_EVAL_TIMEOUT_MS (default 40000).
+const timeoutMs = flag("--timeout-ms") !== undefined || process.env.REAL_EVAL_TIMEOUT_MS ? Math.max(1000, Number(flag("--timeout-ms") ?? process.env.REAL_EVAL_TIMEOUT_MS) || 40_000) : undefined;
+const out = await runMatrix({ models, cases, k, yes, maxCalls, concurrency, delayMs, timeoutMs });
 if (out.status !== "done") {
   console.error(`Plan: ${models.length} model(s) x ${cases.length} cases x ${k} repeats = ${out.plannedCalls} runs (each run makes several LLM requests, billed or rate-limited by the provider).`);
   if (out.status === "over_limit") { console.error(`Over --max-calls ${out.maxCalls}. Nothing was called.`); process.exit(4); }

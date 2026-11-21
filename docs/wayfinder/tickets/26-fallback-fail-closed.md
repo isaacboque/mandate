@@ -1,6 +1,6 @@
 ---
 type: decision (HITL)
-status: open
+status: resolved 2026-11-21
 ---
 ## Question
 When the LLM call fails (error, timeout, a request the provider rejects), `src/service/service.ts` falls back to the built-in rules agent (`concierge.llm_failed`, `agent.llm_failed`). Should an adversarial context fail closed instead (no proposal, ask the person), rather than hand control to the rules agent?
@@ -12,3 +12,6 @@ When the LLM call fails (error, timeout, a request the provider rejects), `src/s
 
 ## Recommended answer
 Keep the fallback for benign asks (it is what makes the demo work without a key), but when the ask or a listing in the run is flagged or looks adversarial, or the LLM failed mid-turn after tool calls, fail closed: say the model was unavailable and propose nothing. A simpler first step: run the detector hardening of [ticket 25](25-detector-hardening.md) so the rules agent does not pick those listings. Decide with Isaac; this task did not change the behaviour.
+
+## Resolution (2026-11-21)
+Decided by Isaac (accepted the recommendation): fail closed when an LLM is configured. A failed call proposes nothing, returns an `error` card and traces `concierge.failed_closed` / `agent.failed_closed`; the rules agent answers only when no LLM is configured. Money and quantity tool arguments are declared as `number` and normalised in code, which also removes the provider-side validation failure seen in the real run. Scenario a10 and `test/fail-closed.test.ts` cover it; the real eval reports such runs as "failed closed, nothing proposed". See the pull request that closed this ticket (task 16).

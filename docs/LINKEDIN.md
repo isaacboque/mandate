@@ -16,7 +16,7 @@ Then I tried to break my own claim.
 
 My regex injection detector caught only 19 of 78 obfuscated listings (other languages, zero-width characters, base64, hidden fields). Money outside the mandate: 0 of 78, judged by an oracle that never calls the guardrail code. The detector is a weak layer; the structure holds. The one gap: a missed listing whose cart fits the mandate is stopped only by the person approving. 20 of the 78.
 
-All of it runs with no API key: 56 scenarios, 11 of 11 guardrails caught when switched off, 78 injection variants.
+All of it runs with no API key: 57 scenarios, 11 of 11 guardrails caught when switched off, 78 injection variants.
 
 Not measured yet: a real model. The experiment is written; I run it next.
 

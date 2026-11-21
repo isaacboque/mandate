@@ -6,7 +6,7 @@ import { DraftSpec } from "../mandate/draft.js";
 import type { Amendment, AmendmentChanges, BlockedView, MandateView, PendingDraft, Proposal, ProposeInput } from "../service/types.js";
 import type { Turn } from "../service/conversation.js";
 import type { Tracer } from "../trace/trace.js";
-import { catalogTools, parseAsk, refuseTool, runRulesAgent } from "./agent.js";
+import { catalogTools, parseAsk, refuseTool, runRulesAgent, wholeNumber } from "./agent.js";
 
 /** What the person sees beside the agent's words. Built from server state: the model cannot forge one. */
 export type Card =
@@ -14,7 +14,9 @@ export type Card =
   | { type: "amendment"; amendment: Amendment }
   | { type: "proposal"; proposal: Proposal }
   | { type: "spending"; mandates: MandateView[] }
-  | { type: "blocked"; blocked: BlockedView };
+  | { type: "blocked"; blocked: BlockedView }
+  /** The configured model failed: nothing was proposed by a fallback. Server text, never the model's. */
+  | { type: "error"; message: string };
 
 export type ConciergeOut = { refused: string[]; cards: Card[] };
 
@@ -50,11 +52,12 @@ const AmendInput = z.object({
   mandateId: z.string().max(40),
   reason: z.string().max(200),
   changes: z.object({
-    totalBudgetCents: z.number().int().positive().optional(),
-    perItemCapCents: z.number().int().positive().optional(),
+    // `number`, not `integer`: a provider rejects 9000.0 server-side; the code rounds and checks (see wholeNumber).
+    totalBudgetCents: z.number().optional().describe("Whole cents."),
+    perItemCapCents: z.number().optional().describe("Whole cents."),
     allowedCategories: z.array(z.string().min(1).max(60)).min(1).max(8).optional(),
     allowedMerchants: z.array(z.string().min(1).max(80)).max(8).optional(),
-    maxQuantityPerItem: z.number().int().min(1).max(100).optional(),
+    maxQuantityPerItem: z.number().min(1).max(100).optional().describe("Whole number."),
     validForHours: z.number().positive().max(168).optional(),
   }),
 });
@@ -71,10 +74,13 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
       description: "Propose a cart under ONE contract (mandateId from list_mandates). It only enqueues: the guardrails and a person decide. Use product ids from search results.",
       inputSchema: z.object({
         mandateId: z.string().max(40),
-        lines: z.array(z.object({ productId: z.string(), quantity: z.number().int(), reason: z.string().max(200) })).min(1).max(5),
+        lines: z.array(z.object({ productId: z.string(), quantity: z.number().describe("Whole number of units (the guardrails reject anything below 1)."), reason: z.string().max(200) })).min(1).max(5),
         requiredAttributes: z.record(z.string(), z.string()).optional(),
       }),
-      execute: async ({ mandateId, ...input }) => {
+      execute: async ({ mandateId, ...raw }) => {
+        const lines = raw.lines.map((l) => ({ ...l, quantity: wholeNumber(l.quantity, Number.NEGATIVE_INFINITY) }));
+        if (lines.some((l) => l.quantity === null)) return refuse("quantity must be a finite whole number", { mandateId, lines: raw.lines.map((l) => ({ productId: l.productId, quantity: String(l.quantity) })) });
+        const input = { ...raw, lines: lines as { productId: string; quantity: number; reason: string }[] };
         if (!known(mandateId)) return refuse(`Unknown contract ${mandateId}; call list_mandates`, { mandateId });
         const unknown = input.lines.find((l) => !port.seen.has(l.productId));
         if (unknown) return refuse(`Product ${unknown.productId} was not returned by the catalog this turn`, input);
@@ -86,8 +92,9 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
     }),
     draft_mandate: tool({
       description: "Draft a spending contract from what the person asked. It is only a draft: the person reviews and signs it. If the person gave no budget, do NOT call this; ask them.",
-      inputSchema: DraftSpec,
-      execute: async (spec) => {
+      inputSchema: DraftSpec.extend({ maxQuantityPerItem: z.number().min(1).max(100).optional().describe("How many of the same item, a whole number. Default 1.") }),
+      execute: async (raw) => {
+        const spec = { ...raw, ...(raw.maxQuantityPerItem === undefined ? {} : { maxQuantityPerItem: wholeNumber(raw.maxQuantityPerItem, 1) ?? undefined }) } as DraftSpec;
         const d = await port.draftFromSpec(spec);
         out.cards.push({ type: "draft", draft: d });
         log("agent.draft_mandate", { totalBudget: spec.totalBudget }, { draftId: d.id, signed: false });
@@ -97,7 +104,12 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
     propose_amendment: tool({
       description: "Propose a change to a signed contract. Nothing changes until the person signs the amendment; you cannot sign it. Amounts are in cents.",
       inputSchema: AmendInput,
-      execute: async ({ mandateId, reason, changes }) => {
+      execute: async ({ mandateId, reason, changes: rawChanges }) => {
+        // Money and quantity: whole numbers, finite, at least 1. Anything else is a refused call, not a crash.
+        const whole = (k: "totalBudgetCents" | "perItemCapCents" | "maxQuantityPerItem") => (rawChanges[k] === undefined ? undefined : wholeNumber(rawChanges[k], 1));
+        const total = whole("totalBudgetCents"), cap = whole("perItemCapCents"), qty = whole("maxQuantityPerItem");
+        if (total === null || cap === null || qty === null) return refuse("amounts must be whole numbers of at least 1", { mandateId, changes: Object.fromEntries(Object.entries(rawChanges).map(([k, v]) => [k, typeof v === "number" ? String(v) : v])) });
+        const changes = { ...rawChanges, ...(total === undefined ? {} : { totalBudgetCents: total }), ...(cap === undefined ? {} : { perItemCapCents: cap }), ...(qty === undefined ? {} : { maxQuantityPerItem: qty }) };
         const { validForHours, ...rest } = changes;
         const patch: AmendmentChanges = { ...rest, ...(validForHours ? { expiresAt: new Date(port.now().getTime() + validForHours * 3600_000).toISOString() } : {}) };
         try {
