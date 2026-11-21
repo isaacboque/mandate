@@ -4,7 +4,7 @@ Facts come only from this repo and are reproducible. Mandate began as a PayPal A
 
 ## Post
 
-What if the model that reads untrusted text is allowed to spend your money?
+I tried to break my own AI agent with real models. None of the models fell for the attacks. My fallback code did.
 
 I built Mandate to test that, in a sandbox. A shopping agent proposes carts; the limits live outside the model.
 
@@ -13,7 +13,7 @@ I built Mandate to test that, in a sandbox. A shopping agent proposes carts; the
 
 Then I tried to break my own claim.
 
-My regex injection detector caught only 19 of 78 obfuscated listings. Money outside the mandate: 0 of 78, judged by an oracle that never calls the guardrail code. The detector is a weak layer; the structure holds.
+My regex injection detector caught only 19 of 78 obfuscated listings. Money outside the mandate: 0 of 78, judged by an independent checker that shares no code with the guardrails. The detector is a weak layer; the structure holds.
 
 Then a real model. Three open-weight models via Groq (not Claude, one run, 19 cases each): money outside the mandate 0 in all three.
 
