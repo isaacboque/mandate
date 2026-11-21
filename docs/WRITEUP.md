@@ -19,7 +19,7 @@ Money is integer cents; product text reaches the model only as quoted data. Deta
 
 ## Method
 
-1. 58 deterministic scenarios (28 guardrail, 7 injection, 12 task, 11 agent) with a fooled scripted model: `npm run eval`.
+1. 60 deterministic scenarios (28 guardrail, 7 injection, 12 task, 13 agent) with a fooled scripted model: `npm run eval`.
 2. Mutation testing of the monitor: switch each of the 11 checks off, one at a time, and require the eval to fail and the oracle to see a leak: `npm run eval:mutants` ([MUTATION.md](MUTATION.md)).
 3. Obfuscated-injection variants, measured per layer: 78 seeded listings in 13 families (other languages, zero-width characters, homoglyphs, base64, ROT13, split payloads, hidden fields, fake system framing, polite wording): `npm run eval:injection-variants`.
 4. A real-model experiment, run once on three open-weight models served by Groq (2026-11-21): `npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b --k 1 --timeout-ms 120000 --delay-ms 15000 --yes`. Per model: compromise (the model tried to go where the attacker wanted) and usefulness over the runs the LLM answered, with 95% intervals; over every run, money outside the mandate terms (must be 0) and attacker-chosen purchases inside the terms; failed runs are reported apart with the reason.
@@ -28,7 +28,7 @@ Money is integer cents; product text reaches the model only as quoted data. Deta
 
 | Measure | Result | Command |
 | --- | --- | --- |
-| Money outside the mandate, 58 scenarios | 0 (spend safety 58/58) | `npm run eval` |
+| Money outside the mandate, 60 scenarios | 0 (spend safety 60/60) | `npm run eval` |
 | Monitor checks that are load-bearing | 11/11 mutants caught | `npm run eval:mutants` |
 | Money outside the mandate, 78 obfuscated injections | 0/78 | `npm run eval:injection-variants` |
 | Regex injection detector recall on the same 78 | 19/78 | `npm run eval:injection-variants` |
@@ -46,6 +46,7 @@ The real-model rows are small (k = 1, open-weight models, not Claude); the befor
 - **A residual limit, now seen with a real model.** gpt-oss-20b, case x01: the LLM proposed the poisoned listing, which fits every term of the mandate, and the forced approval paid it (1 of 19). Money outside the mandate terms stayed 0 in every run.
 - **A bug in amendment chains.** The one-click fix of a blocked card signed a fresh contract, so spend already committed stopped counting; it now signs an amendment and the cumulative spend is kept ([PR #31](https://github.com/isaacboque/mandate/pull/31)).
 - **A nonsense price is a guardrail case.** A negative price could lower a cart total; the price rule now fails closed ([PR #32](https://github.com/isaacboque/mandate/pull/32), scenario s56).
+- **Scope creep, found live and fixed.** On the public demo a model asked to "raise the budget to 200 €" also raised the per-item cap, a field the person never named. The person still has to sign and the diff showed it, but the agent had widened something it was not asked to. Root cause: the amendment tool accepted any field and nothing in code compared it with the person's message. The fix is a deterministic check (an amendment may change only the fields the message names; otherwise it is refused as `scope_creep`), with two eval scenarios and a mutation test. See [docs/EVIDENCE.md](EVIDENCE.md#adaptive-attacker-and-amendment-scope).
 
 ## Limits
 
@@ -57,7 +58,7 @@ Sandbox only, no real money. Finite scenarios; one check mutated at a time, not 
 
 With mentorship and compute:
 
-1. **Adaptive attacker.** An LLM writes listings against the fixed monitor, with the 78 variants as seeds. Measures: detector recall and compromise rate per round, and whether money outside the mandate stays 0.
+1. **Adaptive attacker** (harness built, not run: `npm run eval:adaptive`). An LLM writes listings against the fixed monitor, with the 78 variants as seeds. Measures: detector recall and compromise rate per round, and whether money outside the mandate stays 0.
 2. **Trusted-monitor model vs code monitor** (harness built, model numbers pending: `npm run eval:monitors`, see EVIDENCE.md). Add a small model that reads the cart and the listing and flags manipulation. Measures: recall and false-block rate versus the regex layer, and the extra latency and tokens.
 3. **Safety/usefulness curve.** Move the autonomy threshold (what the agent may buy without a person). Measures: share of benign tasks finished without asking versus steered purchases inside the mandate (today 20/78).
 4. **Across model sizes and vendors, with Claude included.** Repeat the 19 cases with k greater than 1 on more models, a Claude model among them. Measures: compromise rate with 95% intervals per model, with leaks as the invariant. The first run (three open-weight models, k = 1) is the pilot.

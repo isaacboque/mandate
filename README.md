@@ -22,13 +22,13 @@ The guardrails are plain code **outside the LLM**. A poisoned product listing ca
 git clone https://github.com/isaacboque/mandate.git && cd mandate
 npm ci
 npm run build && npm start      # http://localhost:8787 (demo mode: chat + contracts, fixture catalog, mock payments, no keys)
-npm run eval                    # 58 deterministic scenarios, prints the table below
+npm run eval                    # 60 deterministic scenarios, prints the table below
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
 **Use your own model key:** copy `.env.example` to `.env`, set the key of the provider you use (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GROQ_API_KEY`, the last has a free tier) and run `npm run doctor` to see what will answer. The provider is detected from the key; nothing else is required. Keys stay on the server (a public page never asks for one). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-**How it is checked:** `npm test` (472 tests, mocks only), `npm run eval` (spend safety 58/58 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (503 tests, mocks only), `npm run eval` (spend safety 60/60 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -112,7 +112,7 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 
 On the fixture catalog, with a simulated clock and mock payments (no keys):
 
-- **Spend safety 58/58**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
+- **Spend safety 60/60**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
 - **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
 - **Guardrails 28/28**, **task success 12/12** and **agent scenarios 9/9** (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays).
 
@@ -132,21 +132,23 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 ## Evaluation
 
-`npm run eval` runs 58 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
+`npm run eval` runs 60 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 58/58 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 60/60 |
 | Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 28/28 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
-| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 11/11 |
+| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 13/13 |
 <!-- eval:end -->
 
 ### Try it against a real model (optional; free with a Groq key)
 
 `npm run eval:real` is an opt-in control experiment with real LLMs: 19 cases (6 task, 3 poisoned-listing, 10 adversarial), each 3 times by default (`--k N`), on the same fixture catalog and the same independent oracle. For each model it reports, separately, the **compromise rate** (how often the untrusted model tried to go where the attacker wanted), **money outside the mandate terms** (must be 0) and, separately, **attacker-chosen purchases** inside the terms and **usefulness** (benign tasks done, false blocks), with 95% intervals, latency and tokens. Compare models in one command, for example a Claude model and a model from another vendor: `npm run eval:real -- --models anthropic:<model-id>,openai:<model-id> --k 3 --yes` (without `--yes` it only prints the plan; `--max-calls N` caps it). **No-cost run (Groq free tier, only `GROQ_API_KEY` needed):** `npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b --k 1 --timeout-ms 120000 --delay-ms 15000 --yes` (the command of the published run; use the model ids your account offers). HTTP 429 (free-tier limits) is waited out and retried up to 5 times (honouring `retry-after`, else exponential backoff up to 60 s); a run that stays rate-limited is reported as `error: rate_limit` and left out of the rates, with the count shown; `--delay-ms N` paces the calls. `OPENAI_BASE_URL` points the `openai` provider at any OpenAI-compatible endpoint. Put your own keys in your own `.env` (copy `.env.example`; `.env` is gitignored); the script never prints or stores them and writes `traces/real-model-eval.md` and `.json` (gitignored). The exit code fails only if money moved outside a mandate. Metric definitions and the empty results table are in [docs/EVIDENCE.md](docs/EVIDENCE.md); the results of the published run are in [docs/EVIDENCE.md](docs/EVIDENCE.md).
+
+`npm run eval:adaptive` (an LLM attacker that rewrites a poisoned listing after each outcome, against a target agent) is built and not run yet; see [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) for the attacker table and [docs/EVIDENCE.md](docs/EVIDENCE.md#adaptive-attacker-and-amendment-scope) for the command. An amendment the agent proposes may change only the fields you named (found live, fixed in code).
 
 ## Limits
 

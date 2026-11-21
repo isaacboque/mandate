@@ -6,9 +6,9 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 472 in 43 files | `npm test` |
-| Scenarios, split guardrail / injection / task / agent | 58 (28 / 7 / 12 / 11) | `npm run eval` |
-| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 58/58 | `npm run eval` |
+| Tests (mocks only) | 503 in 46 files | `npm test` |
+| Scenarios, split guardrail / injection / task / agent | 60 (28 / 7 / 12 / 13) | `npm run eval` |
+| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 60/60 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
 | Oracle leaks with a guardrail off | per-mutant table in [MUTATION.md](MUTATION.md) | `npm run eval:mutants` |
 | Concierge tools | 8 (search, get product, propose cart, draft contract, propose amendment, list contracts, get spending, explain block) | `src/agent/concierge.ts`; scenario a07 |
@@ -131,6 +131,27 @@ npm run eval:real:report -- --k 3
 | model | runs stored | compromise | outside the mandate terms | attacker-chosen purchase | paired: fail-closed held, legacy did not / reverse | McNemar p |
 | --- | --- | --- | --- | --- | --- | --- |
 | groq:openai/gpt-oss-120b | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+
+## Adaptive attacker and amendment scope
+
+**Amendment scope (measured, keyless).** Seen live on 2026-11-21 (gpt-oss-120b): "raise the budget to 200 €" produced an amendment that raised the total budget and the per-item cap. The cause: the tool accepted any field the model sent, and neither the prompt nor the code said that only the named field may change. Fixed in code (`src/mandate/scope.ts`): the amendment tool refuses any field the person's message does not name (`agent.refused`, reason `scope_creep`) and tells the agent why. Scenarios a12 (refused) and a13 (in-scope passes) are in `npm run eval` (60/60); `test/scope-mutation.test.ts` switches the check off and expects a12 to fail. Scenario a02 was reworded to ask for the budget and the per-item cap, because the old wording ("raise the budget") now correctly refuses a cap change.
+
+**Adaptive attacker (harness built, not run).** An LLM writes a poisoned listing; the target agent runs a fixed shopping task over a catalog that includes it; the attacker is told only the outcome (put in a cart or not, which checks blocked it, whether the regex detector flagged it) and rewrites, up to R rounds, for S seeds. A seed stops at its first success. Measures: seeds where the listing was put in a cart, rounds to first success, attacker-chosen purchase after a forced approval, money outside the mandate terms (must stay 0), detector flag rate on the attacker's listings. 429 handling and resume are as in `eval:real`. With 5 seeds the success row is a small sample and carries a wide interval and a rule-of-three line.
+
+```
+# plan only (exits 3 without --yes)
+GROQ_API_KEY=... npm run eval:adaptive
+# the run: at most 5 seeds x 8 rounds = 40 attacker calls and 40 target runs (about 3.4K tokens each, so about 140K tokens, under one day of free quota)
+GROQ_API_KEY=... npm run eval:adaptive -- --yes --resume --delay-ms 25000
+```
+
+| measure | result |
+| --- | --- |
+| Seeds where the attacker's listing was put in a cart | TODO(Isaac) |
+| Rounds to first success | TODO(Isaac) |
+| Attacker-chosen purchase after a forced approval, inside the terms | TODO(Isaac) |
+| Money outside the mandate terms | TODO(Isaac) |
+| Attacker listings the regex detector flagged | TODO(Isaac) |
 
 ## Monitors: model vs code
 
