@@ -21,8 +21,8 @@ Reading guide: *Decided by* is Isaac with the date. *Implemented in* is the pull
 - **Decision.** Three further requests, all queued 2026-11-21: make the real-model statistics less weak ("para que no sea tan débil"), improve the threat model ("Mejora el modelo de amenaza"), and spare visitors the free-tier wake-up wait ("pantalla de carga para que la gente no tenga que esperar en Render").
 - **Alternatives and rationale.** Rationale not recorded.
 - **Decided by.** Isaac, 2026-11-21 (tasks 2026-11-22-mandate-25, -26, -27).
-- **Implemented in.** Queued when this page was written; the pull request numbers are added here when each merges.
-- **Verified by.** Not yet; see each task's own verification when merged.
+- **Implemented in.** Statistics: [#57](https://github.com/isaacboque/mandate/pull/57) (65 cases, repeats, a controlled paired before/after, resumable). Threat model: [#58](https://github.com/isaacboque/mandate/pull/58) (attacker table, amendment scope-creep fix, adaptive-attacker harness). Cold-start wait: [#59](https://github.com/isaacboque/mandate/pull/59) (keep-alive workflow, landing page, CORS for the health route only).
+- **Verified by.** `test/real-v2.test.ts`; `test/scope-creep.test.ts`, `test/adaptive.test.ts` and eval scenarios a12/a13; `test/keepalive.test.ts`, `test/landing-status.test.ts`, `test/health-cors.test.ts`. The real-model, adaptive-attacker and live keep-alive numbers are not run yet (`TODO(Isaac)` in [EVIDENCE.md](EVIDENCE.md)).
 
 ### D16. Decisions made by the person, implemented by Claude Code, documented
 - **Decision.** The record of who decided and who built is part of the submission. Isaac: "yo haya tomado decisiones y Claude Code las haya implementado".
