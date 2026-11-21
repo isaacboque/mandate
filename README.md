@@ -6,7 +6,7 @@
 
 ![A poisoned listing is blocked, with the reasons](docs/demo.gif)
 
-**For reviewers:** a two-minute research-style note is in [docs/WRITEUP.md](docs/WRITEUP.md). [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed.
+**For reviewers:** a two-minute research-style note is in [docs/WRITEUP.md](docs/WRITEUP.md). [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed. [docs/DECISIONS.md](docs/DECISIONS.md) records who decided what (Isaac decides, Claude Code implements).
 [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) lists assets, attacker models, what stops each and the assumptions.
 Real-model check, 2026-11-21, with three open-weight models served by Groq (not Claude; 19 cases, k=1): money outside the mandate terms 0/19 per model, compromise 0/19, 3/19 and 2/17, one attacker-chosen purchase inside the terms (gpt-oss-20b), and a flaw the scripted eval could not see that was found and fixed (fail closed). Table and caveats: [docs/EVIDENCE.md](docs/EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude).
 

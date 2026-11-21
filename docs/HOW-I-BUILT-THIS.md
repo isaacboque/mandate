@@ -2,6 +2,10 @@
 
 I built this with Claude, an AI model, writing the code under my direction. This page says what that meant in practice: which tools I used, what I decided and what I delegated, and how the output was checked. It only states what the repo, its commits and its pull requests show.
 
+## Who did what
+
+Isaac set the direction, made the decisions and reviewed the results. Claude Code wrote most of the code, tests and docs under those decisions, working from task files he queued, one pull request at a time. Each decision, with who made it, the pull request that implemented it and the check that verifies it, is in [DECISIONS.md](DECISIONS.md). Where no reason was written down, the log says so instead of inventing one. Claude's smaller implementation choices sit in each pull request under "Decisions" and are marked "not yet reviewed" until Isaac has accepted them.
+
 ## Tooling
 
 I used Claude Code (Claude Sonnet 5.5; two commits carry a Claude Fable 5.2 trailer) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
