@@ -27,6 +27,9 @@ The offline agent for a session is a flag set only by `POST /api/agent/offline` 
 
 Tool arguments from a model are normalised in code, not trusted: money and quantity parameters are declared as `number` (a provider validates arguments server-side and rejects `9000.0` for an `integer`), then rounded to whole numbers; NaN, Infinity, non-numbers and money of 0 or below are refused (`agent.refused`). A quantity of 0 or below is not refused by the tool: it goes on to the `quantity` guardrail, which blocks it (scenario s06). `checkCart` still requires integer cents.
 
+## One amount is enough to draft (2026-11-21)
+A single amount in the person's ask ("Indoor futsal shoes, max 90 €", "white tee shirt, under 50 €") is the spending limit: the concierge calls `draft_mandate` in the same turn with that amount as `totalBudget` and no `perItemCap`, so it is both the total budget and the per-item cap, with quantity 1 and "asks before every purchase". The draft says so in its own lines ("Assumed: 90.00 EUR is both the total budget and the per-item cap; change it in Contracts before signing."), added by the code, not left to the model. With two amounts the model maps them (the one called total or budget, and the one called per item or each). It asks how much it can spend only when the message has no amount at all. Amounts come only from the person's message, never from product text; a draft stays a draft (nothing is spendable until a person signs). The rule is in the concierge system prompt and in the `draft_mandate` tool description (`test/one-amount.test.ts` pins both) and eval scenario a11 covers the result.
+
 ## API
 `GET /api/mandates`, `/api/mandates/:hash/audit` (the chain of signed contracts, every proposal under it and its trace, as a download), `/api/drafts`, `/api/amendments`, `/api/chat`; `POST /api/drafts/:id/sign|discard`, `/api/amendments/:id/sign|reject`, `/api/mandates/:hash/revoke`, `/api/mandates/:hash/fix` (human-only: the blocked card's one-click fix becomes an amendment signed in one step; chain and spend are kept), `/api/chat` (`{text}` 1..500 chars, rate limited), `/api/chat/stream` (same input and limit; Server-Sent Events).
 
@@ -34,7 +37,7 @@ Tool arguments from a model are normalised in code, not trusted: money and quant
 `POST /api/chat/stream` runs the same turn as `/api/chat`. Events: `text` (`{delta}`, the model's words as they are written; LLM mode only, the rules agent answers at once), then exactly one `done` (the same `{messages, cards}` payload as `/api/chat`) or one `error` (`{error}`). A rate-limit or bad-body refusal is a normal 429/400 before the stream starts. The streamed text is model text: the chat shows it as plain text in a temporary bubble and replaces it with the `done` reply; cards, amounts and buttons come only from `done` (server state). Figures the model writes while streaming are not verified, like any chat text. If the model fails, `done` carries an `error` card and no proposal (traced as `concierge.failed_closed`; see Failure semantics). The web client falls back to `/api/chat` only when nothing reached the server or the response is not an event stream, and never repeats a turn that already ran or failed.
 
 ## Tests
-`test/chain.test.ts`, `mandates.test.ts`, `concierge.test.ts`, `chat-api.test.ts`; eval group `agent` (a01-a10); mutant `mandate_active` (a05, a06, s14).
+`test/chain.test.ts`, `mandates.test.ts`, `concierge.test.ts`, `chat-api.test.ts`; eval group `agent` (a01-a11); mutant `mandate_active` (a05, a06, s14).
 
 ## Out of scope
 Agent-side auto-sign (ticket 17, recommend no), agent-callable revoke (ticket 18, recommend no).

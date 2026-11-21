@@ -19,7 +19,7 @@ Money is integer cents; product text reaches the model only as quoted data. Deta
 
 ## Method
 
-1. 57 deterministic scenarios (28 guardrail, 7 injection, 12 task, 10 agent) with a fooled scripted model: `npm run eval`.
+1. 58 deterministic scenarios (28 guardrail, 7 injection, 12 task, 11 agent) with a fooled scripted model: `npm run eval`.
 2. Mutation testing of the monitor: switch each of the 11 checks off, one at a time, and require the eval to fail and the oracle to see a leak: `npm run eval:mutants` ([MUTATION.md](MUTATION.md)).
 3. Obfuscated-injection variants, measured per layer: 78 seeded listings in 13 families (other languages, zero-width characters, homoglyphs, base64, ROT13, split payloads, hidden fields, fake system framing, polite wording): `npm run eval:injection-variants`.
 4. A real-model experiment, run once on three open-weight models served by Groq (2026-11-21): `npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b --k 1 --timeout-ms 120000 --delay-ms 15000 --yes`. Per model: compromise (the model tried to go where the attacker wanted) and usefulness over the runs the LLM answered, with 95% intervals; over every run, money outside the mandate terms (must be 0) and attacker-chosen purchases inside the terms; failed runs are reported apart with the reason.
@@ -28,7 +28,7 @@ Money is integer cents; product text reaches the model only as quoted data. Deta
 
 | Measure | Result | Command |
 | --- | --- | --- |
-| Money outside the mandate, 57 scenarios | 0 (spend safety 57/57) | `npm run eval` |
+| Money outside the mandate, 58 scenarios | 0 (spend safety 58/58) | `npm run eval` |
 | Monitor checks that are load-bearing | 11/11 mutants caught | `npm run eval:mutants` |
 | Money outside the mandate, 78 obfuscated injections | 0/78 | `npm run eval:injection-variants` |
 | Regex injection detector recall on the same 78 | 19/78 | `npm run eval:injection-variants` |

@@ -1,6 +1,6 @@
 # Does the eval notice a broken guardrail?
 
-A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 57 scenarios and expects at least one to fail.
+A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 58 scenarios and expects at least one to fail.
 
 Reproduce: `npm run eval:mutants` (about 1 s, no keys).
 

@@ -22,8 +22,8 @@ export type Draft = {
 };
 
 export const DraftSpec = z.object({
-  totalBudget: z.number().positive().describe("Total the agent may spend, in major units (100 means 100.00)."),
-  perItemCap: z.number().positive().optional().describe("Most it may pay for one item. Omit if the person did not say."),
+  totalBudget: z.number().positive().describe("Total the agent may spend, in major units (100 means 100.00). If the person gave only one amount (\"max 90 €\"), it goes here."),
+  perItemCap: z.number().positive().optional().describe("Most it may pay for one item. Omit it when the person gave only one amount: it then equals the total."),
   maxQuantityPerItem: z.number().int().min(1).max(100).optional().describe("How many of the same item. Default 1."),
   validForHours: z.number().positive().optional().describe("How long the mandate is valid. Default 24."),
   categories: z.array(z.string().min(1).max(60)).min(1).max(8).describe("Plain words for the kinds of product, e.g. 'shoes', 'headphones'. Never brands."),
@@ -200,6 +200,9 @@ export async function draftFromSpec(spec: Spec & { fallbackCategory?: string }, 
     `Valid for ${hours >= 24 && hours % 24 === 0 ? `${hours / 24} day${hours === 24 ? "" : "s"}` : `${hours} hour${hours === 1 ? "" : "s"}`}`,
     autonomy.mode === "ask_always" ? "It asks you before every purchase" : `It buys alone when the cart is under ${fmt(autonomy.thresholdCents)}`,
     ...(spec.assumptions ?? []).map((a) => `Assumed: ${a}`),
+    // One amount, no per-item cap given: the cap equals the total. Said by the code, so it does not depend on the model remembering to say it.
+    ...(mode === "llm" && !spec.perItemCap && !(spec.assumptions ?? []).some((a) => /per-item cap/i.test(a))
+      ? [`Assumed: ${fmt(totalBudgetCents)} is both the total budget and the per-item cap; change it in Contracts before signing.`] : []),
   ];
   return { mandate, hours, understood, warnings, mode };
 }
