@@ -14,6 +14,12 @@ type Ctx = {
   proposals: Map<string, Proposal>; drafts: PendingDraft[]; amendments: Amendment[];
   freshAttack?: string;
   onReview: () => void; onFix: (b: BlockedView) => void; onProposalChange: (p: Proposal) => void;
+  /** The limit card's buttons: resend the last message, or switch this session to the offline agent (and resend it). */
+  onRetry: () => void; onOffline: () => void;
+  /** What is answering, for the waiting line. */
+  modelName?: string;
+  /** A status line from the server while it waits for the model ("busy, retrying in 3 s"). */
+  status?: string;
 };
 
 function PendingCard({ kind, title, status, onReview }: { kind: "draft" | "amendment"; title: string; status: string; onReview: () => void }) {
@@ -58,6 +64,16 @@ function CardView({ card, ctx }: { card: Card; ctx: Ctx }) {
           <span className="verdict bad"><Icon name="cross" size={16} /> <b>{card.message}</b></span>
         </div>
       );
+    case "llm_limited":
+      return (
+        <div className="minicard limitcard" role="group" aria-label="Model quota">
+          <span className="verdict warn"><Icon name="clock" size={16} /> <b>{card.variant === "day" ? "Today's free model quota is used up" : "The free model is busy"}</b></span>
+          <div className="limit-actions">
+            <button type="button" className="ghost small" disabled={ctx.busy} onClick={ctx.onRetry}>Try again</button>
+            <button type="button" className="ghost small" disabled={ctx.busy} onClick={ctx.onOffline}>Use the offline agent for this session</button>
+          </div>
+        </div>
+      );
     case "spending":
       return (
         <div className="minicard spendingcard" role="group" aria-label="Spending">
@@ -100,7 +116,6 @@ export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: 
     <section className="chat" aria-label="Chat with the agent">
       <div className="panehead">
         <h2>Agent</h2>
-        <span className="badge" title={ctx.config.agent === "llm" ? "An AI model reads your words" : "No AI key: a built-in rules reader handles your words"}>{ctx.config.agent === "llm" ? "AI mode" : "Rules mode"}</span>
       </div>
       <div className="msgs" role="log" aria-live="polite" aria-label="Conversation">
         {items.length === 0 && (
@@ -119,7 +134,7 @@ export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: 
           // The model's words as they arrive: plain text only, never actions. The final reply (and its cards) replaces this bubble.
           <div className="msg agent streaming" aria-live="off"><p className="bubble">{streaming}</p></div>
         )}
-        {sending && <Working live={live && ctx.config.agent === "llm"} />}
+        {sending && <Working live={live && ctx.config.agent === "llm"} model={ctx.config.agent === "llm" ? ctx.modelName : undefined} status={ctx.status} />}
         <div ref={end} />
       </div>
       {first && !sending && (

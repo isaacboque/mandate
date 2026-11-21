@@ -92,3 +92,25 @@
   .composer-actions .primary { flex: 1; }
   .contract, .draftform, .amendment { padding: 14px 12px; }
 }
+
+/* ----- model badge, limit card, tour ----- */
+.agentbadge.model { background: var(--good-soft); color: var(--good); }
+.agentbadge.offline { background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
+.limitcard { border-color: #ecd3a6; background: var(--warn-soft); }
+.limitcard p { margin: 0; color: var(--ink); }
+.verdict.warn { color: var(--warn); display: inline-flex; gap: 6px; align-items: center; }
+.limit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tour { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px 14px; margin-top: 16px; }
+.tour-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tour-toggle { background: none; border: 0; padding: 4px 0; cursor: pointer; display: inline-flex; gap: 10px; align-items: baseline; text-align: left; }
+.tour-count { color: var(--muted); font-size: 13px; }
+.tour-steps { list-style: none; margin: 8px 0 2px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 14px; }
+.tour-steps li { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--muted); }
+.tour-steps li small { display: block; font-size: 12px; font-weight: 400; }
+.tour-steps li.next { color: var(--ink); }
+.tour-steps li.done { color: var(--good); }
+.tick { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
+.tour-steps li.next .tick { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.tour-steps li.done .tick { background: var(--good-soft); color: var(--good); border-color: var(--good-soft); }
+@media (max-width: 900px) { .tour-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .tour-steps { grid-template-columns: 1fr; } .tour { padding: 8px 12px; } }

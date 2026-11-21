@@ -16,7 +16,9 @@ export type Card =
   | { type: "spending"; mandates: MandateView[] }
   | { type: "blocked"; blocked: BlockedView }
   /** The configured model failed: nothing was proposed by a fallback. Server text, never the model's. */
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** The free model quota is used up or busy: a usage limit, not a bug. Server text; the person can retry or choose the offline agent. */
+  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string };
 
 export type ConciergeOut = { refused: string[]; cards: Card[] };
 
@@ -38,6 +40,8 @@ export type ConciergePort = {
   proposeCart(mandateId: string, input: ProposeInput, ask: string): Promise<Proposal>;
   explain(proposalId?: string): BlockedView | null;
   llmTimeoutMs?: number;
+  /** The person chose the offline agent for this session (the note says so, instead of "no AI model is configured"). */
+  offline?: boolean;
   /** Streaming only: receives each piece of the assistant's text as the model writes it. It is model text, never an action. */
   onText?: (delta: string) => void;
 };
@@ -179,6 +183,7 @@ export async function runLlmConcierge(history: Turn[], text: string, model: Lang
     tools: buildConciergeTools(port, out),
     stopWhen: stepCountIs(10),
     abortSignal: AbortSignal.timeout(port.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS),
+    maxRetries: 0, // a limit is handled by the guarded turn (one short retry, or an honest card), not by the SDK's silent backoff
   };
   const res = port.onText ? await streamConcierge(request, port.onText) : await generateText(request);
   // A call to a tool that does not exist (a poisoned listing asking for "sign" or "pay") or with bad arguments is refused by the SDK. Trace each one.
@@ -201,7 +206,7 @@ const CONTRACT = /\b(contract|mandate|authori[sz]e|allow)\b/i;
 /** No-key concierge: a few plain intents, said so openly. The same tools' facts, no model. */
 export async function runRulesConcierge(text: string, port: ConciergePort, out: ConciergeOut): Promise<string> {
   port.tracer.log({ runId: port.runId, step: "concierge.start", kind: "decision", args: { mode: "rules", chars: text.length } });
-  const note = "(Rules mode: no AI model is configured, so I only understand a few plain requests.) ";
+  const note = port.offline ? "(Offline agent, as you chose: I only understand a few plain requests.) " : "(Rules mode: no AI model is configured, so I only understand a few plain requests.) ";
   const active = port.mandates().filter((m) => m.status === "active");
   const money = parseAsk(text).maxPriceCents;
 

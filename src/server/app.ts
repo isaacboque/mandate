@@ -8,15 +8,20 @@ import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
 import { MandateInput } from "../mandate/input.js";
+import { describeLlm } from "../llm/model.js";
 
 export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 
 /** `trustedProxies`: how many proxies of our own sit in front of the app (0 = none: X-Forwarded-For is ignored). */
-export type Config = { demoMode: "mock" | "live"; currency: string; trustedProxies?: number };
+export type Config = {
+  demoMode: "mock" | "live"; currency: string; trustedProxies?: number;
+  /** The model that answers when one is configured (no key, ever). Absent when there is none. */
+  llm?: { provider: string; model: string };
+};
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const proxies = Number(env.TRUSTED_PROXIES);
-  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0 };
+  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
 }
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
@@ -57,10 +62,19 @@ export function createApp(source: MandateService | SessionStore, config: Config,
 
   app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
-  app.get("/api/health", (c) => c.json({ ok: true }));
+  // What answers, without a session and without any key: the badge and the host's health check read this.
+  app.get("/api/health", (c) => c.json({ ok: true, agent: config.llm ? "llm" : "rules", model: config.llm?.model ?? null, provider: config.llm?.provider ?? null }));
   app.get("/api/config", (c) => {
     const service = svc(c);
-    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
+    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
+  });
+
+  // The person's switch between the model and the offline rules agent, for THIS session only. A failure never flips it.
+  app.post("/api/agent/offline", async (c) => {
+    const { offline } = z.object({ offline: z.boolean() }).parse(await c.req.json());
+    const service = svc(c);
+    service.setOffline(offline);
+    return c.json({ agent: service.agentMode, offline: service.offline });
   });
 
   // 1. mandate
@@ -110,7 +124,12 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     return streamSSE(c, async (stream) => {
       let queue: Promise<unknown> = Promise.resolve(); // keeps the pieces in order, and the done after the last piece
       try {
-        const result = await service.chat(text, (delta) => { queue = queue.then(() => stream.writeSSE({ event: "text", data: JSON.stringify({ delta }) })); });
+        const result = await service.chat(
+          text,
+          (delta) => { queue = queue.then(() => stream.writeSSE({ event: "text", data: JSON.stringify({ delta }) })); },
+          // "waiting for the model" / "busy, retrying in N s": status lines from the server, shown as status, never as the agent's words
+          (status) => { queue = queue.then(() => stream.writeSSE({ event: "status", data: JSON.stringify({ text: status }) })); },
+        );
         await queue;
         await stream.writeSSE({ event: "done", data: JSON.stringify(result) });
       } catch (e) {

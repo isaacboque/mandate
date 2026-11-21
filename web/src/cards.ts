@@ -5,7 +5,7 @@ const str = (x: unknown) => typeof x === "string";
 
 /**
  * Cards are the only way the chat can show something actionable, and they come from typed server data, never from the
- * model's words. Anything that is not exactly one of the six known shapes is dropped, so a card type the UI does not know renders nothing.
+ * model's words. Anything that is not exactly one of the seven known shapes is dropped, so a card type the UI does not know renders nothing.
  */
 export function parseCards(raw: unknown): Card[] {
   if (!Array.isArray(raw)) return [];
@@ -19,6 +19,7 @@ export function parseCards(raw: unknown): Card[] {
       case "spending": if (Array.isArray(c.mandates)) out.push(c as Card); break;
       case "blocked": if (isObj(c.blocked) && Array.isArray(c.blocked.failed)) out.push(c as Card); break;
       case "error": if (str(c.message)) out.push(c as Card); break;
+      case "llm_limited": if ((c.variant === "minute" || c.variant === "day") && typeof c.retryAfterSec === "number" && str(c.message)) out.push(c as Card); break;
       default: break; // unknown type: nothing is rendered
     }
   }
