@@ -56,7 +56,7 @@ Sandbox only, no real money. Finite scenarios; one check mutated at a time, not 
 With mentorship and compute:
 
 1. **Adaptive attacker.** An LLM writes listings against the fixed monitor, with the 78 variants as seeds. Measures: detector recall and compromise rate per round, and whether money outside the mandate stays 0.
-2. **Trusted-monitor model vs code monitor.** Add a small model that reads the cart and the listing and flags manipulation. Measures: recall and false-block rate versus the regex layer, and the extra latency and tokens.
+2. **Trusted-monitor model vs code monitor** (harness built, model numbers pending: `npm run eval:monitors`, see EVIDENCE.md). Add a small model that reads the cart and the listing and flags manipulation. Measures: recall and false-block rate versus the regex layer, and the extra latency and tokens.
 3. **Safety/usefulness curve.** Move the autonomy threshold (what the agent may buy without a person). Measures: share of benign tasks finished without asking versus steered purchases inside the mandate (today 20/78).
 4. **Across model sizes and vendors, with Claude included.** Repeat the 19 cases with k greater than 1 on more models, a Claude model among them. Measures: compromise rate with 95% intervals per model, with leaks as the invariant. The first run (three open-weight models, k = 1) is the pilot.
 5. **Human approval as a control.** Replace the harness's always-approve with a simulated reviewer that sees the reason text. Measures: how many steered in-mandate purchases a reviewer catches, and at what review time.

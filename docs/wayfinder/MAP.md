@@ -32,6 +32,8 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 
 - Resolved 2026-11-21: [26 LLM failure falls back to the rules agent](tickets/26-fallback-fail-closed.md): a configured LLM that fails now fails closed (nothing proposed, error card); the rules agent answers only with no LLM.
 
+- 2026-11-22: model monitor vs regex harness built (`npm run eval:monitors`, [research/monitors.md](../research/monitors.md)); model rows pending a Groq key.
+
 ## Open (needs Isaac)
 - [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): done 2026-11-21 on three open-weight models via Groq (not Claude), k = 1; table in [EVIDENCE.md](../EVIDENCE.md). Optional next: a Claude model and k greater than 1.
 - [Check hosted demo links before posting](tickets/06-hosted-links.md): open (needs a browser logged out; free-tier servers wake in about 30 s).
