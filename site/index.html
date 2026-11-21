@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandate: agents trusted with a mandate, not with money</title>
+<meta name="description" content="A shopping agent that can only propose. A person signs the spending contract, and plain code checks every cart against it. Sandbox demo, no real money.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232457d6'/%3E%3Cpath d='M9 22V10l7 8 7-8v12' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --text: #14181f; --muted: #4a5360; --line: #d5dae2;
+    --accent: #1d4fc4; --accent-text: #ffffff; --ok: #0b6b3a; --ok-bg: #e3f4ea; --warn: #7a4b00; --warn-bg: #fdf0d8; --wait: #1d4fc4; --wait-bg: #e6edfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f131a; --card: #171c25; --text: #eef1f6; --muted: #aab3c2; --line: #2c3442;
+      --accent: #7aa2ff; --accent-text: #0b1220; --ok: #6fdc9b; --ok-bg: #12301f; --warn: #f2c26b; --warn-bg: #33270f; --wait: #9bb8ff; --wait-bg: #1a2644;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.15; margin: 8px 0 8px; letter-spacing: -0.01em; }
+  .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 20px; max-width: 60ch; }
+  .brand { font-weight: 700; color: var(--accent); letter-spacing: 0.02em; }
+  .status { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 24px; display: grid; gap: 12px; }
+  .status > * { min-width: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px; font-weight: 600; width: fit-content; max-width: 100%; }
+  .pill[data-phase="waking"] { background: var(--wait-bg); color: var(--wait); }
+  .pill[data-phase="ready"] { background: var(--ok-bg); color: var(--ok); }
+  .pill[data-phase="asleep"] { background: var(--warn-bg); color: var(--warn); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex: none; }
+  .pill[data-phase="waking"] .dot { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .pill[data-phase="waking"] .dot { animation: none; } }
+  .elapsed { font-variant-numeric: tabular-nums; font-weight: 400; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 10px; font: inherit; font-weight: 700; text-decoration: none; border: 2px solid var(--accent); cursor: pointer; min-height: 44px; }
+  .btn.primary { background: var(--accent); color: var(--accent-text); }
+  .btn.secondary { background: transparent; color: var(--accent); }
+  .btn[hidden] { display: none; }
+  a:focus-visible, button:focus-visible, video:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  .note { color: var(--muted); font-size: 0.95rem; margin: 0; }
+  code { font: 0.9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; word-break: break-word; }
+  pre { margin: 8px 0 0; max-width: 100%; padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font-size: 0.85rem; }
+  .media { margin: 0 0 24px; }
+  .media video, .media img { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line); background: var(--card); aspect-ratio: 8 / 5; }
+  .media figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+  ul.facts { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 12px; }
+  ul.facts li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  ul.facts a { color: var(--accent); font-weight: 600; }
+  footer { color: var(--muted); font-size: 0.9rem; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">MANDATE</p>
+  <h1>Agents shouldn't be trusted with money. They should be trusted with a mandate.</h1>
+  <p class="lead">A shopping agent that can only propose. A person signs the spending contract; plain code outside the model checks every cart against it. Sandbox demo: no real money moves.</p>
+
+  <section class="status" aria-labelledby="status-title">
+    <h2 id="status-title" style="margin:0;font-size:1.05rem">Live demo</h2>
+    <div id="pill" class="pill" data-phase="waking" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="pill-text">Waking the live demo… usually 30 s</span>
+      <span id="elapsed" class="elapsed" aria-hidden="true">· 0 s</span>
+    </div>
+    <div class="actions">
+      <a id="open" class="btn primary" href="https://mandate-gb6t.onrender.com" hidden>Open the live demo</a>
+      <a id="open-anyway" class="btn secondary" href="https://mandate-gb6t.onrender.com">Open anyway</a>
+      <button id="retry" class="btn secondary" type="button" hidden>Try again</button>
+    </div>
+    <p id="help" class="note">The demo runs on a free host that sleeps when nobody uses it. While it wakes, watch the video below; this button turns on by itself the moment it is ready.</p>
+    <div id="local" hidden>
+      <p class="note">The live demo is asleep or out of free quota. Watch the video, or run it on your machine in two minutes:</p>
+      <pre><code>git clone https://github.com/isaacboque/mandate &amp;&amp; cd mandate
+npm ci &amp;&amp; npm run build &amp;&amp; npm start</code></pre>
+    </div>
+  </section>
+
+  <figure class="media">
+    <video id="video" controls muted loop playsinline preload="metadata" poster="poster.png" width="800" height="500" aria-describedby="video-cap">
+      <source src="demo.webm" type="video/webm">
+      <source src="demo.mp4" type="video/mp4">
+      <img src="demo.gif" alt="Screen recording of the demo: the agent drafts a contract, a person signs it, a poisoned listing is blocked." width="800" height="500">
+    </video>
+    <figcaption id="video-cap">60 seconds: the agent drafts a contract from one sentence, a person signs, the agent proposes a cart, a poisoned listing tries to move money and is stopped.</figcaption>
+  </figure>
+
+  <ul class="facts">
+    <li><strong>Only a person moves authority.</strong> The agent has no tool that signs, amends, revokes, approves or pays; those are buttons. Product text is untrusted data. <a href="https://github.com/isaacboque/mandate/blob/main/docs/THREAT-MODEL.md">Threat model</a></li>
+    <li><strong>Measured, not claimed.</strong> 60 deterministic scenarios judged by an independent oracle; switching off any of the 11 guardrails makes the eval fail; 78 obfuscated injections, money outside the mandate 0/78. <a href="https://github.com/isaacboque/mandate/blob/main/docs/EVIDENCE.md">Evidence, with the command for every figure</a></li>
+    <li><strong>Honest about limits.</strong> The real-model check used open-weight models on a free tier (not Claude); a person approving a bad cart is not something it stops. <a href="https://github.com/isaacboque/mandate/blob/main/docs/WRITEUP.md">Write-up</a> · <a href="https://github.com/isaacboque/mandate">Repository</a></li>
+  </ul>
+
+  <footer>Sandbox only: no real money, no accounts. Source on <a href="https://github.com/isaacboque/mandate">GitHub</a>.</footer>
+</main>
+<script type="module">
+  import { createStatus } from "./status.js";
+  const $ = (id) => document.getElementById(id);
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const video = $("video");
+  if (!reduce) { const p = video.play(); if (p && p.catch) p.catch(() => {}); } else { video.removeAttribute("loop"); }
+  let last = "";
+  const status = createStatus({
+    onChange({ phase, elapsedSec }) {
+      $("elapsed").textContent = phase === "ready" ? "" : `· ${elapsedSec} s`;
+      if (phase === last) return;
+      last = phase;
+      $("pill").dataset.phase = phase;
+      $("pill-text").textContent = phase === "ready" ? "Live demo ready" : phase === "asleep" ? "No answer after 90 s" : "Waking the live demo… usually 30 s";
+      $("open").hidden = phase !== "ready";
+      $("open-anyway").hidden = phase === "ready";
+      $("retry").hidden = phase !== "asleep";
+      $("help").hidden = phase !== "waking";
+      $("local").hidden = phase !== "asleep";
+    },
+  });
+  $("retry").addEventListener("click", () => { last = ""; status.start(); });
+  status.start();
+</script>
+</body>
+</html>

@@ -60,6 +60,7 @@ A configured model that fails never silently hands the turn to the offline agent
 | `OPENAI_BASE_URL` | | Any OpenAI-compatible endpoint for the `openai` provider |
 | `LLM_TIMEOUT_SECONDS` | `40` | Longest wait for one model call; then the turn fails closed |
 | `LLM_DAILY_TURN_BUDGET` | `150` | Model turns per UTC day for the whole server (`0` = no limit). Past it, visitors see the "quota used up" card without a provider call. Protects a free quota |
+| `PUBLIC_SITE_ORIGIN` | `https://isaacboque.github.io` | The one origin (the static landing page in `site/`) that may read `/api/health` from a browser. Only that route, never credentials; a wildcard or a value that is not a plain origin is ignored |
 | `TRUSTED_PROXIES` | `0` | How many proxies of your own sit in front of the app (Render: `1`); `0` ignores `X-Forwarded-For` |
 | `RATE_LIMIT_ASKS_PER_HOUR` | live `12`, demo `0` | Searches per visitor per hour (`0` = off) |
 | `DAILY_ASK_CAP` | live `300`, demo `0` | Searches per day for the whole instance (`0` = off) |
