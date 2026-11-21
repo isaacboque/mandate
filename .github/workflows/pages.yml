@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read   # deploy-pages lists the uploaded artifact through the API; without it the deploy finds 0 artifacts
   pages: write
   id-token: write
 concurrency:
