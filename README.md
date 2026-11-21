@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/isaacboque/mandate/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/mandate/actions/workflows/ci.yml)
 
+**Try it: https://isaacboque.github.io/mandate/** (a fast static page that wakes the live demo for you and opens it the moment it is ready).
+
 ![A poisoned listing is blocked, with the reasons](docs/demo.gif)
 
 **For reviewers:** a two-minute research-style note is in [docs/WRITEUP.md](docs/WRITEUP.md). [docs/EVIDENCE.md](docs/EVIDENCE.md) is one page: every figure with the command that reproduces it and what is not claimed. [docs/DECISIONS.md](docs/DECISIONS.md) records who decided what (Isaac decides, Claude Code implements).
@@ -28,7 +30,7 @@ npm run eval:mutants            # switch each of the 11 guardrails off in turn: 
 
 **Use your own model key:** copy `.env.example` to `.env`, set the key of the provider you use (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GROQ_API_KEY`, the last has a free tier) and run `npm run doctor` to see what will answer. The provider is detected from the key; nothing else is required. Keys stay on the server (a public page never asks for one). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-**How it is checked:** `npm test` (503 tests, mocks only), `npm run eval` (spend safety 60/60 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (542 tests, mocks only), `npm run eval` (spend safety 60/60 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -38,7 +40,7 @@ npm run eval:mutants            # switch each of the 11 guardrails off in turn: 
 
 The poisoned-listing attack, blocked on the desktop layout: ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-6-attack.png)
 
-**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments; the agent is `gpt-oss-120b` on Groq's free tier when the owner has set the key, otherwise the offline rules agent; the badge in the header says which). When the free quota is busy or used up, the chat says so (a usage limit, not a bug, nothing was proposed or spent) and offers **Try again** and **Use the offline agent for this session**. A "Try it in 60 s" strip guides a first visit. **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
+**Live demo:** https://mandate-gb6t.onrender.com, best opened through the landing page https://isaacboque.github.io/mandate/, which shows the video and wakes the server first (demo mode: fixture catalog and simulated payments; the agent is `gpt-oss-120b` on Groq's free tier when the owner has set the key, otherwise the offline rules agent; the badge in the header says which). When the free quota is busy or used up, the chat says so (a usage limit, not a bug, nothing was proposed or spent) and offers **Try again** and **Use the offline agent for this session**. A "Try it in 60 s" strip guides a first visit. **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up: the landing page waits for you, and a scheduled workflow (`.github/workflows/keep-demo-awake.yml`, one `GET /api/health` every 5 minutes from 08:00 to 21:59 Madrid time, switchable with repository variables, see the header of that file) keeps the demo awake most of the time. GitHub's schedule is best effort, so a cold start can still happen; `npm run keepalive:report` shows how well it worked over the last 24 h.
 
 Started as a PayPal AI Hackathon project. Sandbox only: no real money moves. More: [case study](docs/CASE-STUDY.md) · [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT-MODEL.md) · [60-second demo script](docs/DEMO.md).
 

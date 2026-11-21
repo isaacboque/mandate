@@ -27,7 +27,7 @@ Still open: one model picked a poisoned listing that fit the mandate, and the fo
 
 Repo: https://github.com/isaacboque/mandate
 Write-up: https://github.com/isaacboque/mandate/blob/main/docs/WRITEUP.md
-Demo, no keys: https://mandate-gb6t.onrender.com (free instance, about 30 s to wake)
+Demo, no keys: https://isaacboque.github.io/mandate/ (a static page that wakes the free demo server for you and opens it when ready)
 Reproduce: `npm ci && npm run eval && npm run eval:mutants && npm run eval:injection-variants`
 Real-model table, before and after, with caveats: https://github.com/isaacboque/mandate/blob/main/docs/EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude
 

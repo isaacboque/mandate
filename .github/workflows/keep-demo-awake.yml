@@ -1,0 +1,81 @@
+# Keeps the public demo (the `mandate` service only, no other service) from going to sleep, at the lowest possible cost: one GET /api/health.
+# Render's free tier spins a service down after 15 minutes without a request, so a ping every 5 minutes leaves room for one delayed or dropped run.
+# GitHub's scheduled runs are best effort (they can be late, worst around the start of each hour, and dropped without an error): a few cold starts a
+# day can still happen. The landing page (site/index.html) covers them.
+#
+# Switches (repository Settings > Secrets and variables > Actions > Variables; none is a secret):
+#   KEEP_DEMO_AWAKE        "false", "0", "off" or "no" turns it off. Default: on.
+#   KEEP_DEMO_AWAKE_FROM   first hour of the window, Madrid time. Default 8.
+#   KEEP_DEMO_AWAKE_TO     last hour of the window, Madrid time (21 means until 21:59). Default 21.
+#   KEEP_DEMO_AWAKE_UNTIL  last day it pings, YYYY-MM-DD, Madrid. Empty = no end date.
+#   DEMO_URL               the demo's address. Default https://mandate-gb6t.onrender.com
+# The window is 14 hours a day, about 434 instance hours in a 31-day month, which leaves about 316 of Render's 750 free hours for other services.
+name: keep-demo-awake
+on:
+  schedule:
+    # Every 5 minutes at minutes 2, 7, ..., 57 (never :00), in UTC hours that cover 08:00-21:59 Madrid in both summer (UTC+2) and winter (UTC+1) time.
+    # The Madrid hour is checked inside the job, so there is no dependence on a cron time zone field and daylight saving time needs no change.
+    - cron: "2-57/5 5-20 * * *"
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: keep-demo-awake
+  cancel-in-progress: true
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      ping: ${{ steps.gate.outputs.ping }}
+    steps:
+      - id: gate
+        env:
+          KEEP_DEMO_AWAKE: ${{ vars.KEEP_DEMO_AWAKE }}
+          KEEP_DEMO_AWAKE_FROM: ${{ vars.KEEP_DEMO_AWAKE_FROM }}
+          KEEP_DEMO_AWAKE_TO: ${{ vars.KEEP_DEMO_AWAKE_TO }}
+          KEEP_DEMO_AWAKE_UNTIL: ${{ vars.KEEP_DEMO_AWAKE_UNTIL }}
+        run: |
+          # --- gate begin
+          from="${KEEP_DEMO_AWAKE_FROM:-8}"; to="${KEEP_DEMO_AWAKE_TO:-21}"
+          [[ "$from" =~ ^([0-9]|1[0-9]|2[0-3])$ ]] || from=8
+          [[ "$to" =~ ^([0-9]|1[0-9]|2[0-3])$ ]] || to=21
+          now="${KEEP_NOW:-$(TZ=Europe/Madrid date '+%Y-%m-%d %H:%M')}"   # KEEP_NOW is only for tests
+          day="${now% *}"; hm="${now#* }"; hh=$((10#${hm%:*})); mm=$((10#${hm#*:}))
+          ping=true; reason="in the window"
+          case "$(echo "${KEEP_DEMO_AWAKE:-true}" | tr 'A-Z' 'a-z')" in
+            false|0|off|no) ping=false; reason="switched off (KEEP_DEMO_AWAKE)" ;;
+          esac
+          if [ "$ping" = true ] && [ -n "${KEEP_DEMO_AWAKE_UNTIL:-}" ] && [[ "$day" > "$KEEP_DEMO_AWAKE_UNTIL" ]]; then
+            ping=false; reason="launch window ended (KEEP_DEMO_AWAKE_UNTIL $KEEP_DEMO_AWAKE_UNTIL)"
+          fi
+          if [ "$ping" = true ]; then
+            inwin=false
+            { [ "$hh" -ge "$from" ] && [ "$hh" -le "$to" ]; } && inwin=true
+            { [ "$hh" -eq $((from - 1)) ] && [ "$mm" -ge 50 ]; } && inwin=true   # warm-up: the 10 minutes before the window opens
+            [ "$inwin" = true ] || { ping=false; reason="outside the window ($from:00-$to:59 Madrid)"; }
+          fi
+          echo "ping=$ping" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "keep-demo-awake: $now Madrid: ping=$ping ($reason)"
+          # --- gate end
+  ping:
+    needs: gate
+    if: needs.gate.outputs.ping == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: One GET /api/health (no model call, no quota, no page)
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL || 'https://mandate-gb6t.onrender.com' }}
+        run: |
+          started="$(date -u +%FT%TZ)"
+          res="$(curl -sS -o /dev/null -w '%{http_code} %{time_total}' --retry 2 --retry-delay 10 --max-time 90 "$DEMO_URL/api/health" 2>&1)" || true
+          code="${res%% *}"; secs="${res##* }"
+          if [ "$code" = "200" ] && awk "BEGIN{exit !($secs < 2)}" 2>/dev/null; then kind="warm"; else kind="cold or down"; fi
+          {
+            echo "### keep-demo-awake"
+            echo "- Started: $started"
+            echo "- Answer: HTTP $code in ${secs}s, so the demo was **$kind**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$started HTTP $code ${secs}s $kind"
+          exit 0

@@ -15,13 +15,26 @@ export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 /** `trustedProxies`: how many proxies of our own sit in front of the app (0 = none: X-Forwarded-For is ignored). */
 export type Config = {
   demoMode: "mock" | "live"; currency: string; trustedProxies?: number;
+  /** The one origin (the static landing page) that may read /api/health from a browser. Nothing else is opened to any origin. */
+  siteOrigin?: string;
   /** The model that answers when one is configured (no key, ever). Absent when there is none. */
   llm?: { provider: string; model: string };
 };
 
+export const DEFAULT_SITE_ORIGIN = "https://isaacboque.github.io";
+
+/** `PUBLIC_SITE_ORIGIN` must be a plain http(s) origin (scheme + host[:port], no path). Anything else, a wildcard included, falls back to the default. */
+function siteOriginFrom(raw: string | undefined): string {
+  try {
+    const u = new URL(raw ?? "");
+    if ((u.protocol === "https:" || u.protocol === "http:") && raw!.replace(/\/$/, "") === u.origin) return u.origin;
+  } catch { /* not a URL */ }
+  return DEFAULT_SITE_ORIGIN;
+}
+
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const proxies = Number(env.TRUSTED_PROXIES);
-  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
+  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, siteOrigin: siteOriginFrom(env.PUBLIC_SITE_ORIGIN), ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
 }
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
@@ -63,6 +76,14 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
   // What answers, without a session and without any key: the badge and the host's health check read this.
+  // The landing page (a static site on another origin) polls this to know when a sleeping instance is awake, so this route alone answers
+  // that one origin. No credentials, no other method, no other route. `vary: origin` keeps a cache from serving one origin's answer to another.
+  app.use("/api/health", async (c, next) => {
+    await next();
+    c.header("vary", "Origin", { append: true });
+    c.header("cache-control", "no-store");
+    if (c.req.header("origin") === (config.siteOrigin ?? DEFAULT_SITE_ORIGIN)) c.header("access-control-allow-origin", config.siteOrigin ?? DEFAULT_SITE_ORIGIN);
+  });
   app.get("/api/health", (c) => c.json({ ok: true, agent: config.llm ? "llm" : "rules", model: config.llm?.model ?? null, provider: config.llm?.provider ?? null }));
   app.get("/api/config", (c) => {
     const service = svc(c);

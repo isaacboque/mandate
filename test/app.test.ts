@@ -5,8 +5,8 @@ import { serviceFromEnv } from "../src/server/deps.js";
 
 describe("config", () => {
   it("defaults to mock mode and EUR", () => {
-    expect(configFromEnv({})).toEqual({ demoMode: "mock", currency: "EUR", trustedProxies: 0 });
-    expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD", trustedProxies: 0 });
+    expect(configFromEnv({})).toEqual({ demoMode: "mock", currency: "EUR", trustedProxies: 0, siteOrigin: "https://isaacboque.github.io" });
+    expect(configFromEnv({ DEMO_MODE: "live", CURRENCY: "USD" })).toEqual({ demoMode: "live", currency: "USD", trustedProxies: 0, siteOrigin: "https://isaacboque.github.io" });
   });
   it("TRUSTED_PROXIES is a whole number of proxies; anything else means none", () => {
     expect(configFromEnv({ TRUSTED_PROXIES: "1" }).trustedProxies).toBe(1);
