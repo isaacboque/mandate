@@ -6,9 +6,9 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 416 in 37 files | `npm test` |
-| Scenarios, split guardrail / injection / task / agent | 57 (28 / 7 / 12 / 10) | `npm run eval` |
-| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 57/57 | `npm run eval` |
+| Tests (mocks only) | 422 in 38 files | `npm test` |
+| Scenarios, split guardrail / injection / task / agent | 58 (28 / 7 / 12 / 11) | `npm run eval` |
+| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 58/58 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
 | Oracle leaks with a guardrail off | per-mutant table in [MUTATION.md](MUTATION.md) | `npm run eval:mutants` |
 | Concierge tools | 8 (search, get product, propose cart, draft contract, propose amendment, list contracts, get spending, explain block) | `src/agent/concierge.ts`; scenario a07 |

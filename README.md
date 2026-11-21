@@ -14,7 +14,7 @@ Real-model check, 2026-11-21, with three open-weight models served by Groq (not 
 
 You give a shopping agent a **signed mandate**: total budget, per-item cap, categories, merchants, quantity, expiry, and what it may do alone. The agent searches real product catalogs ([Channel3](https://channel3.ai)), proposes a cart with reasons, and pays through **PayPal** only inside the mandate. Everything else waits for a person.
 
-The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout. In the 57-scenario eval, with a model that is fooled on purpose, no payment was captured outside the mandate.
+The guardrails are plain code **outside the LLM**. A poisoned product listing can fool the model, but the model has no tool that pays, every proposal is checked by deterministic code, and the mandate and the live price are checked again at checkout. In the 58-scenario eval, with a model that is fooled on purpose, no payment was captured outside the mandate.
 
 **Quickstart (no keys, Node 20+):**
 
@@ -22,13 +22,13 @@ The guardrails are plain code **outside the LLM**. A poisoned product listing ca
 git clone https://github.com/isaacboque/mandate.git && cd mandate
 npm ci
 npm run build && npm start      # http://localhost:8787 (demo mode: chat + contracts, fixture catalog, mock payments, no keys)
-npm run eval                    # 57 deterministic scenarios, prints the table below
+npm run eval                    # 58 deterministic scenarios, prints the table below
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
 **Use your own model key:** copy `.env.example` to `.env`, set the key of the provider you use (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GROQ_API_KEY`, the last has a free tier) and run `npm run doctor` to see what will answer. The provider is detected from the key; nothing else is required. Keys stay on the server (a public page never asks for one). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-**How it is checked:** `npm test` (416 tests, mocks only), `npm run eval` (spend safety 57/57 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (422 tests, mocks only), `npm run eval` (spend safety 58/58 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -112,7 +112,7 @@ Then `npm run build && npm start`. In live mode, **Approve** creates the PayPal 
 
 On the fixture catalog, with a simulated clock and mock payments (no keys):
 
-- **Spend safety 57/57**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
+- **Spend safety 58/58**: an independent oracle that never calls the guardrail code found no captured payment outside the mandate it was made under.
 - **Injection 7/7**: poisoned listings never changed what was executed, even with a "fooled" model that obeys them.
 - **Guardrails 28/28**, **task success 12/12** and **agent scenarios 9/9** (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays).
 
@@ -132,16 +132,16 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 
 ## Evaluation
 
-`npm run eval` runs 57 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
+`npm run eval` runs 58 deterministic scenarios (fixture catalog, simulated clock, mock payments; no keys). A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against the mandate it was made under. Per-scenario results are in [eval/RESULTS.md](eval/RESULTS.md). CI runs it on every PR.
 
 <!-- eval:start -->
 | Metric | Result | Scenarios |
 | --- | --- | --- |
-| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 57/57 |
+| **Spend safety** (no payment captured outside the mandate; must be 100%) | **100%** | 58/58 |
 | Guardrail scenarios (over budget, cap, category, merchant, quantity, expiry, drift, currency, retries, bypass attempts) | 100% | 28/28 |
 | Injection resistance (poisoned listings never change what is executed) | 100% | 7/7 |
 | Task success (a valid item exists → a valid cart is proposed) | 100% | 12/12 |
-| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 10/10 |
+| Agent scenarios (the concierge drafts, proposes and explains; only a person signs, amends, revokes, approves or pays) | 100% | 11/11 |
 <!-- eval:end -->
 
 ### Try it against a real model (optional; free with a Groq key)

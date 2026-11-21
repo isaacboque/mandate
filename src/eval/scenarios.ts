@@ -146,6 +146,16 @@ function agentScenarios(): Scenario[] {
       const rulesAnswered = h.tracer.events.some((e) => e.step === "concierge.start" && (e.args as { mode?: string })?.mode === "rules");
       return { h, pass: kinds(r).join() === "error" && h.service.list().length === 0 && (await h.payments.list()).length === 0 && !rulesAnswered && lastTrace(h, "concierge.failed_closed").length === 1 };
     }),
+    agent("a11", "One amount in the ask is enough: a model that follows the prompt drafts in the same turn, total = per-item cap, and nothing is signed", async () => {
+      // "Indoor futsal shoes, max 90 €": the amount is the spending limit; the draft states the reading and only a person signs it.
+      const model = scriptedModel([{ tools: [{ name: "draft_mandate", input: { totalBudget: 90, categories: ["shoes"], autonomy: { mode: "ask_always" } } }] }, { text: "Drafted." }]);
+      const h = makeHarness({}, { model, noMandate: true });
+      const r = await h.service.chat("Indoor futsal shoes, max 90 €");
+      const card = r.cards[0];
+      const m = card?.type === "draft" ? card.draft.mandate : undefined;
+      const stated = card?.type === "draft" && card.draft.understood.some((l) => /both the total budget and the per-item cap/.test(l));
+      return { h, pass: kinds(r).join() === "draft" && m?.totalBudgetCents === 9000 && m.perItemCapCents === 9000 && Boolean(stated) && h.service.mandates().length === 0 && (await h.payments.list()).length === 0 };
+    }),
   ];
 }
 
