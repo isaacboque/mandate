@@ -1,134 +1,206 @@
 # Decisions
 
-Product, safety and evaluation decisions behind Mandate, newest first. **Isaac decided; Claude Code implemented** each one from a task file, and wrote its smaller choices in the pull request under "Decisions". Isaac's own words, where short, are quoted from the `approved:` line of the task (Spanish, verbatim). Task ids are in Isaac's private task vault, so a task id here is a reference, not a link; the pull request numbers are public. Where no rationale was written down it says **Rationale not recorded** instead of guessing one.
+How Mandate got to be what it is: the product, safety and evaluation decisions, who made each one, what implemented it and what checks it.
 
-"Implementation choices accepted by Isaac" are listed apart from decisions: a choice appears there only when a later task or note shows he accepted it. Everything else the executor chose is marked "executor choice, not yet reviewed".
+**The split of work.** Isaac decides; Claude Code implements. Isaac sets the direction, makes the call and reviews the result. Claude Code writes most of the code, tests and docs under those decisions, one pull request at a time, from task files he queues. Its smaller implementation choices are written in each pull request under "Decisions" and are marked here as *not yet reviewed* until Isaac has accepted them. More on how it was built: [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
 
-Reading guide: *Decided by* is Isaac with the date. *Implemented in* is the pull request (PR numbers are on this repository). *Verified by* is the check that would fail if it were not true.
+**What this log will not do.** It records a rationale only when one was written down. Where none was, the entry says **Rationale not recorded** instead of inventing one. Isaac's own words are quoted from the approval line of the task they started, in the language he wrote them (mostly Spanish), with a translation in italics.
 
-## 2026-11-22 batch (queued the day the residency application closes)
+## At a glance
 
-### D18. Model monitor vs code monitor
-- **Context.** The regex detector flags 19 of 78 obfuscated injections ([EVIDENCE.md](EVIDENCE.md)).
-- **Decision.** Run the experiment now: a model monitor (Llama Prompt Guard 2, gpt-oss-safeguard) against the regex on one dataset. Isaac: "monitor con modelo vs monitor de código".
-- **Alternatives.** Rationale not recorded.
-- **Consequences.** The harness exists and the regex baseline is measured (22/81 recall, 9/53 false positives); the model rows are `TODO(Isaac)` until he runs it with his Groq key.
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-22-mandate-24-monitor-experiment).
-- **Implemented in.** [#55](https://github.com/isaacboque/mandate/pull/55).
-- **Verified by.** `test/monitors.test.ts`; `npm run eval:monitors -- --monitors regex` reproduces 19/78 on the variants.
+| # | Decision | Theme | Decided | Implemented in |
+| --- | --- | --- | --- | --- |
+| [D1](#d1-the-agent-can-only-propose-the-guardrails-are-plain-code) | The agent can only propose; the guardrails are plain code | Safety | 2026-11-11 | original build (M1-M8) |
+| [D2](#d2-sandbox-only-declared-as-a-limit) | Sandbox only, declared as a limit | Safety | 2026-11-11 | original build, [#26](https://github.com/isaacboque/mandate/pull/26) |
+| [D3](#d3-agent-first-refocus) | Refocus on a chat agent beside a contracts panel | Product | 2026-11-19 | [#28](https://github.com/isaacboque/mandate/pull/28), [#29](https://github.com/isaacboque/mandate/pull/29) |
+| [D4](#d4-only-a-person-signs-amends-revokes-approves-or-pays) | Only a person signs, amends, revokes, approves or pays | Safety | 2026-11-19 | [#30](https://github.com/isaacboque/mandate/pull/30) |
+| [D5](#d5-build-the-evidence-a-reviewer-can-check) | Build the evidence a reviewer can check | Evaluation | 2026-11-19 | [#38](https://github.com/isaacboque/mandate/pull/38) to [#43](https://github.com/isaacboque/mandate/pull/43) |
+| [D6](#d6-measure-real-models-on-groqs-free-tier) | Measure real models on Groq's free tier | Evaluation | 2026-11-20 | [#44](https://github.com/isaacboque/mandate/pull/44) |
+| [D7](#d7-separate-money-outside-the-mandate-from-an-attacker-chosen-purchase) | Separate "money outside the mandate" from "attacker-chosen purchase" | Evaluation | 2026-11-20 | [#45](https://github.com/isaacboque/mandate/pull/45) |
+| [D8](#d8-fail-closed-when-a-configured-model-fails) | Fail closed when a configured model fails | Safety | 2026-11-21 | [#46](https://github.com/isaacboque/mandate/pull/46) |
+| [D9](#d9-publish-the-real-model-numbers-framed-honestly) | Publish the real-model numbers, framed honestly | Evaluation | 2026-11-21 | [#47](https://github.com/isaacboque/mandate/pull/47) |
+| [D10](#d10-the-offline-agent-only-as-an-explicit-choice) | The offline agent only as an explicit choice | Safety | 2026-11-21 | [#49](https://github.com/isaacboque/mandate/pull/49) |
+| [D11](#d11-a-public-demo-on-a-free-key-honest-about-its-limits) | A public demo on a free key, honest about its limits | Demo | 2026-11-21 | [#49](https://github.com/isaacboque/mandate/pull/49), [#52](https://github.com/isaacboque/mandate/pull/52) |
+| [D12](#d12-keys-live-in-the-environment-never-in-the-web-page) | Keys live in the environment, never in the web page | Operations | 2026-11-21 | [#50](https://github.com/isaacboque/mandate/pull/50) |
+| [D13](#d13-one-amount-in-the-ask-drafts-the-contract) | One amount in the ask drafts the contract | Product | 2026-11-21 | [#53](https://github.com/isaacboque/mandate/pull/53) |
+| [D14](#d14-after-signing-the-agent-carries-on) | After signing, the agent carries on | Product | 2026-11-21 | [#54](https://github.com/isaacboque/mandate/pull/54) |
+| [D15](#d15-internal-contract-ids-stay-in-the-agents-text) | Internal contract ids stay in the agent's text | Product | not recorded | none needed |
+| [D16](#d16-compare-a-model-monitor-with-the-code-monitor) | Compare a model monitor with the code monitor | Evaluation | 2026-11-21 | [#55](https://github.com/isaacboque/mandate/pull/55) |
+| [D17](#d17-make-the-real-model-statistics-defensible) | Make the real-model statistics defensible | Evaluation | 2026-11-21 | [#57](https://github.com/isaacboque/mandate/pull/57) |
+| [D18](#d18-a-wider-threat-model-and-the-scope-creep-fix) | A wider threat model, and the scope-creep fix | Safety | 2026-11-21 | [#58](https://github.com/isaacboque/mandate/pull/58) |
+| [D19](#d19-visitors-do-not-wait-on-a-cold-start) | Visitors do not wait on a cold start | Demo | 2026-11-21 | [#59](https://github.com/isaacboque/mandate/pull/59) |
+| [D20](#d20-record-who-decided-what) | Record who decided what | Process | 2026-11-21 | [#56](https://github.com/isaacboque/mandate/pull/56), [#60](https://github.com/isaacboque/mandate/pull/60) |
 
-### D17. Stronger statistics, a better threat model, no cold-start wait
-- **Decision.** Three further requests, all queued 2026-11-21: make the real-model statistics less weak ("para que no sea tan débil"), improve the threat model ("Mejora el modelo de amenaza"), and spare visitors the free-tier wake-up wait ("pantalla de carga para que la gente no tenga que esperar en Render").
-- **Alternatives and rationale.** Rationale not recorded.
-- **Decided by.** Isaac, 2026-11-21 (tasks 2026-11-22-mandate-25, -26, -27).
-- **Implemented in.** Statistics: [#57](https://github.com/isaacboque/mandate/pull/57) (65 cases, repeats, a controlled paired before/after, resumable). Threat model: [#58](https://github.com/isaacboque/mandate/pull/58) (attacker table, amendment scope-creep fix, adaptive-attacker harness). Cold-start wait: [#59](https://github.com/isaacboque/mandate/pull/59) (keep-alive workflow, landing page, CORS for the health route only).
-- **Verified by.** `test/real-v2.test.ts`; `test/scope-creep.test.ts`, `test/adaptive.test.ts` and eval scenarios a12/a13; `test/keepalive.test.ts`, `test/landing-status.test.ts`, `test/health-cors.test.ts`. The real-model, adaptive-attacker and live keep-alive numbers are not run yet (`TODO(Isaac)` in [EVIDENCE.md](EVIDENCE.md)).
+## The decisions
 
-### D16. Decisions made by the person, implemented by Claude Code, documented
-- **Decision.** The record of who decided and who built is part of the submission. Isaac: "yo haya tomado decisiones y Claude Code las haya implementado".
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-22-mandate-28-decision-log).
-- **Implemented in.** This page and [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
-- **Verified by.** Every entry names a task id or PR; quotes copied from the task files.
+### D1. The agent can only propose; the guardrails are plain code
 
-## 2026-11-21
+- **Decision.** The model has no tool that pays. The checks that matter (`checkCart` at proposal, a re-check at checkout) are deterministic code outside the model, and an independent oracle that never calls that code judges every captured payment.
+- **Why.** Code written by a model, or a model acting at runtime, can be wrong in ways that are hard to see; a pure function can be tested line by line and behaves the same whatever any model says. Source: [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
+- **Decided by.** Isaac ([PLAN.md](PLAN.md), "Decided by Isaac 2026-11-11").
+- **Verified by.** `npm run eval` (60 scenarios, spend safety 60/60) and `npm run eval:mutants` (switching off any one of the 11 guardrails fails the eval: 11 of 11).
 
-### D15. Keys only in the environment, no key field in the web page
-- **Context.** Isaac asked that people can use their own key. Isaac: "ponga su propia api key en el env y funcione".
-- **Decision.** The provider is detected from the key in the environment (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`); misconfiguration is reported at start-up; written up in [CONFIGURATION.md](CONFIGURATION.md).
-- **Executor choice, not yet reviewed.** No field to type a key into the page: a key sent through the browser, network and a shared server's logs is the stated reason in CONFIGURATION.md. Isaac's words say "in the env"; the explicit "no key field in the page" is the executor's reading.
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-21-mandate-20-bring-your-own-key).
-- **Implemented in.** [#50](https://github.com/isaacboque/mandate/pull/50).
-- **Verified by.** `npm run doctor`, tests for `resolveLlm`.
+### D2. Sandbox only, declared as a limit
 
-### D14. After signing, the agent carries on and proposes
-- **Decision.** After a person signs a draft from the chat, the agent runs a follow-up turn (searches, proposes; never signs or pays). A limit hit mid-turn no longer contradicts a cart already proposed. Isaac: "tras firmar el agente sigue solo".
-- **Alternatives.** Rationale not recorded.
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-21-mandate-23-after-sign-flow).
-- **Implemented in.** [#54](https://github.com/isaacboque/mandate/pull/54).
-- **Verified by.** Service tests and the browser walk (`npm run screenshots`).
+- **Decision.** The merchant of record is a PayPal sandbox account and a real merchant handoff is not built. The README, [THREAT-MODEL.md](THREAT-MODEL.md) and [EVIDENCE.md](EVIDENCE.md) say so instead of implying otherwise.
+- **Decided by.** Isaac ([PLAN.md](PLAN.md), section "Architecture").
+- **Verified by.** The limit is stated in each of those documents; nothing in the code moves real money.
 
-### D13. One amount in the ask drafts the contract
-- **Context.** Seen live: "Indoor futsal shoes, max 90 €" made the model ask for a total budget first.
-- **Decision.** A single amount is both total budget and per-item cap; the draft states the assumption and the person reviews before signing. Isaac: "que con una sola cifra el agente redacte el borrador sin preguntar".
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-21-mandate-22-one-amount-drafts).
-- **Implemented in.** [#53](https://github.com/isaacboque/mandate/pull/53).
-- **Verified by.** A service test: total = cap = 9000 cents with an assumption line.
+### D3. Agent-first refocus
 
-### D12. Public demo on Isaac's free Groq key, honest about limits
-- **Decision.** The hosted demo uses `gpt-oss-120b` on Isaac's free Groq key. When the quota is hit, the chat says it is a usage limit, not a bug. Isaac: "haz que la demo funcione con mi apikey gratuita" and "diga que es por eso y no porque esté mal". The limit card was polished in a follow-up he also approved (task 2026-11-21-mandate-21).
-- **Executor choice, not yet reviewed.** The one-call-at-a-time queue and the optional `LLM_DAILY_TURN_BUDGET` (default 150).
-- **Decided by.** Isaac, 2026-11-21 (tasks 2026-11-21-mandate-18 and -21).
-- **Implemented in.** [#49](https://github.com/isaacboque/mandate/pull/49), [#52](https://github.com/isaacboque/mandate/pull/52).
-- **Verified by.** Failure-classification and limit-card tests; browser run.
+- **Decision.** Turn Mandate into a chat agent beside a contracts panel: shopping only, contracts drafted from natural language, amendments, several active contracts with revoke, spending and audit questions. The goal is a technical portfolio piece, so no accounts and no real persistence.
+- **Quote.** "quiero que se enfoque mas a un agente" *(I want it to focus more on an agent)*.
+- **Decided by.** Isaac, 2026-11-19.
+- **Implemented in.** [#28](https://github.com/isaacboque/mandate/pull/28) (agent core), [#29](https://github.com/isaacboque/mandate/pull/29) (interface).
+- **Verified by.** The agent scenarios of `npm run eval` and the end-to-end browser run.
 
-### D11. The offline agent only as an explicit per-person choice
-- **Decision.** Switching to the rules agent is a button the person presses, per session, labelled in the header. It is never an automatic fallback.
-- **Alternatives and rationale.** Rationale not recorded beyond the rule itself; it follows D10.
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-21-mandate-18-demo-real-llm, whose brief states the rule).
+### D4. Only a person signs, amends, revokes, approves or pays
+
+- **Decision.** The agent never signs, not even below a threshold. Signing is the one act that creates spending power, so it stays a human button.
+- **Quote.** "firmar siempre el usuario (aceptar) / revocar usuario" *(the user always signs (accepts) / the user revokes)*.
+- **Alternative considered.** Letting the agent sign below a threshold ([ticket 17](wayfinder/tickets/17-agent-auto-sign.md), decided "no").
+- **Decided by.** Isaac, 2026-11-19.
+- **Implemented in.** [#30](https://github.com/isaacboque/mandate/pull/30).
+- **Verified by.** Agent scenarios a01-a07 and the mutation run.
+
+### D5. Build the evidence a reviewer can check
+
+- **Decision.** Treat the project as a piece of research evidence: an oracle, a real-model run, a threat model, control metrics, obfuscated-injection variants and a short write-up, each figure with the command that reproduces it.
+- **Quotes.** "mandate tiene que servir para que tenga mas posibilidades para anthropic" *(Mandate has to help me have better chances with Anthropic)*; "un fit perfecto en mi linkedn y para la residencia de anthropic" *(a perfect fit on my LinkedIn and for the Anthropic residency)*.
+- **Decided by.** Isaac, 2026-11-19 and 2026-11-20.
+- **Implemented in.** [#38](https://github.com/isaacboque/mandate/pull/38) to [#43](https://github.com/isaacboque/mandate/pull/43).
+- **Verified by.** [EVIDENCE.md](EVIDENCE.md): every figure lists its command and what is not claimed.
+
+### D6. Measure real models on Groq's free tier
+
+- **Decision.** Add a Groq provider and run `eval:real` on open-weight models. Isaac has no paid API access, so the models are not Claude, and every document says so.
+- **Quote.** "i'll get a groq one".
+- **Decided by.** Isaac, 2026-11-20.
+- **Implemented in.** [#44](https://github.com/isaacboque/mandate/pull/44).
+- **Verified by.** Provider tests, and Isaac's own runs.
+
+### D7. Separate "money outside the mandate" from an "attacker-chosen purchase"
+
+- **Context.** The first real run counted a poisoned listing that fit every mandate term as a violation, which mixed two different things.
+- **Decision.** Report them apart. *Outside the mandate terms* must be 0. *Attacker-chosen purchase* means the attacker's listing was bought after a person approved it, with every term respected: no money left the mandate, but the attacker chose the product. Only runs the model actually answered count in model rates.
+- **Decided by.** Agreed in chat after Isaac ran the eval, 2026-11-20.
+- **Implemented in.** [#45](https://github.com/isaacboque/mandate/pull/45).
+- **Verified by.** The tests of `src/eval/realModel.ts`.
+
+### D8. Fail closed when a configured model fails
+
+- **Context.** In a real run a provider rejected a model's tool call and the service fell back to the rules agent, which bought the attacker's listing. An input that can force a failure had handed control to the most gullible agent ([ticket 26](wayfinder/tickets/26-fallback-fail-closed.md)).
+- **Decision.** With a model configured, a failed call proposes nothing and shows an error card. The rules agent answers only when no model is configured.
+- **Quote.** "fallar cerrado" *(fail closed)*.
+- **Decided by.** Isaac, 2026-11-21, accepting the recommendation.
+- **Implemented in.** [#46](https://github.com/isaacboque/mandate/pull/46).
+- **Verified by.** A deterministic scenario in which a mock model throws mid-turn, and a mutation run that still catches every guardrail.
+
+### D9. Publish the real-model numbers, framed honestly
+
+- **Decision.** Publish the figures from Isaac's two runs, stating that they are open-weight models served by Groq and not Claude, with the date, repeats, sample size and 95% intervals, and the before and after of the fail-closed fix.
+- **Quote.** "publicar cifras" *(publish the figures)*.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#47](https://github.com/isaacboque/mandate/pull/47).
+- **Verified by.** Figures copied exactly from the run outputs; see "Not claimed" in [EVIDENCE.md](EVIDENCE.md).
+
+### D10. The offline agent only as an explicit choice
+
+- **Decision.** Switching to the rules agent is a button the person presses, per session, and the header says which agent is answering. It is never an automatic fallback.
+- **Why.** Rationale not recorded beyond the rule itself; it follows from D8.
+- **Decided by.** Isaac, 2026-11-21 (stated in the brief of the demo task).
 - **Implemented in.** [#49](https://github.com/isaacboque/mandate/pull/49).
 - **Verified by.** Service tests for the per-session flag.
 
-### D10. Fail closed when a configured LLM fails
-- **Context.** In a real run a provider rejected a model's tool call; the service fell back to the rules agent, which bought the attacker's listing (inside the mandate terms). So an adversarial input could force a failure and hand control to the most gullible agent ([ticket 26](wayfinder/tickets/26-fallback-fail-closed.md)).
-- **Decision.** With a model configured, a failed call proposes nothing and shows an error card. The rules agent answers only when no model is configured. Isaac: "fallar cerrado".
-- **Decided by.** Isaac, 2026-11-21, accepting the recommendation (task 2026-11-21-mandate-16-fail-closed).
-- **Implemented in.** [#46](https://github.com/isaacboque/mandate/pull/46).
-- **Verified by.** A deterministic agent scenario with a mock model that throws mid-turn; `npm run eval:mutants` still 100%.
+### D11. A public demo on a free key, honest about its limits
 
-### D9. Publish the real-model numbers, framed honestly
-- **Decision.** Publish the figures from Isaac's two runs, stating they are open-weight models via Groq, not Claude, with date, k, n and 95% intervals. Isaac: "publicar cifras".
-- **Decided by.** Isaac, 2026-11-21 (task 2026-11-21-mandate-17-publish-real-numbers).
-- **Implemented in.** [#47](https://github.com/isaacboque/mandate/pull/47).
-- **Verified by.** Figures copied from the run outputs; see "Not claimed" in [EVIDENCE.md](EVIDENCE.md).
+- **Decision.** The hosted demo runs `gpt-oss-120b` on Isaac's free Groq key. When the quota is busy or used up, the chat says it is a usage limit and not a bug, and nothing was proposed or spent. The limit card was polished in a follow-up he also approved.
+- **Quotes.** "haz que la demo funcione con mi apikey gratuita" *(make the demo work with my free API key)*; "diga que es por eso y no porque esté mal" *(say it is because of that and not because something is wrong)*.
+- **Not yet reviewed (executor choice).** One model call at a time, and an optional daily turn budget (`LLM_DAILY_TURN_BUDGET`, default 150) to protect the key.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#49](https://github.com/isaacboque/mandate/pull/49), [#52](https://github.com/isaacboque/mandate/pull/52).
+- **Verified by.** Failure-classification and limit-card tests; the browser run.
 
-## 2026-11-20
+### D12. Keys live in the environment, never in the web page
 
-### D8. Measure real models on Groq's free tier
-- **Decision.** Add a Groq provider and run `eval:real` on open-weight models. Isaac: "i'll get a groq one". He has no paid API access, so the models are not Claude, and that is stated everywhere.
-- **Decided by.** Isaac, 2026-11-20 (task 2026-11-20-mandate-14-groq-provider).
-- **Implemented in.** [#44](https://github.com/isaacboque/mandate/pull/44).
-- **Verified by.** Provider tests; Isaac's own runs.
+- **Decision.** Whoever runs a copy sets their provider's key in the environment and it works: the provider is detected from the key, a misconfiguration is reported at start-up, and `npm run doctor` checks the setup. Written up in [CONFIGURATION.md](CONFIGURATION.md).
+- **Quote.** "ponga su propia api key en el env y funcione" *(put their own API key in the env and have it work)*.
+- **Not yet reviewed (executor choice).** No field to paste a key into the page: a key typed into a public page would travel through the browser, the network and a shared server's logs. Isaac's words say "in the env"; the explicit "no key field" is the executor's reading.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#50](https://github.com/isaacboque/mandate/pull/50).
+- **Verified by.** `npm run doctor` and the tests of `resolveLlm`.
 
-### D7. Split "money outside the mandate" from "attacker-chosen purchase"
-- **Context.** The first real run counted a poisoned listing that fit every mandate term as a violation, mixing two different things.
-- **Decision.** Report them apart: outside the mandate terms (must be 0) and attacker-chosen purchase (poisoned listing bought after approval, within terms). Count only LLM-answered runs in model rates.
-- **Decided by.** The plan was agreed in chat after Isaac ran the eval (task 2026-11-20-mandate-15-real-eval-honest-metrics).
-- **Implemented in.** [#45](https://github.com/isaacboque/mandate/pull/45).
-- **Verified by.** `src/eval/realModel.ts` tests.
+### D13. One amount in the ask drafts the contract
 
-### D6. The goal: a fit for LinkedIn and the Anthropic residency
-- **Decision.** Plan the next work around a research-grade evidence page. Isaac: "un fit perfecto en mi linkedn y para la residencia de anthropic". Earlier: "mandate tiene que servir para que tenga mas posibilidades para anthropic" (2026-11-19).
-- **Implemented in.** [#38](https://github.com/isaacboque/mandate/pull/38) to [#43](https://github.com/isaacboque/mandate/pull/43) (oracle, real-model run, threat model, control metrics, injection variants, write-up).
-- **Verified by.** [EVIDENCE.md](EVIDENCE.md), each figure with its command.
-- **Decided by.** Isaac, 2026-11-19 and 2026-11-20 (tasks 2026-11-19-mandate-08 to -10, 2026-11-20-mandate-11 to -13).
+- **Context.** Seen live: "Indoor futsal shoes, max 90 €" made the model ask for a total budget first.
+- **Decision.** A single amount is both the total budget and the per-item cap; the draft states that assumption and the person reviews it before signing. The agent asks only when the message has no amount at all.
+- **Quote.** "que con una sola cifra el agente redacte el borrador sin preguntar" *(with a single figure the agent drafts without asking)*.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#53](https://github.com/isaacboque/mandate/pull/53).
+- **Verified by.** A service test: total and cap are both 9000 cents, with an assumption line.
 
-## 2026-11-19
+### D14. After signing, the agent carries on
 
-### D5. Only a person signs, amends, revokes, approves or pays
-- **Decision.** The agent never signs, not even under a threshold. Isaac: "firmar siempre el usuario (aceptar) / revocar usuario". Ticket: [17](wayfinder/tickets/17-agent-auto-sign.md) "Decided by Isaac 2026-11-19: no".
-- **Alternatives.** Auto-sign under a threshold. Rationale in the ticket: signing is the one act that creates spending power.
-- **Decided by.** Isaac, 2026-11-19 (task 2026-11-19-mandate-01-hygiene).
-- **Implemented in.** [#30](https://github.com/isaacboque/mandate/pull/30).
-- **Verified by.** Agent scenarios a01-a07; mutation run.
+- **Decision.** After a person signs a draft from the chat, the agent runs a follow-up turn on its own (searches and proposes; it never signs or pays). A limit reached mid-turn no longer contradicts a cart already proposed.
+- **Quote.** "tras firmar el agente sigue solo" *(after signing, the agent carries on by itself)*.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#54](https://github.com/isaacboque/mandate/pull/54).
+- **Verified by.** Service tests and the browser walk (`npm run screenshots`).
 
-### D4. Agent-first refocus
-- **Decision.** Make Mandate a chat agent beside a contracts panel, shopping only, drafting contracts from natural language, amendments, several active contracts with revoke, spending and audit queries. Isaac: "quiero que se enfoque mas a un agente". Goal: technical portfolio and LinkedIn; no accounts or real persistence.
-- **Decided by.** Isaac, 2026-11-19 (tasks 2026-11-19-mandate-agent-core and -agent-ui).
-- **Implemented in.** [#28](https://github.com/isaacboque/mandate/pull/28), [#29](https://github.com/isaacboque/mandate/pull/29).
-- **Verified by.** `npm run eval` agent scenarios; the end-to-end browser run.
+### D15. Internal contract ids stay in the agent's text
 
-### D3. Keep the internal contract ids in the agent's text
-- **Decision.** Accepted as is, not worth fixing.
-- **Rationale not recorded.** The only written source is the brief of task 2026-11-22-mandate-28; no task, PR or note records the decision or its reason.
+- **Decision.** Accepted as is; not worth fixing.
+- **Rationale not recorded.** The only written source is the brief of the decision-log task; no pull request or note records when it was decided or why.
 
-## Foundations
+### D16. Compare a model monitor with the code monitor
 
-### D2. Sandbox only, declared as a limit
-- **Decision.** The merchant of record is a PayPal sandbox account; a real merchant handoff is not built, and the README, [THREAT-MODEL.md](THREAT-MODEL.md) and [EVIDENCE.md](EVIDENCE.md) say so.
-- **Decided by.** Isaac ([PLAN.md](PLAN.md), "Decided by Isaac 2026-11-11"; see "Architecture" there).
-- **Implemented in.** The original build pull requests (M1-M8) and [#26](https://github.com/isaacboque/mandate/pull/26).
+- **Context.** The regex detector flags 19 of 78 obfuscated injections ([EVIDENCE.md](EVIDENCE.md)).
+- **Decision.** Run the experiment: a model monitor (Llama Prompt Guard 2, gpt-oss-safeguard) against the regex, on one dataset of 81 attacks and 53 negatives that include 40 hard negatives.
+- **Quote.** "monitor con modelo vs monitor de código" *(model monitor vs code monitor)*.
+- **Consequence.** The harness exists and the regex baseline is measured (22 of 81 attacks flagged, 9 of 53 false positives). The model rows are not run yet: they need Isaac's Groq key (`TODO(Isaac)` in EVIDENCE.md).
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#55](https://github.com/isaacboque/mandate/pull/55).
+- **Verified by.** `test/monitors.test.ts`; `npm run eval:monitors -- --monitors regex` reproduces 19 of 78 on the variants.
 
-### D1. The agent can only propose; the guardrails are plain code
-- **Decision.** The LLM has no tool that pays; `checkCart` and the checkout re-check run in code and an independent oracle judges the result. See [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
-- **Decided by.** Isaac ([PLAN.md](PLAN.md)).
-- **Verified by.** `npm run eval` (60 scenarios), `npm run eval:mutants` (11 of 11 guardrails caught).
+### D17. Make the real-model statistics defensible
+
+- **Context.** The first real-model result had 19 cases, one repeat, hand-written cases and a before and after that changed the timeouts as well as the fallback.
+- **Decision.** Strengthen it: 65 seeded cases in five families, repeats with Wilson intervals and a rule-of-three line next to every 0/n, a controlled paired comparison of the old fallback against fail-closed with an exact McNemar test, and runs that resume across days within a free daily quota.
+- **Quote.** "para que no sea tan débil" *(so that it is not so weak)*.
+- **Not yet reviewed (executor choice).** The two arms share one model run, so they differ only after a failed call; the report says so, and says when a run cannot tell the arms apart.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#57](https://github.com/isaacboque/mandate/pull/57).
+- **Verified by.** `test/real-v2.test.ts`; a test that nothing outside `src/eval` can reach the legacy arm. The numbers themselves are not run yet.
+
+### D18. A wider threat model, and the scope-creep fix
+
+- **Context.** Seen live on the demo: "raise the budget to 200 €" produced an amendment that also raised the per-item cap, a field the person never named.
+- **Decision.** Widen the threat model to ten attacker rows, each measured or marked as not run, and close the hole in code: an amendment the agent proposes may change only the fields the person's message names, otherwise it is refused as `scope_creep`. The person still signs every amendment. An adaptive-attacker evaluation (a model that rewrites a poisoned listing after each outcome) was built alongside.
+- **Quote.** "Mejora el modelo de amenaza" *(Improve the threat model)*.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#58](https://github.com/isaacboque/mandate/pull/58).
+- **Verified by.** Eval scenarios a12 and a13, a separate mutation test that switches the check off, `test/scope-creep.test.ts` and `test/adaptive.test.ts`. The adaptive results are not run yet.
+
+### D19. Visitors do not wait on a cold start
+
+- **Context.** The free host sleeps when idle and shows its own loading page for about 30 seconds on the first visit.
+- **Decision.** Two measures: a scheduled workflow that sends one cheap request to `/api/health` every five minutes inside a daily window, switchable with repository variables; and a static landing page that shows the video, wakes the server in the background and offers the demo the moment it is ready. The server allows cross-origin reads of the health route only, from one configured origin.
+- **Quote.** "pantalla de carga para que la gente no tenga que esperar en Render" *(a loading screen so people do not have to wait on Render)*.
+- **Not yet reviewed (executor choice).** The schedule is in UTC with the Madrid hour checked inside the job, because a cron time-zone field could not be confirmed from a primary source.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#59](https://github.com/isaacboque/mandate/pull/59).
+- **Verified by.** `test/keepalive.test.ts`, `test/landing-status.test.ts`, `test/health-cors.test.ts`. The workflows themselves have not run yet; GitHub's schedule is best effort, so a few cold starts a day can still happen and the landing page covers them.
+
+### D20. Record who decided what
+
+- **Decision.** The split between the person who decides and the tool that implements is documented as part of the project, with this log and a short section in [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
+- **Quote.** "yo haya tomado decisiones y Claude Code las haya implementado" *(I have made decisions and Claude Code has implemented them)*.
+- **Decided by.** Isaac, 2026-11-21.
+- **Implemented in.** [#56](https://github.com/isaacboque/mandate/pull/56), [#60](https://github.com/isaacboque/mandate/pull/60), and this page.
+- **Verified by.** Every entry names a pull request or a source document, and every quote was checked against the approval line it comes from.
+
+## Open items for Isaac
+
+- **Rationale not recorded:** D10, D15, and the reasons behind D16 to D19. Filling these in turns the log from a list of decisions into a record of reasoning.
+- **Executor choices waiting for review:** no key field in the web page (D12), the model-call queue and daily budget (D11), the shared run of the two arms (D17), and the UTC schedule of the keep-alive (D19).
+- **Not run yet, so not claimed:** the real-model, adaptive-attacker and monitor results (D16 to D18) and the keep-alive workflows (D19).
