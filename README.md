@@ -26,7 +26,7 @@ npm run eval                    # 57 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
-**How it is checked:** `npm test` (343 tests, mocks only), `npm run eval` (spend safety 57/57 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
+**How it is checked:** `npm test` (378 tests, mocks only), `npm run eval` (spend safety 57/57 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
 
@@ -36,7 +36,7 @@ npm run eval:mutants            # switch each of the 11 guardrails off in turn: 
 
 The poisoned-listing attack, blocked on the desktop layout: ![A poisoned listing tells the agent to buy 10 units; the guardrails block it](docs/screenshots/desktop-6-attack.png)
 
-**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments, no keys). **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
+**Live demo:** https://mandate-gb6t.onrender.com (demo mode: fixture catalog and simulated payments; the agent is `gpt-oss-120b` on Groq's free tier when the owner has set the key, otherwise the offline rules agent; the badge in the header says which). When the free quota is busy or used up, the chat says so (a usage limit, not a bug, nothing was proposed or spent) and offers **Try again** and **Use the offline agent for this session**. A "Try it in 60 s" strip guides a first visit. **Live mode:** https://mandate-live-7q2i.onrender.com (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, see the section below). The free instances can take about 30 s to wake up.
 
 Started as a PayPal AI Hackathon project. Sandbox only: no real money moves. More: [case study](docs/CASE-STUDY.md) · [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT-MODEL.md) · [60-second demo script](docs/DEMO.md).
 
@@ -83,7 +83,7 @@ Start it as in the quickstart above (`npm ci`, `npm run build && npm start`, Nod
 
 Then: click a suggestion such as "Indoor futsal shoes, max 90 €" (or type your own) → the agent answers with a **draft** card → in **Contracts** review the fields and press **Sign contract** → ask for the shoes → **Approve** → **Pay (simulate buyer)**. Click **Try an attack** to see a poisoned listing blocked: the card says what the listing told the model, what the fooled model proposed and which guardrails stopped it. Then type "raise the budget to 200 €": the agent proposes an amendment, you read the diff and press **Sign amendment**; or press **Revoke** and watch a waiting cart be refused at checkout. Without a key the agent runs in "Rules mode" (it says so in the chat header) and understands a few plain requests.
 
-Demo mode uses a fixture catalog (16 products, 3 of them poisoned, 1 with a price that rises at checkout) and mock payments. If you set an LLM key (below) the agent is the LLM instead of the rules agent.
+Demo mode uses a fixture catalog (16 products, 3 of them poisoned, 1 with a price that rises at checkout) and mock payments. If you set an LLM key (below) the agent is the LLM instead of the rules agent. The header badge shows which one answers ("Model: gpt-oss-120b via Groq (free tier)" or "Offline agent (no LLM)"), and `/api/health` reports `agent` and the model id, never a key.
 
 ## Run it live (PayPal sandbox + Channel3)
 
@@ -162,7 +162,7 @@ The trace, approval-queue pattern, PayPal OAuth refresh approach and the design 
 
 ## Deploy
 
-`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed). It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint.
+`render.yaml` defines a free Render web service in demo mode (`DEMO_MODE=mock`, no keys needed; it also declares `LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-120b` and an empty `GROQ_API_KEY` slot: set the key in the Render dashboard to put a real model behind the demo, free tier, no card). `LLM_DAILY_TURN_BUDGET` (default 150 turns per UTC day) and one model call at a time protect that free quota; past the budget visitors see the "quota used up" card without a provider call. It is deployed at https://mandate-gb6t.onrender.com. To deploy your own: connect the repo in Render and apply the blueprint.
 
 Every visitor gets their own session (an HttpOnly cookie): their mandate, budget, proposals and trace are not visible to, or spent by, anyone else. Sessions are in memory and expire after 2 hours idle. **Reset demo** clears your own proposals. Trace files on disk are deleted after `TRACE_RETENTION_HOURS` (default 24).
 

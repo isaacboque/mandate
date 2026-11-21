@@ -33,6 +33,13 @@ export function modelFor(provider: Provider, id: string, env: NodeJS.ProcessEnv 
   }
 }
 
+/** Which provider and model the environment selects, without building one (for the badge and /api/health). Never includes a key. */
+export function describeLlm(env: NodeJS.ProcessEnv = process.env): { provider: Provider; model: string } | undefined {
+  if (!hasLlmKey(env)) return undefined;
+  const provider = (env.LLM_PROVIDER ?? "google") as Provider;
+  return { provider, model: env.LLM_MODEL || DEFAULT_MODEL[provider] };
+}
+
 /** Picks the LLM from env: LLM_PROVIDER, LLM_MODEL (optional) and the provider's own API key variable. */
 export function modelFromEnv(env: NodeJS.ProcessEnv = process.env): LanguageModel {
   const provider = (env.LLM_PROVIDER ?? "google") as Provider;

@@ -4,7 +4,8 @@
  * docs/screenshots, checks for horizontal overflow at 380 px, checks that the stamp/pop/shake animations fire,
  * and that prefers-reduced-motion leaves no running animation. It also fails on any Content-Security-Policy violation (and proves the policy
  * is enforced by injecting an inline script that must be blocked), checks the category field keeps typed text with a hint, and checks the
- * streaming bubble (a stubbed event stream; no model key is used).
+ * streaming bubble (a stubbed event stream; no model key is used), the "free model quota is busy" card with its status line and its two
+ * buttons (also stubbed), and the "Try it in 60 s" tour (ticks as the flow goes, collapsed strip on a phone, hides when all six are done).
  *
  * Mock payments, rules agent (LLM keys are blanked), fixture catalog: no keys, no paid calls.
  * Run: npm run build && npm run screenshots   (CHANNEL=chrome to use Chrome instead of Edge)
@@ -92,6 +93,9 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await page.getByText("Tell the agent what to buy.").waitFor();
   await check("0 empty chat");
   await shot("0-chat");
+  // The tour: visible on a first visit with nothing done; open on desktop, a collapsed strip on a phone.
+  await must("0 tour", (await page.locator(".tour").count()) === 1 && /0 of 6 done/.test((await page.locator(".tour-toggle").textContent()) ?? ""), "the 60-second tour is shown with 0 of 6 done");
+  await must("0 tour collapse", (await page.locator(".tour-toggle").getAttribute("aria-expanded")) === (vp.width < 700 ? "false" : "true"), "the tour is open on desktop and a collapsed strip on a phone");
 
   // The policy is sent, and it is enforced: an injected inline script must be blocked (that one expected violation is not a finding).
   const header = first?.headers()["content-security-policy"] ?? "";
@@ -142,6 +146,9 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await fires("3 paid", "pop", ".receipt");
   await check("3 paid");
   await shot("5-paid");
+  if (await page.locator(".tour-toggle").getAttribute("aria-expanded") === "false") await page.locator(".tour-toggle").click();
+  await must("3 tour ticks", /3 of 6 done/.test((await page.locator(".tour-toggle").textContent()) ?? "") && (await page.locator(".tour-steps li.done").count()) === 3, "ask, sign and buy are ticked from the server's state");
+  await shot("5b-tour");
 
   // 3. The attack: the fooled model proposes 10, plain code says no.
   await tab("Chat");
@@ -208,6 +215,48 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await page.locator(".msg.agent .bubble", { hasText: "Stub final answer." }).waitFor({ timeout: 5000 });
   await must("7 streaming replaced", (await page.locator(".msg.agent.streaming").count()) === 0, "the final reply replaces the streaming bubble");
   await check("7 streaming");
+
+  // The free model quota is busy (stubbed stream: a status line, then a typed llm_limited card). It must say it is a usage limit, not a bug,
+  // and offer Try again and the offline agent. The second call (Try again) answers normally.
+  await page.evaluate(() => {
+    const orig = window.fetch.bind(window);
+    let calls = 0;
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).endsWith("/api/chat/stream")) return orig(input, init);
+      calls++;
+      const first = calls === 1;
+      const enc = new TextEncoder();
+      return Promise.resolve(new Response(new ReadableStream({
+        async start(c) {
+          if (first) {
+            c.enqueue(enc.encode('event: status\ndata: {"text":"The free model is busy, retrying in 3 s…"}\n\n'));
+            await new Promise((r) => setTimeout(r, 1500));
+            const msg = "The demo's free model quota (Groq free tier) is busy right now. This is a usage limit, not a bug. Nothing was proposed or spent. Try again in about 20 s, or continue with the offline agent.";
+            c.enqueue(enc.encode("event: done\ndata: " + JSON.stringify({ messages: [{ role: "assistant", text: msg }], cards: [{ type: "llm_limited", variant: "minute", retryAfterSec: 20, message: msg }] }) + "\n\n"));
+          } else {
+            c.enqueue(enc.encode('event: done\ndata: {"messages":[{"role":"assistant","text":"Stub retry answer."}],"cards":[]}\n\n'));
+          }
+          c.close();
+        },
+      }), { status: 200, headers: { "content-type": "text/event-stream" } }));
+    }) as typeof window.fetch;
+  });
+  await page.locator("#chat-input").fill("something while the quota is busy");
+  await page.locator("#chat-input").press("Enter");
+  await page.locator(".working", { hasText: "busy, retrying in 3 s" }).waitFor({ timeout: 4000 });
+  await must("8 status line", true, "the waiting line says why the turn waits (busy, retrying)");
+  await page.locator(".limitcard").waitFor({ timeout: 5000 });
+  const limitText = (await page.locator(".msg.agent", { has: page.locator(".limitcard") }).textContent()) ?? "";
+  await must("8 limit card", /usage limit, not a bug/.test(limitText) && /Nothing was proposed or spent/.test(limitText), "the limit card says it is a usage limit, not a bug, and that nothing was done");
+  await must("8 limit buttons", (await page.getByRole("button", { name: "Try again" }).count()) === 1 && (await page.getByRole("button", { name: "Use the offline agent for this session" }).count()) === 1, "Try again and Use the offline agent are offered");
+  await check("8 limit card");
+  await shot("11-limit");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await page.locator(".msg.agent .bubble", { hasText: "Stub retry answer." }).waitFor({ timeout: 5000 });
+  await must("8 try again", true, "Try again sends the last message once more");
+
+  // Ask, sign, buy, attack, amend and revoke are all done by now: the tour has nothing left to say and hides itself.
+  await must("8 tour done", (await page.locator(".tour").count()) === 0, "the tour is gone once all six steps are done");
 
   if (errors.length) { log(`  [${tag}] console/page errors: ${errors.join(" | ")}`); findings.push({ run: tag, step: "all", what: `console errors: ${errors.join(" | ")}` }); }
   await ctx.close();

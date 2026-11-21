@@ -1,7 +1,8 @@
 import { Channel3Catalog } from "../catalog/Channel3Catalog.js";
 import { FixtureCatalog } from "../catalog/FixtureCatalog.js";
 import { ApprovalQueue } from "../approval/queue.js";
-import { hasLlmKey, modelFromEnv } from "../llm/model.js";
+import { LlmGate } from "../llm/gate.js";
+import { describeLlm, hasLlmKey, modelFromEnv } from "../llm/model.js";
 import { MockPayments } from "../payments/MockPayments.js";
 import { PayPalOrders } from "../payments/PayPalOrders.js";
 import { RestOrdersInvoker } from "../payments/RestOrdersInvoker.js";
@@ -32,6 +33,11 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const attackCatalog = new FixtureCatalog();
   const invoker = live ? new RestOrdersInvoker(env.PAYPAL_CLIENT_ID ?? "", env.PAYPAL_CLIENT_SECRET ?? "") : undefined;
   const model = hasLlmKey(env) ? modelFromEnv(env) : undefined;
+  // One model call at a time for the whole server, and a daily turn budget so a public demo on a free quota does not burn it in a day
+  // (LLM_DAILY_TURN_BUDGET, default 150 turns per UTC day, 0 = no limit). Past it, turns get the honest "quota used up" card without calling the provider.
+  const llmGate = new LlmGate({ dailyBudget: num(env.LLM_DAILY_TURN_BUDGET, 150) });
+  const llm = describeLlm(env);
+  const llmLabel = llm?.provider === "groq" ? "Groq free tier" : llm ? `${llm.provider} quota` : undefined;
   // Where PayPal sends the buyer back to. Render sets RENDER_EXTERNAL_URL itself.
   const appUrl = (env.APP_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT ?? 8787}`).replace(/\/$/, "");
 
@@ -41,7 +47,7 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
     const payments = invoker
       ? new PayPalOrders(invoker, approvals, tracer, { traceId: runId, returnUrl: `${appUrl}/?paypal=return`, cancelUrl: `${appUrl}/?paypal=cancel` })
       : new MockPayments(approvals, tracer, { traceId: runId });
-    return new MandateService({ catalog, attackCatalog, payments, approvals, tracer, runId, model, idPrefix: id.slice(0, 6), llmTimeoutMs: num(env.LLM_TIMEOUT_SECONDS, 0) > 0 ? num(env.LLM_TIMEOUT_SECONDS, 0) * 1000 : undefined });
+    return new MandateService({ catalog, attackCatalog, payments, approvals, tracer, runId, model, idPrefix: id.slice(0, 6), llmGate, llmLabel, llmTimeoutMs: num(env.LLM_TIMEOUT_SECONDS, 0) > 0 ? num(env.LLM_TIMEOUT_SECONDS, 0) * 1000 : undefined });
   };
 
   const sessions = new SessionStore(makeService, { ttlMs: num(env.SESSION_TTL_MINUTES, 120) * 60 * 1000, max: num(env.MAX_SESSIONS, 300) });

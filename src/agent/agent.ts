@@ -25,6 +25,8 @@ export type AgentRun = {
   summary: string; mode: "llm" | "rules"; refused: string[];
   /** A configured model failed (HTTP error, invalid tool call, timeout): nothing was proposed by anyone else, and the person is told. */
   failedClosed?: boolean;
+  /** Why it failed closed (a class from src/llm/failure.ts, or "budget"). */
+  failure?: string;
 };
 
 /** A model may send 9000.0 or 9000.4 for a whole number: round it. Returns null (refuse the call) for NaN, Infinity, anything that is not a number, or below `min`. */
@@ -129,6 +131,7 @@ export async function runLlmAgent(ask: string, model: LanguageModel, ctx: AgentC
     tools: buildTools(ctx, out),
     stopWhen: stepCountIs(8),
     abortSignal: AbortSignal.timeout(ctx.llmTimeoutMs ?? DEFAULT_LLM_TIMEOUT_MS),
+    maxRetries: 0, // see runLlmConcierge
   });
   ctx.tracer.log({ runId: ctx.runId, step: "agent.finish", kind: "llm", result: { text: res.text, steps: res.steps.length, usage: res.totalUsage } });
   return { summary: res.text, mode: "llm", refused: out.refused };

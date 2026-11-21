@@ -5,7 +5,7 @@ export type Mandate = {
   maxQuantityPerItem: number; expiresAt: string; autonomy: Autonomy; supersedes?: string;
 };
 export type SignedMandate = { mandate: Mandate; hash: string };
-export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; resettable: boolean; mandate: SignedMandate | null; spentCents: number; seen: { categories: { value: string; count: number }[]; merchants: { value: string; count: number }[] }; now: string };
+export type Config = { demoMode: "mock" | "live"; currency: string; gateway: string; agent: "llm" | "rules"; offline?: boolean; llm?: { provider: string; model: string }; resettable: boolean; mandate: SignedMandate | null; spentCents: number; seen: { categories: { value: string; count: number }[]; merchants: { value: string; count: number }[] }; now: string };
 export type MandatePatch = Partial<{ allowedCategories: string[]; allowedMerchants: string[]; perItemCapCents: number; totalBudgetCents: number }>;
 export type NearMiss = {
   productId: string; title: string; merchant: string; category: string; priceCents: number; currency: string; url: string; imageUrl?: string;
@@ -40,7 +40,8 @@ export type Card =
   | { type: "proposal"; proposal: Proposal }
   | { type: "spending"; mandates: MandateView[] }
   | { type: "blocked"; blocked: BlockedView }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "llm_limited"; variant: "minute" | "day"; retryAfterSec: number; message: string };
 export type ChatResult = { messages: { role: "assistant"; text: string }[]; cards: unknown[] };
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
 
@@ -51,7 +52,7 @@ async function req<T>(path: string, json?: unknown, post = json !== undefined): 
   return data as T;
 }
 
-async function chatStream(text: string, onText: (delta: string) => void): Promise<ChatResult> {
+async function chatStream(text: string, onText: (delta: string) => void, onStatus?: (text: string) => void): Promise<ChatResult> {
   let r: Response;
   try {
     r = await fetch("/api/chat/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
@@ -73,6 +74,7 @@ async function chatStream(text: string, onText: (delta: string) => void): Promis
     if (!event || data === undefined) return;
     const payload = JSON.parse(data);
     if (event === "text") onText(String(payload.delta ?? ""));
+    else if (event === "status") onStatus?.(String(payload.text ?? ""));
     else if (event === "done") done = payload as ChatResult;
     else if (event === "error") throw new Error(String(payload.error ?? "The agent could not answer"));
   };
@@ -108,7 +110,9 @@ export const api = {
    * `done` payload counts: the cards and the reply come from it. If the stream cannot be used at all (no body, wrong content type,
    * network error before anything arrived) it falls back to `chat`; a turn that already ran or failed on the server is never repeated.
    */
-  chatStream: (text: string, onText: (delta: string) => void) => chatStream(text, onText),
+  chatStream: (text: string, onText: (delta: string) => void, onStatus?: (text: string) => void) => chatStream(text, onText, onStatus),
+  /** The person's switch between the AI model and the offline rules agent, for this session. */
+  setOffline: (offline: boolean) => req<{ agent: "llm" | "rules"; offline: boolean }>("/api/agent/offline", { offline }),
   history: () => req<{ role: "user" | "assistant"; text: string }[]>("/api/chat"),
   mandates: () => req<MandateView[]>("/api/mandates"),
   drafts: () => req<PendingDraft[]>("/api/drafts"),

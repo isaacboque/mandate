@@ -5,7 +5,9 @@ import { attention, parseCards } from "./cards";
 import { Chat, type ChatItem } from "./Chat";
 import { ContractsPanel } from "./ContractsPanel";
 import { friendlyError } from "./errors";
+import { modelBadge, stepsDone } from "./stepper";
 import { TracePanel } from "./TracePanel";
+import { Tour } from "./Tour";
 import { useRun } from "./useRun";
 
 type Tab = "chat" | "contracts";
@@ -30,6 +32,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("chat");
   const [sending, setSending] = useState(false);
   const [streamed, setStreamed] = useState(""); // the agent's words so far in this turn; the final reply replaces it
+  const [status, setStatus] = useState<string>(); // the server's status line while it waits for the model ("busy, retrying in 3 s")
   const [freshAttack, setFreshAttack] = useState<string>();
   // The trace sits beside the page only on a very wide screen; otherwise it is one click away.
   const [traceOpen, setTraceOpen] = useState(() => window.matchMedia("(min-width: 1500px)").matches);
@@ -71,9 +74,11 @@ export default function App() {
     setItems((all) => [...all, { id: userId, role: "user", text, cards: [] }]);
     setSending(true);
     setStreamed("");
-    const r = await run(() => api.chatStream(text, (d) => setStreamed((t) => t + d)));
+    setStatus(undefined);
+    const r = await run(() => api.chatStream(text, (d) => setStreamed((t) => t + d), (st) => setStatus(st)));
     setSending(false);
     setStreamed("");
+    setStatus(undefined);
     if (!r) { setItems((all) => all.filter((i) => i.id !== userId)); return false; }
     const cards = parseCards(r.cards);
     for (const c of cards) if (c.type === "proposal") upsert(c.proposal);
@@ -82,6 +87,16 @@ export default function App() {
     refresh();
     return true;
   };
+
+  const lastAsk = () => items.slice().reverse().find((i) => i.role === "user")?.text;
+  /** The limit card's "Try again": send the last message once more. */
+  const onRetry = () => { const t = lastAsk(); if (t) void onSend(t); };
+  /** The person's choice (never a failure's): this session uses the offline rules agent, and the last message is sent to it. */
+  const onOffline = () => {
+    const t = lastAsk();
+    run(() => api.setOffline(true)).then((r) => { if (!r) return; refresh(); if (t) void onSend(t); });
+  };
+  const backToModel = () => { run(() => api.setOffline(false)).then((r) => { if (r) refresh(); }); };
 
   const onAttack = () => {
     if (!contracts.some((c) => c.status === "active")) { add("agent", "The attack demo needs a signed contract to be stopped by. Ask me for one first."); return; }
@@ -127,11 +142,18 @@ export default function App() {
           </div>
           <div className="badges">
             {config && <span className={`badge ${config.demoMode === "mock" ? "" : "live"}`}>{config.demoMode === "mock" ? "Demo payments" : "PayPal sandbox"}</span>}
+            {config && (
+              <span className={`badge agentbadge ${config.agent === "llm" ? "model" : "offline"}`} title={config.agent === "llm" ? "An AI model reads your words. Its failures never hand the turn to the offline agent: only you can switch." : "A built-in rules reader handles your words; no AI model is used."}>
+                {modelBadge(config)}
+              </span>
+            )}
+            {config?.offline && config.llm && <button className="linklike" disabled={busy || sending} onClick={backToModel}>Back to the model</button>}
             <button className="ghost small" onClick={() => setTraceOpen((o) => !o)} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
           </div>
         </header>
 
         {error && <div className="alert" role="alert">{error}</div>}
+        {config && <Tour done={stepsDone({ asked: items.some((i) => i.role === "user"), contracts, proposals })} />}
         {!config && <Booting error={bootError} onRetry={() => setBootTry((n) => n + 1)} />}
 
         {config && (
@@ -148,7 +170,7 @@ export default function App() {
               <div id="chat-pane" className="pane chatpane" role="tabpanel" aria-labelledby="tab-chat">
                 <Chat
                   items={items} sending={sending} streaming={streamed} onSend={onSend} onAttack={onAttack}
-                  ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts, amendments, freshAttack, onReview, onFix, onProposalChange: (p) => { upsert(p); refresh(); } }}
+                  ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts, amendments, freshAttack, onReview, onFix, onRetry, onOffline, status, modelName: config.llm?.model.replace(/^[^/]+\//, ""), onProposalChange: (p) => { upsert(p); refresh(); } }}
                 />
               </div>
               <div id="contracts-pane" className="pane contractspane" role="tabpanel" aria-labelledby="tab-contracts" tabIndex={-1}>

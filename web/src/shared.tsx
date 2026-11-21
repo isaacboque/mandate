@@ -34,15 +34,15 @@ export const safeHref = (u: string) => (/^https?:\/\/(?![^/]*\.example(?:[:/]|$)
 
 
 /** Honest waiting state: we do not fake progress, we say what is going on and how long it can take. */
-export function Working({ live }: { live: boolean }) {
+export function Working({ live, model, status }: { live: boolean; model?: string; status?: string }) {
   const [s, setS] = useState(0);
   useEffect(() => { const t = setInterval(() => setS((x) => x + 1), 1000); return () => clearInterval(t); }, []);
   return (
     <div className="working" role="status">
       <span className="spinner" aria-hidden />
       <div>
-        <b>The agent is searching and choosing… {s}s</b>
-        <p className="muted small">{live ? "With a live AI model this can take 10 to 20 seconds. Every step shows in the trace." : "This should take a moment."}</p>
+        <b>{model ? `Thinking with ${model}… ${s}s` : `The agent is searching and choosing… ${s}s`}</b>
+        <p className="muted small">{status ?? (model || live ? "A model turn can take 5 to 20 seconds. Every step shows in the trace." : "This should take a moment.")}</p>
       </div>
     </div>
   );

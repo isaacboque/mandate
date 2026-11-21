@@ -140,7 +140,7 @@ describe("a model that never answers", () => {
     const { service, tracer } = setup({ llmTimeoutMs: 50, model: hang as never });
     const { proposals, run } = await service.ask(ASK);
     expect(run.failedClosed).toBe(true);
-    expect(run.summary).toMatch(/nothing was proposed/i);
+    expect(run.summary).toMatch(/took too long; nothing was done/i);
     expect(proposals).toHaveLength(0);
     const failed = tracer.events.find((e) => e.step === "agent.failed_closed");
     expect(String(failed?.error)).toMatch(/timeout/);

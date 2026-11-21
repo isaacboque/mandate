@@ -59,8 +59,9 @@ describe("POST /api/chat/stream (ticket 20)", () => {
     const a = world(broken as never);
     const events = await readStream(await post(a.app, "/api/chat/stream", "how much have I spent?"));
     expect(events.at(-1)!.event).toBe("done");
-    expect(events.at(-1)!.data.messages[0].text).toMatch(/nothing was proposed/i);
-    expect(events.at(-1)!.data.cards.map((c: { type: string }) => c.type)).toEqual(["error"]);
+    // "429 RESOURCE_EXHAUSTED" is a usage limit: the honest limit card, nothing proposed or spent
+    expect(events.at(-1)!.data.messages[0].text).toMatch(/usage limit, not a bug/i);
+    expect(events.at(-1)!.data.cards.map((c: { type: string }) => c.type)).toEqual(["llm_limited"]);
     expect(a.tracer.events.map((e) => e.step)).toContain("concierge.failed_closed");
     expect(a.tracer.events.map((e) => e.step)).not.toContain("concierge.llm_failed");
   });

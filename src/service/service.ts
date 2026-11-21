@@ -13,6 +13,8 @@ import { MockPayments } from "../payments/MockPayments.js";
 import { orderIdempotencyKey, type PaymentGateway } from "../payments/types.js";
 import type { Tracer } from "../trace/trace.js";
 import { formatCents } from "../core/money.js";
+import { LlmGate } from "../llm/gate.js";
+import { runGuardedLlmTurn } from "../llm/turn.js";
 import { Conversation, type Turn } from "./conversation.js";
 import type { Amendment, AmendmentChanges, BlockedView, MandatePatch, MandateView, NearMiss, PendingDraft, Proposal, ProposeInput } from "./types.js";
 
@@ -32,6 +34,12 @@ export type ServiceDeps = {
   llmTimeoutMs?: number;
   /** Currency for drafts when no contract exists yet (default EUR). */
   currency?: string;
+  /** Shared by every visitor of a server: one model call at a time and an optional daily turn budget. Default: a private, unlimited gate. */
+  llmGate?: LlmGate;
+  /** Waits before the single retry of a short rate limit (tests pass a no-op). */
+  sleep?: (ms: number) => Promise<void>;
+  /** Who owns the free quota, for the limit message, e.g. "Groq free tier". */
+  llmLabel?: string;
 };
 
 const toCartLine = (p: Product, quantity: number): CartLine => ({
@@ -59,9 +67,6 @@ function mandateFix(m: Mandate, spent: number, names: string[], p: { category: s
  * a person or the mandate's autonomy rule approves, and money moves only after the mandate and the
  * live price are re-checked at execution time.
  */
-/** What the person reads when a configured model fails. Server text, never the model's. */
-const FAILED_CLOSED = "The model failed, nothing was proposed. Try again.";
-
 export class MandateService {
   /** Every contract this visitor signed, in signing order. Several can be active at once. */
   private records = new Map<string, MandateRecord>();
@@ -75,7 +80,23 @@ export class MandateService {
   /** Every in-stock, clean product this visitor's searches returned: the source of category and shop suggestions. */
   private seenProducts = new Map<string, { category: string; merchant: string }>();
 
-  constructor(private d: ServiceDeps) {}
+  /** True only after the person pressed "use the offline agent" in this session. Never set by a failure. */
+  private offlineChoice = false;
+  private gate: LlmGate;
+
+  constructor(private d: ServiceDeps) {
+    this.gate = d.llmGate ?? new LlmGate();
+  }
+
+  get offline(): boolean { return this.offlineChoice; }
+  /** The person's switch between the model and the offline rules agent, for this session. A no-op when no model is configured. */
+  setOffline(on: boolean): void {
+    if (!this.d.model) return;
+    this.offlineChoice = on;
+    this.trace("agent.offline_choice", "decision", { args: { offline: on } });
+  }
+  /** The model answers only when one is configured and the person has not chosen the offline agent. */
+  private get llmActive(): boolean { return Boolean(this.d.model) && !this.offlineChoice; }
 
   private now() {
     return (this.d.now ?? (() => new Date()))();
@@ -89,7 +110,7 @@ export class MandateService {
     return [...this.records.values()].filter((r) => r.status === "active").at(-1)?.signed ?? null;
   }
   get agentMode(): "llm" | "rules" {
-    return this.d.model ? "llm" : "rules";
+    return this.llmActive ? "llm" : "rules";
   }
   /** Category lookup for the mandate form (the whole branch under a name). Empty when the catalog cannot do it. */
   /** Drafts a mandate from plain words. It never signs: the person reviews the draft and signs it themselves. */
@@ -351,16 +372,16 @@ export class MandateService {
     };
     this.trace("ask", "decision", { args: { text } });
     let run: AgentRun;
-    try {
-      run = this.d.model ? await runLlmAgent(text, this.d.model, ctx) : await runRulesAgent(text, ctx);
-    } catch (e) {
-      if (!this.d.model) throw e;
-      // Fail closed. A configured model that fails (HTTP error, invalid tool call, timeout) does not hand the turn to the rules agent: an
-      // adversarial input could force that failure and get the most gullible agent. Whatever the model had already proposed stays visible
-      // (it passed the same checks); nothing more is proposed, and the person is told.
-      const why = (e as Error).message.slice(0, 160);
-      this.trace("agent.failed_closed", "error", { args: { text }, error: why });
-      run = { summary: FAILED_CLOSED, mode: "llm", refused: [], failedClosed: true };
+    if (this.llmActive) {
+      const turn = await runGuardedLlmTurn({
+        gate: this.gate, sleep: this.d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), label: this.d.llmLabel ?? "free tier",
+        run: () => runLlmAgent(text, this.d.model!, ctx), canRetry: () => mine.length === 0,
+        onFailure: (kind, message) => this.traceFailure("agent", kind, message, { text }),
+      });
+      // Fail closed. Whatever the model had already proposed before it failed stays visible (it passed the same checks).
+      run = turn.ok ? turn.value : { summary: turn.failure.text, mode: "llm", refused: [], failedClosed: true, failure: turn.failure.kind };
+    } else {
+      run = await runRulesAgent(text, ctx);
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     for (const p of mine) {
@@ -426,12 +447,12 @@ export class MandateService {
    * endpoint a person calls. Cards come from server state, never from the model's words.
    */
   /** `onText` (streaming) gets the model's words as they are written; the returned reply and the cards are the only things that count. */
-  async chat(text: string, onText?: (delta: string) => void): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
+  async chat(text: string, onText?: (delta: string) => void, onStatus?: (text: string) => void): Promise<{ messages: { role: "assistant"; text: string }[]; cards: Card[] }> {
     const out: ConciergeOut = { refused: [], cards: [] };
     const seen = new Map<string, Product>();
     const mode = this.agentMode;
     const port: ConciergePort = {
-      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs, onText,
+      catalog: this.d.catalog, tracer: this.d.tracer, runId: this.d.runId, seen, now: () => this.now(), llmTimeoutMs: this.d.llmTimeoutMs, onText, offline: this.offlineChoice,
       mandates: () => this.mandates(),
       draftFromSpec: async (spec: DraftSpec) => this.createDraft(await draftFromSpec(spec, { currency: this.currencyOf(), catalog: this.d.catalog, now: this.now(), mode }), "agent"),
       draftFromText: async (t) => this.createDraft(await draftMandate({ text: t, currency: this.currencyOf(), catalog: this.d.catalog, now: this.now() }), "agent"),
@@ -446,19 +467,34 @@ export class MandateService {
     };
     this.trace("chat.turn", "decision", { args: { chars: text.length, mode } });
     let reply: string;
-    try {
-      reply = this.d.model ? await runLlmConcierge(this.conversation.history(), text, this.d.model, port, out) : await runRulesConcierge(text, port, out);
-    } catch (e) {
-      if (!this.d.model) throw e;
-      // Fail closed (see ask). Cards already built this turn are real server state and stay; the error card is added after them.
-      this.trace("concierge.failed_closed", "error", { args: { chars: text.length }, error: (e as Error).message.slice(0, 160) });
-      reply = FAILED_CLOSED;
-      out.cards.push({ type: "error", message: FAILED_CLOSED });
+    if (this.llmActive) {
+      const turn = await runGuardedLlmTurn({
+        gate: this.gate, sleep: this.d.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), label: this.d.llmLabel ?? "free tier", onStatus,
+        run: () => runLlmConcierge(this.conversation.history(), text, this.d.model!, port, out), canRetry: () => out.cards.length === 0,
+        onFailure: (kind, message) => this.traceFailure("concierge", kind, message, { chars: text.length }),
+      });
+      if (turn.ok) reply = turn.value;
+      else {
+        // Fail closed. Cards built before the failure are real server state and stay; the explanatory card is added after them.
+        reply = turn.failure.text;
+        out.cards.push(turn.failure.card);
+      }
+    } else {
+      reply = await runRulesConcierge(text, port, out);
     }
     for (const p of seen.values()) if (p.inStock && !p.injectionFlag) this.seenProducts.set(p.id, { category: p.category, merchant: p.merchant });
     this.conversation.add("user", text);
     this.conversation.add("assistant", reply);
     return { messages: [{ role: "assistant", text: reply }], cards: out.cards };
+  }
+
+  /** `<where>.failed_closed` with the class and the provider's words; an auth failure is also logged for the owner (never the key). */
+  private traceFailure(where: "agent" | "concierge", kind: string, message: string, args: object) {
+    this.trace(`${where}.failed_closed`, "error", { args: { ...args, class: kind }, error: message.slice(0, 160), class: kind });
+    if (kind === "auth") {
+      this.trace("llm.auth_failed", "error", { error: message.slice(0, 160) });
+      console.error(`[mandate] the model key was refused (${message.slice(0, 80)}): check the key in the environment`);
+    }
   }
 
   private currencyOf(): string {

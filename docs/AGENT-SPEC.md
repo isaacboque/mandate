@@ -12,6 +12,19 @@
 ## Failure semantics (ticket 26, resolved 2026-11-21)
 When an LLM is configured and its call fails (HTTP error, an invalid tool call the provider rejects, a timeout), the turn **fails closed**: nothing more is proposed, no draft and no amendment is created, the person sees an `error` card ("The model failed, nothing was proposed. Try again."), and the failure is traced (`concierge.failed_closed` in chat, `agent.failed_closed` in `ask`, with the error text, at most 160 characters). The rules agent answers **only when no LLM is configured** (the keyless demo and the deterministic eval). Anything the model had already proposed before it failed is real server state and stays visible; it passed the same checks. Reason: a real-model run showed that a failure the input can force (a malformed tool argument) handed the turn to the rules agent, which bought the attacker's in-terms listing. Scenario a10 covers it.
 
+Failure classes (`src/llm/failure.ts`), each traced as `concierge.failed_closed` / `agent.failed_closed` with its `class`, and each with its own line:
+
+| Class | What the person reads |
+| --- | --- |
+| `rate_limit_minute` (429, TPM/RPM, with retry-after) | One server-side retry if the wait is 8 s or less ("The free model is busy, retrying in N s…"). Still failing: an `llm_limited` card (variant minute): "The demo's free model quota (Groq free tier) is busy right now. This is a usage limit, not a bug. Nothing was proposed or spent. Try again in about N s, or continue with the offline agent." with Try again and Use the offline agent |
+| `rate_limit_day` (TPD/RPD) or the server's `LLM_DAILY_TURN_BUDGET` used up | `llm_limited` card, variant day: "Today's free model quota is used up; it resets in about N h. ..." No provider call is made past the budget |
+| `timeout` | "The model took too long; nothing was done." |
+| `invalid_tool_call` (provider 400 tool validation) | "The model made an invalid tool call; the system refused it and did nothing. This is the safety behaviour." |
+| `auth` (401/403) | "The demo's model key is not working; tell the owner." and `llm.auth_failed` is traced and logged (never the key) |
+| `other` | "The model failed, nothing was proposed. Try again." |
+
+The offline agent for a session is a flag set only by `POST /api/agent/offline` (a person's button); a failure never sets it. One model call runs at a time across the server (`LlmGate`, FIFO, with a "waiting for the model" status), the SDK's own silent retries are off (`maxRetries: 0`), and `/api/chat/stream` sends `status` events for the waiting and retry lines (status text is not the agent's words).
+
 Tool arguments from a model are normalised in code, not trusted: money and quantity parameters are declared as `number` (a provider validates arguments server-side and rejects `9000.0` for an `integer`), then rounded to whole numbers; NaN, Infinity, non-numbers and money of 0 or below are refused (`agent.refused`). A quantity of 0 or below is not refused by the tool: it goes on to the `quantity` guardrail, which blocks it (scenario s06). `checkCart` still requires integer cents.
 
 ## API

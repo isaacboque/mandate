@@ -20,7 +20,7 @@ describe("a configured LLM that fails: fail closed", () => {
     const h = makeHarness({}, { model: failing() });
     const r = await h.service.chat(SHOES);
     expect(r.cards.map((c) => c.type)).toEqual(["error"]);
-    expect(r.messages[0].text).toMatch(/nothing was proposed/i);
+    expect(r.messages[0].text).toMatch(/invalid tool call.*did nothing/i);
     expect(h.service.list()).toEqual([]);
     expect(steps(h)).toContain("concierge.failed_closed");
     expect(steps(h)).not.toContain("concierge.llm_failed");
@@ -42,7 +42,7 @@ describe("a configured LLM that fails: fail closed", () => {
     const { proposals, run } = await h.service.ask(SHOES);
     expect(proposals).toEqual([]);
     expect(run.failedClosed).toBe(true);
-    expect(run.summary).toMatch(/nothing was proposed/i);
+    expect(run.summary).toMatch(/took too long; nothing was done/i);
     expect(steps(h)).toContain("agent.failed_closed");
     expect(steps(h)).not.toContain("agent.llm_failed");
     expect(rulesAnswered(h)).toBe(false);
