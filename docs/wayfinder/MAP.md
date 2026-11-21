@@ -33,7 +33,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 - Resolved 2026-11-21: [26 LLM failure falls back to the rules agent](tickets/26-fallback-fail-closed.md): a configured LLM that fails now fails closed (nothing proposed, error card); the rules agent answers only with no LLM.
 
 ## Open (needs Isaac)
-- [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): decided yes; Isaac runs `npm run eval:real` with his own key and the table goes in the README under Limits. Until then every doc says the real-LLM compromise, leak and usefulness figures are not measured.
+- [Run `eval:real` and publish the numbers](tickets/04-real-model-numbers.md): done 2026-11-21 on three open-weight models via Groq (not Claude), k = 1; table in [EVIDENCE.md](../EVIDENCE.md). Optional next: a Claude model and k greater than 1.
 - [Check hosted demo links before posting](tickets/06-hosted-links.md): open (needs a browser logged out; free-tier servers wake in about 30 s).
 - [Forwarded-for spoofing](tickets/07-forwarded-for-spoofing.md): fixed in code; one manual check left, that `TRUSTED_PROXIES=1` matches Render's proxy chain (13 requests with different forged first entries, the 13th must be refused).
 

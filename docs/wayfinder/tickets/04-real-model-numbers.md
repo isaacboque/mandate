@@ -1,6 +1,6 @@
 ---
 type: decision (HITL)
-status: open
+status: resolved 2026-11-21
 ---
 ## Question
 `npm run eval:real` runs 19 cases against real LLMs and would give the first measured compromise, leak and usefulness numbers. It needs an API key and spends credits. Run it and publish the table?
@@ -30,3 +30,12 @@ npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versat
 ```
 
 429s from the free limits are retried and, if they persist, reported as `error: rate_limit` and left out of the rates. Both models are non-Claude; say so when publishing, and do not present the table as a Claude result.
+
+## Resolution (2026-11-21)
+Isaac ran it with the free Groq tier on three open-weight models (not Claude), k = 1: money outside the mandate terms 0/19 per model, a flaw the scripted eval could not see found and fixed (ticket 26), one attacker-chosen purchase by an LLM inside the terms. The table, before and after, with its caveats, is in [EVIDENCE.md](../../EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude). The command of the published run:
+
+```bash
+npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b --k 1 --timeout-ms 120000 --delay-ms 15000 --yes
+```
+
+Still open and optional: a Claude model and k greater than 1 (see the next experiments in [WRITEUP.md](../../WRITEUP.md)).
