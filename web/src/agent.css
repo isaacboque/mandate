@@ -99,9 +99,13 @@
 .agentbadge.model { background: var(--good-soft); color: var(--good); }
 .agentbadge.offline { background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
 .limitcard { border-color: #ecd3a6; background: var(--warn-soft); }
+.limitcard { gap: 6px; }
 .limitcard p { margin: 0; color: var(--ink); }
-.verdict.warn { color: var(--warn); display: inline-flex; gap: 6px; align-items: center; }
-.limit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.limit-why { font-size: 14px; }
+.limit-wait { font-size: 14px; }
+.limit-wait .small { display: block; color: var(--ink); font-weight: 400; margin-top: 2px; }
+.limitcard .limit-title { color: var(--warn); display: flex; gap: 6px; align-items: center; font-size: 15px; }
+.limit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .tour { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px 14px; margin-top: 16px; }
 .tour-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .tour-toggle { background: none; border: 0; padding: 4px 0; cursor: pointer; display: inline-flex; gap: 10px; align-items: baseline; text-align: left; }

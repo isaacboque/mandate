@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { money, type Amendment, type BlockedView, type Card, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
 import { meter } from "./cards";
+import { limitCopy } from "./limit";
 import { Icon } from "./icons";
 import { CHECK_LABEL } from "./labels";
 import { ProposalCard } from "./ProposalCard";
@@ -64,16 +65,20 @@ function CardView({ card, ctx }: { card: Card; ctx: Ctx }) {
           <span className="verdict bad"><Icon name="cross" size={16} /> <b>{card.message}</b></span>
         </div>
       );
-    case "llm_limited":
+    case "llm_limited": {
+      const t = limitCopy(card);
       return (
         <div className="minicard limitcard" role="group" aria-label="Model quota">
-          <span className="verdict warn"><Icon name="clock" size={16} /> <b>{card.variant === "day" ? "Today's free model quota is used up" : "The free model is busy"}</b></span>
+          <p className="limit-title"><Icon name="clock" size={16} /> <b>{t.title}</b></p>
+          <p className="limit-why">{t.explanation}</p>
+          <p className="limit-wait"><b>{t.wait}</b> <span className="small">{t.offlineHint}</span></p>
           <div className="limit-actions">
-            <button type="button" className="ghost small" disabled={ctx.busy} onClick={ctx.onRetry}>Try again</button>
+            <button type="button" className="primary small" disabled={ctx.busy} onClick={ctx.onRetry}>Try again</button>
             <button type="button" className="ghost small" disabled={ctx.busy} onClick={ctx.onOffline}>Use the offline agent for this session</button>
           </div>
         </div>
       );
+    }
     case "spending":
       return (
         <div className="minicard spendingcard" role="group" aria-label="Spending">
@@ -126,7 +131,8 @@ export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: 
         )}
         {items.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
-            {m.text && <p className="bubble">{m.text}</p>}
+            {/* The limit card says it all itself: the server's sentence is not repeated as a bubble. */}
+            {m.text && !m.cards.some((c) => c.type === "llm_limited") && <p className="bubble">{m.text}</p>}
             {m.cards.map((c, i) => <CardView key={i} card={c} ctx={ctx} />)}
           </div>
         ))}
