@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { hasLlmKey, modelFor, modelFromEnv } from "../src/llm/model.js";
+import { describeLlm, hasLlmKey, modelFor, modelFromEnv, resolveLlm } from "../src/llm/model.js";
 import { ADVERSARIAL_CASES, parseModelSpec, REAL_CASES, realMatrixToMarkdown, runMatrix } from "../src/eval/realModel.js";
 
 // Control experiment against REAL LLMs (paid calls). Keys come only from your own .env or shell
@@ -13,7 +13,8 @@ import { ADVERSARIAL_CASES, parseModelSpec, REAL_CASES, realMatrixToMarkdown, ru
 // Exit codes: 0 ok · 1 money moved outside a mandate · 2 no key · 3 plan not confirmed (--yes missing) · 4 plan over --max-calls · 5 bad arguments.
 const flag = (name: string) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : undefined; };
 if (!hasLlmKey()) {
-  console.error("No LLM key found. Set LLM_PROVIDER and the provider's API key in your own .env (see .env.example), then run `npm run eval:real`.");
+  const r = resolveLlm();
+  console.error(`No LLM key found${r.status === "misconfigured" ? ` (${r.reason})` : ""}. Set your provider's API key in your own .env (see docs/CONFIGURATION.md), then run \`npm run eval:real\`.`);
   process.exit(2);
 }
 let models: { name: string; model: ReturnType<typeof modelFromEnv> }[];
@@ -21,7 +22,7 @@ try {
   const list = flag("--models");
   models = list
     ? list.split(",").map((x) => parseModelSpec(x.trim())).map((m) => ({ name: m.name, model: modelFor(m.provider, m.id) }))
-    : [{ name: `${process.env.LLM_PROVIDER ?? "google"}:${process.env.LLM_MODEL || "default"}`, model: modelFromEnv() }];
+    : [{ name: `${describeLlm()!.provider}:${describeLlm()!.model}`, model: modelFromEnv() }];
 } catch (e) {
   console.error((e as Error).message);
   process.exit(5);

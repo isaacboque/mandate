@@ -26,6 +26,8 @@ npm run eval                    # 57 deterministic scenarios, prints the table b
 npm run eval:mutants            # switch each of the 11 guardrails off in turn: the eval must notice
 ```
 
+**Use your own model key:** copy `.env.example` to `.env`, set the key of the provider you use (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GROQ_API_KEY`, the last has a free tier) and run `npm run doctor` to see what will answer. The provider is detected from the key; nothing else is required. Keys stay on the server (a public page never asks for one). Full reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
 **How it is checked:** `npm test` (378 tests, mocks only), `npm run eval` (spend safety 57/57 with an oracle that never calls the guardrail code) and `npm run eval:mutants` (11 of 11 guardrails caught when disabled, see [docs/MUTATION.md](docs/MUTATION.md)). `npm run eval:injection-variants` (78 obfuscated injections: the regex detector flags 19, money outside the mandate 0/78, see [docs/EVIDENCE.md](docs/EVIDENCE.md)). None of these call a real LLM; that is the opt-in `npm run eval:real`. Open questions: [docs/wayfinder/MAP.md](docs/wayfinder/MAP.md).
 
 ![Chat on the left, contracts on the right: the agent drafted a contract, the person signed it and a purchase is paid](docs/screenshots/desktop-5-paid.png)
@@ -66,7 +68,7 @@ flowchart LR
 
 - **Chat + contracts UI** (`web/`): the agent is a chat; contracts are a panel. A draft is an editable form with the agent's fields marked "from the agent"; an amendment is a before/after diff. Sign, amend, revoke, approve and pay are buttons wired to human-only endpoints; the chat renders only typed cards from the server (unknown card types render nothing) and agent text as plain text. On a phone the two panes are tabs, with a dot when something needs you.
 - **Mandate** (`src/mandate`): typed, signed with a short sha256 of its canonical JSON. `checkCart` runs 11 named checks: total budget, per-item cap, category, merchant, quantity, expiry, currency, hard attributes (e.g. size), price freshness, injection flag, mandate active (not revoked or replaced).
-- **Agent** (`src/agent`): Vercel AI SDK, provider by `LLM_PROVIDER` (default Google `gemini-2.5-flash`). The concierge has 8 tools (search, get product, propose cart, draft a contract, propose an amendment, list contracts, get spending, explain a block); none signs, amends, revokes, approves or pays. It can only propose, and only products the catalog returned in that run. With no LLM key, a deterministic rules agent does the same job, so the demo and the eval need no keys.
+- **Agent** (`src/agent`): Vercel AI SDK, provider detected from the key you set (Google, OpenAI, Anthropic or Groq; `LLM_PROVIDER` only to choose among several; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). The concierge has 8 tools (search, get product, propose cart, draft a contract, propose an amendment, list contracts, get spending, explain a block); none signs, amends, revokes, approves or pays. It can only propose, and only products the catalog returned in that run. With no LLM key, a deterministic rules agent does the same job, so the demo and the eval need no keys.
 - **Untrusted text** (`src/catalog`): product titles and descriptions are never put in the system prompt. They reach the model only as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them.
 - **Approval queue** (`src/approval`): a person approves, or the mandate's autonomy rule does (`ask_always`, or `auto_under` a threshold). Blocked carts never get an approval. Payments refuse to run without an approved, unused approval.
 - **Payments** (`src/payments`): PayPal Orders v2 in the sandbox (create, buyer approves, capture), idempotent, plus a mock gateway with the same rules.
@@ -94,8 +96,7 @@ DEMO_MODE=live
 CHANNEL3_API_KEY=...             # free tier at trychannel3.com
 PAYPAL_CLIENT_ID=...             # PayPal sandbox app (Orders / "Accept payments" enabled)
 PAYPAL_CLIENT_SECRET=...
-LLM_PROVIDER=google              # optional; or openai, anthropic
-GOOGLE_GENERATIVE_AI_API_KEY=... # optional; without it the rules agent is used
+GROQ_API_KEY=...                 # optional: any ONE model key (Google, OpenAI, Anthropic or Groq); without it the offline agent is used
 ```
 
 Check each piece on its own first:
@@ -126,7 +127,7 @@ What I decided, what I delegated and how it was checked: [docs/HOW-I-BUILT-THIS.
 ## PayPal and AI in this project
 
 - **PayPal:** Orders v2 in the sandbox is the only way money moves (create, buyer approves, capture), idempotent, behind the approval queue and a checkout re-check. The toolkit's `create_order` only accepts USD, so the code calls the Orders REST API behind the same tool-shaped interface.
-- **AI at runtime:** an optional LLM (Gemini by default; OpenAI or Anthropic by `LLM_PROVIDER`) drafts the mandate form and acts as the shopping agent, with propose-only tools. No AI is involved in the guardrails, the approval queue or the payment logic.
+- **AI at runtime:** an optional LLM (bring your own key: Google, OpenAI, Anthropic or Groq, detected from the key; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)) drafts the mandate form and acts as the shopping agent, with propose-only tools. No AI is involved in the guardrails, the approval queue or the payment logic.
 - **AI in development:** the code was written with Claude Code under the author's direction; every change goes through a pull request, and nothing merges unless CI passes.
 
 ## Evaluation
