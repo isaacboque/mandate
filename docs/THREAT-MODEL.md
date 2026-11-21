@@ -31,7 +31,7 @@ Trust boundaries: (1) product text and the model's output are untrusted; (2) the
 
 ## Not claimed
 
-- No real-LLM success rate: `npm run eval:real` (19 cases, 10 of them adversarial) has not been run by the author; until its table is published under "Limits" in the README, the real-LLM result is not measured. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
+- No Claude result and no general real-model rate: the real-model run (2026-11-21) is three open-weight models served by Groq, k = 1, 19 runs per model, in a sandbox ([EVIDENCE.md](EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude)). It measured money outside the mandate terms 0/19 per model and one attacker-chosen purchase inside the terms by an LLM (gpt-oss-20b); it also found the fallback flaw closed by "LLM failure fails closed" below. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
 - Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (57) and 11 named checks.
 - No production use, no users, no revenue, no prize or hackathon placement; no real money; no merchant handoff.
 - A person approving a bad cart, a compromised server, a stolen session, or a lying catalog are not covered (see the limits below).
@@ -81,7 +81,7 @@ If a configured LLM call fails (error, timeout, a request the provider rejects),
 ## Out of scope and known limits
 
 - **Sandbox only.** The merchant of record in the demo is a PayPal sandbox business account. Paying the real merchant behind a Channel3 listing (a merchant handoff) is not built, so the trust problem of a real merchant (fraud, delivery, refunds) is not addressed.
-- **The scripted eval does not test a real LLM.** The guardrails hold whatever the model does, but how well a given model chooses products is not measured by it. `npm run eval:real` runs a smaller set against a real model when you set your own key.
+- **The scripted eval does not test a real LLM; the real-model run is small.** The guardrails hold whatever the model does, but how well a given model chooses products or resists injection is measured only by `npm run eval:real`, run once on three open-weight models via Groq (k = 1, 19 runs each, 2026-11-21; not Claude). A run in which the LLM proposes an in-terms poisoned listing and a person approves it (1 of 19 for gpt-oss-20b) is the same residual limit as in the injection variants.
 - **Injection detection is regex-based and conservative.** It is one layer. The layers that matter are structural: no payment tool, untrusted text kept out of the system prompt, checks in code at proposal and at checkout.
 - **Catalog data is trusted for facts:** price, stock and category come from Channel3. A merchant that lies about them is not detected. Price units are assumed decimal major units (confirmed with a smoke test). Offers priced under one cent are dropped when a listing is read, and `checkCart` also fails closed on a price that is not a whole number of cents above 0 (the rule sits inside `per_item_cap` and `total_budget`; scenario s56, [ticket 08](wayfinder/tickets/08-checkcart-price-sanity.md)).
 - **State is in memory:** proposals and approvals reset on restart. No accounts, shipping addresses, multi-currency or refunds.
