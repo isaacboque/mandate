@@ -39,7 +39,7 @@ describe("judging an item", () => {
   it("an unparsable answer, or a call that throws, is an error verdict", async () => {
     expect("error" in (await judgeItem({ model: replying("looks fine to me"), rubric: RUBRICS[1], item }))).toBe(true);
     const boom = new MockLanguageModelV4({ doGenerate: async () => { throw new Error("HTTP 429 rate limit"); } });
-    expect("error" in (await judgeItem({ model: boom, rubric: RUBRICS[1], item }))).toBe(true);
+    expect("error" in (await judgeItem({ model: boom, rubric: RUBRICS[1], item, sleep: async () => undefined }))).toBe(true);
   });
 });
 
@@ -97,5 +97,33 @@ describe("calibration against the labelled set", () => {
   });
   it("the acceptance thresholds are fixed in advance", () => {
     expect(ACCEPT).toEqual({ kappa: 0.7, agreement: 0.9 });
+  });
+});
+
+describe("when the judge cannot answer", () => {
+  it("the calibration keeps the reason, so a run of errors is diagnosed instead of reported as a bare count", async () => {
+    const c = await calibrate(async () => ({ error: "HTTP 404: model_not_found" }), CALIBRATION);
+    expect(c.errors).toBe(24);
+    expect(c.disagreements[0]).toMatchObject({ verdict: "error", error: "HTTP 404: model_not_found" });
+  });
+  it("a rate limit is waited out and retried, with a growing wait; any other failure is not retried", async () => {
+    let calls = 0;
+    const waits: number[] = [];
+    const flaky = new MockLanguageModelV4({ doGenerate: async () => { calls++; if (calls < 3) throw Object.assign(new Error("HTTP 429 rate limit reached"), { statusCode: 429 }); return { content: [{ type: "text", text: '{"reasoning":"ok","verdict":"pass"}' }], finishReason: { unified: "stop", raw: "x" }, usage, warnings: [] } as never; } });
+    const v = await judgeItem({ model: flaky, rubric: RUBRICS[0], item, sleep: async (ms) => { waits.push(ms); } });
+    expect(v).toEqual({ verdict: "pass", reasoning: "ok" });
+    expect(waits).toEqual([5000, 15000]);
+    let n = 0;
+    const broken = new MockLanguageModelV4({ doGenerate: async () => { n++; throw Object.assign(new Error("HTTP 404 model_not_found"), { statusCode: 404 }); } });
+    const e = await judgeItem({ model: broken, rubric: RUBRICS[0], item, sleep: async () => undefined });
+    expect("error" in e && e.error).toMatch(/404/);
+    expect(n).toBe(1);
+  });
+  it("gives up after three attempts at a rate limit", async () => {
+    let n = 0;
+    const limited = new MockLanguageModelV4({ doGenerate: async () => { n++; throw Object.assign(new Error("HTTP 429 rate limit"), { statusCode: 429 }); } });
+    const v = await judgeItem({ model: limited, rubric: RUBRICS[0], item, sleep: async () => undefined });
+    expect("error" in v).toBe(true);
+    expect(n).toBe(3);
   });
 });

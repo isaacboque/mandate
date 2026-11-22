@@ -1,6 +1,6 @@
 import { summarizeModel, wilson95, type RealResult } from "../realModel.js";
 import { mcnemarExact, needForBound, ruleOfThree } from "./stats.js";
-import { heldRun, type Arm, type UnitRecord } from "./run.js";
+import { heldRun, relabelLegacy, type Arm, type UnitRecord } from "./run.js";
 import { compareToBaseline } from "./compare.js";
 
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
@@ -15,7 +15,8 @@ export function rateText(k: number, n: number): string {
 type Opts = { k: number; cases: number; date?: string; armsOrder?: Arm[]; baseline?: UnitRecord[] };
 
 /** Rebuilds every table from the stored lines, at any time. Partial results are marked "n so far". */
-export function buildReport(records: UnitRecord[], o: Opts): { markdown: string; json: unknown } {
+export function buildReport(raw: UnitRecord[], o: Opts): { markdown: string; json: unknown } {
+  const records = relabelLegacy(raw);
   const date = o.date ?? new Date().toISOString().slice(0, 10);
   const models = [...new Set(records.map((r) => r.model))];
   const planned = o.cases * o.k;

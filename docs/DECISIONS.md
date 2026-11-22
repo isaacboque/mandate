@@ -182,12 +182,12 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 
 ### D17. Strengthen the real-model statistics
 
-- **Status.** Accepted; implementation choice pending review; runs pending.
+- **Status.** Accepted; implementation choice pending review; first pass (k = 1) done, repeats pending.
 - **Context.** The first real-model result had 19 cases and one repeat, hand-written cases, and a before and after that changed the timeouts as well as the fallback.
 - **Decision.** Build 65 seeded cases in five families; repeats with Wilson intervals and a rule-of-three line next to every 0 of n; a controlled paired comparison of the old fallback against fail-closed with an exact McNemar test; and runs that resume across days within a free daily quota. The analysis is fixed before the data in [EVAL-PROTOCOL.md](EVAL-PROTOCOL.md).
 - **Implementation choice (pending review).** The two arms share one model run and differ only after a failed call. This removes rate-limit and sampling noise between arms and halves the cost, but only runs where the model failed can differ, so the report states the number of discordant pairs and when a run cannot tell the arms apart.
 - **Consequences and trade-offs.** A result that can be falsified and reproduced, bounded by free-tier quota: about four days of runs per model at k = 3.
-- **Evidence.** `test/real-v2.test.ts`, including a test that nothing outside `src/eval` can reach the legacy arm. The runs are pending.
+- **Evidence.** `test/real-v2.test.ts`, including a test that nothing outside `src/eval` can reach the legacy arm. First pass: 65 runs on one model, no money outside the terms and no difference between the arms; the repeats are pending ([EVIDENCE.md](EVIDENCE.md)).
 - **Implemented in.** [#57](https://github.com/isaacboque/mandate/pull/57).
 
 ### D18. Widen the threat model and close amendment scope creep
@@ -221,4 +221,4 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
 - **Implementation choices pending maintainer review:** D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
-- **Results pending:** the real-model, adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.
+- **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.

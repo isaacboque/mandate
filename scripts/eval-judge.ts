@@ -20,7 +20,7 @@ let spec;
 try { spec = parseModelSpec(flag("--judge") ?? "groq:llama-3.3-70b-versatile"); } catch (e) { console.error((e as Error).message); process.exit(5); }
 const calMode = has("--calibrate"), runsFile = flag("--runs");
 if (calMode === Boolean(runsFile)) { console.error("Use exactly one of --calibrate or --runs <file>."); process.exit(5); }
-const delayMs = Math.max(0, Number(flag("--delay-ms")) || 0);
+const delayMs = Math.max(0, Number(flag("--delay-ms") ?? 2000) || 0); // a pause between calls keeps a free tier's per-minute token budget
 const CAL_FILE = "traces/judge-calibration.json";
 
 const records = runsFile ? new JsonlStore(runsFile).load() : [];
@@ -32,7 +32,7 @@ if (!process.env[KEY_VAR[spec.provider]]) { console.error(`No key: set ${KEY_VAR
 if (!has("--yes")) { console.error("Nothing was called. Add --yes to run it."); process.exit(3); }
 
 const model = modelFor(spec.provider, spec.id);
-const judge = (rubric: Parameters<typeof judgeItem>[0]["rubric"], item: Parameters<typeof judgeItem>[0]["item"]) => judgeItem({ model, rubric, item });
+const judge = async (rubric: Parameters<typeof judgeItem>[0]["rubric"], item: Parameters<typeof judgeItem>[0]["item"]) => { const v = await judgeItem({ model, rubric, item }); if (delayMs) await new Promise<void>((r) => setTimeout(r, delayMs)); return v; };
 mkdirSync("traces", { recursive: true });
 
 if (calMode) {
@@ -40,7 +40,7 @@ if (calMode) {
   const ok = accepted(c);
   writeFileSync(CAL_FILE, JSON.stringify({ judge: spec.name, date: new Date().toISOString(), calibration: c, accepted: ok }, null, 2));
   console.log(`Judge ${spec.name}: agreement ${(c.agreement * 100).toFixed(0)}%, kappa ${c.kappa.toFixed(2)}, ${c.errors} error(s) on ${c.n} labelled items: ${ok ? "ACCEPTED" : "NOT accepted (needs kappa >= 0.70, agreement >= 90%, no errors)"}.`);
-  for (const d of c.disagreements) console.log(`  ${d.id} (${d.rubric}): label ${d.label}, judge ${d.verdict}: ${d.note}`);
+  for (const d of c.disagreements) console.log(`  ${d.id} (${d.rubric}): label ${d.label}, judge ${d.verdict === "error" ? `error: ${d.error}` : d.verdict} (${d.note})`);
   process.exit(ok ? 0 : 6);
 }
 

@@ -29,13 +29,23 @@ export function judgePrompt(rubric: Rubric, item: JudgeItem): { system: string; 
   };
 }
 
-/** One judgement. Temperature 0, no automatic retries; a failure or an unparsable answer is an error verdict, counted apart and never a pass. */
-export async function judgeItem(o: { model: LanguageModel; rubric: Rubric; item: JudgeItem; timeoutMs?: number }): Promise<Verdict> {
-  try {
-    const { system, prompt } = judgePrompt(o.rubric, o.item);
-    const r = await generateText({ model: o.model, system, prompt, temperature: 0, maxRetries: 0, abortSignal: AbortSignal.timeout(o.timeoutMs ?? 60_000) });
-    return parseVerdict(r.text);
-  } catch (e) {
-    return { error: (e instanceof Error ? e.message : String(e)).slice(0, 120) };
+const isRateLimit = (e: unknown) => (e as { statusCode?: number })?.statusCode === 429 || /\b429\b|rate.?limit|too many requests/i.test((e as Error)?.message ?? "");
+const WAITS_MS = [5000, 15000];
+
+/**
+ * One judgement. Temperature 0. A rate limit (a free tier has small per-minute token budgets, and a calibration is 24 calls in a row) is waited out and
+ * retried, twice; any other failure, and an unparsable answer, is an error verdict with its reason, counted apart and never a pass.
+ */
+export async function judgeItem(o: { model: LanguageModel; rubric: Rubric; item: JudgeItem; timeoutMs?: number; sleep?: (ms: number) => Promise<void> }): Promise<Verdict> {
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const { system, prompt } = judgePrompt(o.rubric, o.item);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await generateText({ model: o.model, system, prompt, temperature: 0, maxRetries: 0, abortSignal: AbortSignal.timeout(o.timeoutMs ?? 60_000) });
+      return parseVerdict(r.text);
+    } catch (e) {
+      if (!isRateLimit(e) || attempt >= WAITS_MS.length) return { error: (e instanceof Error ? e.message : String(e)).slice(0, 160) };
+      await sleep(WAITS_MS[attempt]);
+    }
   }
 }
