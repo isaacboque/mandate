@@ -227,8 +227,18 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Evidence.** `test/judge-v2.test.ts`; no v2 calibration or labelling result yet.
 - **Implemented in.** [#96](https://github.com/isaacboque/mandate/pull/96).
 
+### D24. Per-visitor limits on the public demo
+
+- **Status.** Pending review (the numbers are an implementation choice).
+- **Context.** A pre-launch audit on 2026-11-23 found that the hosted demo, which answers with a Groq model, had no per-visitor limit: only the 150-turn daily budget for the whole server and an unbounded waiting queue. One script or one insistent visitor could spend the day's quota and leave everyone else the "quota used up" card.
+- **Decision.** Whenever a model is configured, searches are limited per visitor per hour and per day by default in every mode; mock mode with no model stays unlimited. Explicit values still win and `0` turns a limit off. The waiting queue for the model is capped, and a turn past the cap gets the existing honest limit card without calling the provider. `render.yaml` sets the two limits explicitly.
+- **Implementation choice (pending review).** 10 searches per visitor per hour, a day cap equal to `LLM_DAILY_TURN_BUDGET` (150), and a queue of 8 (`LLM_MAX_QUEUE`). Live mode keeps its earlier defaults (12 and 300).
+- **Consequences and trade-offs.** A visitor can no longer use up everyone's quota alone, at the cost of an honest "demo limit reached" message for heavy users. Visitors are told apart by address, so people behind one address share a limit.
+- **Evidence.** `test/app.test.ts` (defaults and overrides), `test/llm-failure.test.ts` (queue cap and its card).
+- **Implemented in.** The pull request for task `2026-11-23-mandate-demo-rate-limits`.
+
 ## Open items
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
-- **Implementation choices pending maintainer review:** D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
+- **Implementation choices pending maintainer review:** D24 (per-visitor limit numbers), D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
 - **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.
