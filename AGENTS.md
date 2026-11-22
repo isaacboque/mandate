@@ -11,7 +11,7 @@ Mandate is a shopping agent that can only propose. A person signs a spending con
 ```bash
 npm run dev                  # API :8787 + UI :5173, demo mode, no keys
 npm run lint && npm run typecheck && npm test && npm run build
-npm run eval                 # 60 deterministic scenarios judged by an independent oracle
+npm run eval                 # 61 deterministic scenarios judged by an independent oracle
 npm run eval:mutants         # each guardrail switched off in turn: the eval must fail
 npm run eval:injection-variants
 npm run eval:datasets        # regenerate eval/datasets/*.jsonl when scenarios or cases change

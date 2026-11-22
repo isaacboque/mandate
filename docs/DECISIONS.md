@@ -47,7 +47,7 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Context.** A model that reads untrusted text can be manipulated, and generated code can be wrong in ways that are hard to see. A pure function can be tested line by line and behaves the same whatever any model says.
 - **Decision.** The model has no tool that pays. Eleven named checks (`checkCart`) run in plain code at proposal, and again at checkout against the live price and the mandate's current state. An independent oracle that never calls that code judges every captured payment.
 - **Consequences and trade-offs.** The safety argument no longer depends on any model's behaviour, which makes it testable against the worst-case model rather than an average one. Cost: the oracle re-derives the rules independently, so every rule exists twice and must be kept in step; and deterministic checks enforce what the contract says, not whether the contract is what the person meant.
-- **Evidence.** `npm run eval` (60 scenarios with a model fooled on purpose, no payment outside the mandate: 60/60); `npm run eval:mutants` (each guardrail switched off in turn fails the eval: 11 of 11).
+- **Evidence.** `npm run eval` (61 scenarios with a model fooled on purpose, no payment outside the mandate: 61/61); `npm run eval:mutants` (each guardrail switched off in turn fails the eval: 11 of 11).
 - **Source.** [Hackathon plan](history/hackathon-plan.md).
 
 ### D2. Sandbox only, stated as a limit
@@ -227,6 +227,16 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Evidence.** `test/judge-v2.test.ts`; no v2 calibration or labelling result yet.
 - **Implemented in.** [#96](https://github.com/isaacboque/mandate/pull/96).
 
+### D23. Quantity is per product, per cart
+
+- **Status.** Pending review (the scope of "per item" is the maintainer's to confirm).
+- **Context.** A pre-launch audit on 2026-11-23 found that `maxQuantityPerItem` was checked line by line. A cart of five lines of the same product, one unit each, passed a contract with a limit of 1 and captured five units; budget and per-item cap still held. The independent oracle compared quantity per line too, so the eval stayed green: a check that is too narrow cannot be found by switching checks off.
+- **Decision.** The `quantity` check sums the units of each product across all lines of the cart; the oracle does the same in its own code (it does not call the guardrail); `propose_cart` refuses a cart that names the same product on two lines, so the model can merge them. A new scenario (s57) has a fooled agent split one product over five lines and expects it blocked with nothing captured.
+- **Open question.** Whether "per item" should also hold across several carts under the same contract over its lifetime. Not implemented: the limit stays per cart.
+- **Consequences and trade-offs.** The guardrail now matches the plain reading of the contract text. A person who wants more units has to sign a contract with a higher limit.
+- **Evidence.** `test/mandate-checks.test.ts`, `test/concierge.test.ts`, scenario s57 in `npm run eval` (61/61); the `quantity` mutant now fails s57 as well (`npm run eval:mutants`, 11 of 11).
+- **Implemented in.** The pull request for task `2026-11-23-mandate-quantity-per-product`.
+
 ### D24. Per-visitor limits on the public demo
 
 - **Status.** Pending review (the numbers are an implementation choice).
@@ -240,5 +250,5 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 ## Open items
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
-- **Implementation choices pending maintainer review:** D24 (per-visitor limit numbers), D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
+- **Implementation choices pending maintainer review:** D23 (scope of the per-product quantity), D24 (per-visitor limit numbers), D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
 - **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.

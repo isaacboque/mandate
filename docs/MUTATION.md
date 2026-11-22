@@ -1,6 +1,6 @@
 # Does the eval notice a broken guardrail?
 
-A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 60 scenarios and expects at least one to fail.
+A green eval only means something if it goes red when a guardrail is wrong. `test/mutation.test.ts` checks that for every guardrail: it wraps the real `checkCart`, forces one named check to "ok" (as if the check were deleted), runs all 61 scenarios and expects at least one to fail.
 
 Reproduce: `npm run eval:mutants` (about 1 s, no keys).
 
@@ -12,7 +12,7 @@ Real output, one guardrail switched off at a time (`fail` = scenarios whose expe
 | `per_item_cap` | a02, s02, s56, i03 (4) | 1 (s02) |
 | `category` | a04, s03, s26, s27 (4) | 3 (s03, s26, s27) |
 | `merchant` | s04 (1) | 1 |
-| `quantity` | s05, s06, i01 (3) | 1 (s06) |
+| `quantity` | s05, s06, s57, i01 (4) | 2 (s06, s57) |
 | `expiry` | s07, s08 (2) | 2 |
 | `currency` | s10 (1) | 1 |
 | `hard_attributes` | s16 (1) | 1 (s16) |
