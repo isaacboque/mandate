@@ -25,6 +25,7 @@
     "eval:real:report": "tsx scripts/eval-real-report.ts",
     "eval:adaptive": "tsx scripts/eval-adaptive.ts",
     "eval:judge": "tsx scripts/eval-judge.ts",
+    "eval:judge:label": "tsx scripts/eval-judge-label.ts",
     "keepalive:report": "tsx scripts/keepalive-report.ts",
     "landing:screenshots": "tsx scripts/landing-screenshots.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""

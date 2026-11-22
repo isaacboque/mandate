@@ -5,14 +5,14 @@ import { wilson95 } from "../realModel.js";
 import { ruleOfThreeText } from "./text.js";
 import type { UnitRecord } from "../real/run.js";
 import type { Calibration } from "./calibration.js";
-import { rubricsFor, type Rubric, type RubricId } from "./rubrics.js";
+import { rubricsFor, type Rubric, type RubricId, type RubricVersion } from "./rubrics.js";
 import type { JudgeItem, Verdict } from "./judge.js";
 
 export type JudgeRecord = { key: string; model: string; caseId: string; family: string; rep: number; rubric: RubricId; reply: string; verdict: Verdict };
 
 type JudgeFn = (rubric: Rubric, item: JudgeItem) => Promise<Verdict>;
 
-function load(file: string): Map<string, JudgeRecord> {
+export function load(file: string): Map<string, JudgeRecord> {
   const m = new Map<string, JudgeRecord>();
   if (!existsSync(file)) return m;
   for (const line of readFileSync(file, "utf8").split("\n")) {
@@ -22,12 +22,18 @@ function load(file: string): Map<string, JudgeRecord> {
   return m;
 }
 
+/** What a judge (or a blind labeller) sees for one stored run and one criterion. */
+export function itemFor(rubric: Rubric, c: RealCase, r: UnitRecord, key: string): JudgeItem {
+  const listing = rubric.id === "does-not-follow-listing-instructions" ? c.extraRows?.map((x) => x.description ?? "").join("\n") : undefined;
+  return { id: key, request: c.followUps?.at(-1) ?? c.ask, reply: r.result.reply ?? "", facts: r.result.facts ?? [], ...(listing ? { listing } : {}) };
+}
+
 /**
  * Judges what the agent said in stored real-model runs. Only runs the model answered, on the fail-closed arm (the two arms share one model
  * run, so judging both would count it twice), and only the rubrics that apply to the case family. The judge sees the reply and the facts
  * taken from the system's state, never the agent's own account of them.
  */
-export async function judgeRuns(o: { records: UnitRecord[]; cases: RealCase[]; judge: JudgeFn; file?: string; resume?: boolean; delayMs?: number; sleep?: (ms: number) => Promise<void> }): Promise<JudgeRecord[]> {
+export async function judgeRuns(o: { records: UnitRecord[]; cases: RealCase[]; judge: JudgeFn; file?: string; resume?: boolean; rubricVersion?: RubricVersion; delayMs?: number; sleep?: (ms: number) => Promise<void> }): Promise<JudgeRecord[]> {
   const byId = new Map(o.cases.map((c) => [c.id, c]));
   const stored = o.resume && o.file ? load(o.file) : new Map<string, JudgeRecord>();
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -35,12 +41,11 @@ export async function judgeRuns(o: { records: UnitRecord[]; cases: RealCase[]; j
   for (const r of o.records) {
     const c = byId.get(r.caseId);
     if (!c || r.arm !== "fail-closed" || r.result.mode !== "llm" || r.result.rateLimited || !r.result.reply) continue;
-    for (const rubric of rubricsFor(r.family)) {
+    for (const rubric of rubricsFor(r.family, o.rubricVersion)) {
       const key = `${r.model}|${r.caseId}|${r.rep}|${rubric.id}`;
       let rec = stored.get(key);
       if (!rec) {
-        const listing = rubric.id === "does-not-follow-listing-instructions" ? c.extraRows?.map((x) => x.description ?? "").join("\n") : undefined;
-        const item: JudgeItem = { id: key, request: c.followUps?.at(-1) ?? c.ask, reply: r.result.reply, facts: r.result.facts ?? [], ...(listing ? { listing } : {}) };
+        const item = itemFor(rubric, c, r, key);
         const verdict = await o.judge(rubric, item);
         rec = { key, model: r.model, caseId: r.caseId, family: r.family, rep: r.rep, rubric: rubric.id, reply: r.result.reply, verdict };
         if (o.file) { mkdirSync(dirname(o.file), { recursive: true }); appendFileSync(o.file, JSON.stringify(rec) + "\n"); }
