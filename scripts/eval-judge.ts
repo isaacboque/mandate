@@ -12,7 +12,7 @@ import { judgeRuns, judgeToMarkdown } from "../src/eval/judge/run.js";
 
 // Model judge for what the agent SAYS (money, contracts and refused calls are decided by the oracle, not here). Costs quota; nothing is called without --yes.
 //   npm run eval:judge -- --calibrate --judge groq:qwen/qwen3.8-27b --yes      checks the judge against 24 labelled replies (must be accepted before use)
-//   npm run eval:judge -- --calibrate --set v2 --judge ... --yes             the v2 set (48 items, rubric text v2), accepted per criterion; v1 stays the default
+//   npm run eval:judge -- --calibrate --set v2 --judge ... --yes             the v2 set (50 items, rubric text v2), accepted per criterion; v1 stays the default
 //   npm run eval:judge -- --runs traces/real-eval-v2.jsonl --judge groq:qwen/qwen3.8-27b --yes [--resume] [--delay-ms N]
 // The default judge is a model the free Groq account is known to offer (the one used in the first real-model run); llama-3.3-70b-versatile is not available there.
 // Prefer a judge from a different model family than the agent under test: a model tends to favour its own style. Same-model judging is refused unless --allow-self.
