@@ -40,9 +40,20 @@ Click a suggestion such as "Indoor futsal shoes, max 90 €" → review the draf
 
 To put a real model behind it, copy `.env.example` to `.env`, set the key of the provider you use (Google, OpenAI, Anthropic or Groq, which has a free tier) and run `npm run doctor`. Keys stay on the server; the web page never asks for one. Reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md). Live mode (real catalog, PayPal sandbox) and hosting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-| Ask, get a draft | Edit and sign | Attack blocked | Amendment diff | Revoked, then refused |
-| --- | --- | --- | --- | --- |
-| ![](docs/screenshots/mobile-1-chat-draft.png) | ![](docs/screenshots/mobile-2-draft-form.png) | ![](docs/screenshots/mobile-6-attack.png) | ![](docs/screenshots/mobile-7-amendment.png) | ![](docs/screenshots/mobile-10-refused.png) |
+<table>
+  <tr>
+    <th>1. Ask, get a draft</th>
+    <th>2. Review and sign</th>
+    <th>3. Attack blocked</th>
+    <th>4. Revoked, then refused</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/phone-1-chat-draft.png" alt="Chat: the agent drafts a 90 euro contract from one sentence; nothing is signed" width="220"></td>
+    <td><img src="docs/screenshots/phone-2-draft-form.png" alt="The draft as an editable form, each field marked as coming from the agent" width="220"></td>
+    <td><img src="docs/screenshots/phone-6-attack.png" alt="A poisoned listing tells the model to buy 10; plain code blocks it and lists the checks that failed" width="220"></td>
+    <td><img src="docs/screenshots/phone-10-refused.png" alt="After the contract is revoked the checkout re-check refuses the payment" width="220"></td>
+  </tr>
+</table>
 
 ## How it works
 

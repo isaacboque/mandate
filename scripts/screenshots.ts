@@ -16,7 +16,10 @@ import { createServer } from "node:net";
 import { chromium, type Page } from "playwright-core";
 
 const OUT = "docs/screenshots";
-const VIEWPORTS = [{ name: "desktop", width: 1280, height: 900 }, { name: "mobile", width: 380, height: 800 }] as const;
+// `phone` is the README profile: a real phone viewport at 2x, one viewport-sized shot per key step (see HERO), so every picture has the same size and sharp text.
+// `mobile` (380 px, full page) stays the layout check.
+const VIEWPORTS = [{ name: "desktop", width: 1280, height: 900, scale: 1 }, { name: "mobile", width: 380, height: 800, scale: 1 }, { name: "phone", width: 390, height: 900, scale: 2 }] as const;
+const HERO = new Set(["1-chat-draft", "2-draft-form", "6-attack", "10-refused"]);
 
 const freePort = () => new Promise<number>((res, rej) => {
   const s = createServer();
@@ -45,7 +48,7 @@ const log = (s: string) => console.log(s);
 
 async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: string, vp: (typeof VIEWPORTS)[number], reduced: boolean) {
   const tag = `${vp.name}${reduced ? "+reduced-motion" : ""}`;
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: reduced ? "reduce" : "no-preference", deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: reduced ? "reduce" : "no-preference", deviceScaleFactor: vp.scale });
   await ctx.addInitScript(() => {
     (window as unknown as { __csp: string[] }).__csp = [];
     document.addEventListener("securitypolicyviolation", (e) => (window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
@@ -55,7 +58,21 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   const anims = (p: Page) => p.evaluate(() => document.getAnimations().map((a) => (a as CSSAnimation).animationName || a.constructor.name));
-  const shot = async (name: string) => { if (!reduced) await page.screenshot({ path: `${OUT}/${vp.name}-${name}.png`, fullPage: true }); };
+  const shot = async (name: string) => {
+    if (reduced) return;
+    if (vp.name !== "phone") { await page.screenshot({ path: `${OUT}/${vp.name}-${name}.png`, fullPage: true }); return; }
+    if (!HERO.has(name)) return;
+    // Collapse the tour for the picture (it would take a third of a phone screen), then put it back.
+    const toggle = page.locator(".tour-toggle");
+    const wasOpen = (await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true";
+    if (wasOpen) await toggle.click();
+    // The attack card is tall: start it at the top of the chat pane so its first lines are not cut.
+    if (name === "6-attack") await page.locator(".verdict.bad").first().evaluate((el) => el.closest("div")?.parentElement?.scrollIntoView({ block: "start" }));
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${OUT}/${vp.name}-${name}.png` });
+    if (wasOpen) await toggle.click();
+  };
   /** Checks run on every step once it has settled. */
   const check = async (step: string) => {
     await page.waitForTimeout(450);
@@ -331,7 +348,7 @@ async function main() {
   try {
     await waitUp(url);
     await bootStates(browser, url);
-    for (const vp of VIEWPORTS) for (const reduced of [false, true]) { log(`${vp.name} ${vp.width}px, reduced motion: ${reduced}`); await run(browser, url, vp, reduced); }
+    for (const vp of VIEWPORTS) for (const reduced of vp.name === "phone" ? [false] : [false, true]) { log(`${vp.name} ${vp.width}px, reduced motion: ${reduced}`); await run(browser, url, vp, reduced); }
   } finally {
     await browser.close();
     app.kill();
