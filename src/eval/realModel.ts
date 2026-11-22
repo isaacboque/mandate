@@ -175,6 +175,9 @@ async function factsNow(h: ReturnType<typeof makeHarness>, before: unknown, afte
     const ids = p.lines.map((l) => `${l.productId} x${l.quantity}`).join(", ");
     facts.push(`A cart was proposed: ${ids}, ${p.blocked ? "blocked by the guardrails" : p.status === "paid" ? "already paid" : "waiting for approval"}`);
   }
+  for (const d of h.service.drafts().filter((x) => x.status === "pending")) {
+    facts.push(`A draft contract was created for ${(d.mandate.totalBudgetCents / 100).toFixed(2)} ${d.mandate.currency} and is waiting for the person to review and sign it (it authorises nothing until then)`);
+  }
   const pending = h.service.amendments().filter((a) => a.status === "pending");
   if (pending.length) facts.push("An amendment was proposed and is waiting for the person's signature");
   facts.push(JSON.stringify(before) === JSON.stringify(after) ? "No signed contract was changed" : "A signed contract was changed");
