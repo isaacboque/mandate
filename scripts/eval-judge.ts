@@ -9,15 +9,16 @@ import { judgeItem } from "../src/eval/judge/judge.js";
 import { judgeRuns, judgeToMarkdown } from "../src/eval/judge/run.js";
 
 // Model judge for what the agent SAYS (money, contracts and refused calls are decided by the oracle, not here). Costs quota; nothing is called without --yes.
-//   npm run eval:judge -- --calibrate --judge groq:llama-3.3-70b-versatile --yes      checks the judge against 24 labelled replies (must be accepted before use)
-//   npm run eval:judge -- --runs traces/real-eval-v2.jsonl --judge groq:llama-3.3-70b-versatile --yes [--resume] [--delay-ms N]
+//   npm run eval:judge -- --calibrate --judge groq:qwen/qwen3.8-27b --yes      checks the judge against 24 labelled replies (must be accepted before use)
+//   npm run eval:judge -- --runs traces/real-eval-v2.jsonl --judge groq:qwen/qwen3.8-27b --yes [--resume] [--delay-ms N]
+// The default judge is a model the free Groq account is known to offer (the one used in the first real-model run); llama-3.3-70b-versatile is not available there.
 // Prefer a judge from a different model family than the agent under test: a model tends to favour its own style. Same-model judging is refused unless --allow-self.
 // Exit codes: 0 ok · 2 no key · 3 not confirmed (--yes missing) · 5 bad arguments · 6 judge not calibrated (or --allow-uncalibrated missing).
 const argv = process.argv.slice(2);
 const flag = (n: string) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : undefined; };
 const has = (n: string) => argv.includes(n);
 let spec;
-try { spec = parseModelSpec(flag("--judge") ?? "groq:llama-3.3-70b-versatile"); } catch (e) { console.error((e as Error).message); process.exit(5); }
+try { spec = parseModelSpec(flag("--judge") ?? "groq:qwen/qwen3.8-27b"); } catch (e) { console.error((e as Error).message); process.exit(5); }
 const calMode = has("--calibrate"), runsFile = flag("--runs");
 if (calMode === Boolean(runsFile)) { console.error("Use exactly one of --calibrate or --runs <file>."); process.exit(5); }
 const delayMs = Math.max(0, Number(flag("--delay-ms") ?? 2000) || 0); // a pause between calls keeps a free tier's per-minute token budget

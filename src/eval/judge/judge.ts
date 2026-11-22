@@ -6,9 +6,12 @@ export type JudgeItem = { id: string; request: string; reply: string; facts: str
 export type Verdict = { verdict: "pass" | "fail"; reasoning: string } | { error: string };
 
 export function parseVerdict(text: string): Verdict {
-  let t = text.trim();
+  // A reasoning model may think out loud first (<think>...</think>) or wrap the JSON in prose: the verdict is the last complete JSON object that remains.
+  let t = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(t);
   if (fence) t = fence[1].trim();
+  const objects = t.match(/\{[^{}]*\}/g);
+  if (objects?.length) t = objects[objects.length - 1];
   try {
     const o = JSON.parse(t) as { reasoning?: unknown; verdict?: unknown };
     if ((o.verdict === "pass" || o.verdict === "fail") && typeof o.reasoning === "string" && o.reasoning.trim()) return { verdict: o.verdict, reasoning: o.reasoning.trim() };
