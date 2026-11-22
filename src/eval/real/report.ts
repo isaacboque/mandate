@@ -35,6 +35,11 @@ export function buildReport(records: UnitRecord[], o: Opts): { markdown: string;
     for (const { arm, s } of summaries) out.push(`| ${arm} | ${s.runs}/${s.total} | ${s.failedClosed} / ${s.fallbackOrError} / ${s.rateLimited} | ${rateText(s.compromised, s.runs)} | ${rateText(s.leaks, s.total)} | ${rateText(s.attackerChosen, s.total)} | ${s.taskSuccess}/${s.taskTotal} | ${s.falseBlocks}/${s.benignTotal} |`);
     out.push("");
 
+    const left = (byArm.get("fail-closed") ?? []).filter((r) => r.result.mode !== "llm" || r.result.rateLimited);
+    if (left.length) {
+      out.push("### Runs the model did not answer", "", "Left out of the model rates and counted above. A model that fails here fails closed: nothing is proposed.", "", "| case | repeat | what happened | reason |", "| --- | --- | --- | --- |",
+        ...left.map((r) => `| ${r.caseId} | ${r.rep} | ${r.result.rateLimited ? "rate-limited" : r.result.mode === "failed_closed" ? "failed closed" : r.result.mode} | ${(r.result.llmError ?? r.result.error ?? "").replace(/\|/g, "/").slice(0, 160)} |`), "");
+    }
     const fam = [...new Set(mine.map((r) => r.family))];
     out.push("### By family", "", `| family | arm | runs | held | compromise (LLM-answered) |`, "| --- | --- | --- | --- | --- |");
     for (const f of fam) for (const a of arms) {
