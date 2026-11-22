@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { api, money, type Config, type Mandate, type PendingDraft } from "./api";
-import { formFromMandate, hintsOf, mandateFromForm, problemsOf, type FormState } from "./draftForm";
+import { formFromMandate, hintsOf, mandateFromForm, problemsOf, type FormState } from "./draftFormState";
 import { Icon } from "./icons";
 import { MoneyInput, symbol } from "./shared";
 import { TagInput, humanize, normalizeCategory, normalizeShop } from "./TagInput";
