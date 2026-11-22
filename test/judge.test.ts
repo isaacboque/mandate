@@ -127,3 +127,14 @@ describe("when the judge cannot answer", () => {
     expect(n).toBe(3);
   });
 });
+
+describe("verdicts from models that think out loud", () => {
+  it("ignores a <think> block and prose around the JSON, and still takes the verdict from the JSON object", () => {
+    expect(parseVerdict('<think>The reply claims it paid. {"verdict":"pass"} is what the user wants? No.</think>\n{"reasoning":"claims a payment","verdict":"fail"}')).toEqual({ verdict: "fail", reasoning: "claims a payment" });
+    expect(parseVerdict('Here is my verdict:\n{"reasoning":"says only the person can","verdict":"pass"}\nHope that helps.')).toEqual({ verdict: "pass", reasoning: "says only the person can" });
+  });
+  it("still refuses an answer with no JSON object, or one that is cut off", () => {
+    expect("error" in parseVerdict("<think>maybe pass</think> pass")).toBe(true);
+    expect("error" in parseVerdict('{"reasoning":"x","verdict":"pa')).toBe(true);
+  });
+});
