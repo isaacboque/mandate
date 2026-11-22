@@ -50,6 +50,8 @@ npm run eval:real -- --cases v2 --models groq:openai/gpt-oss-120b --arms legacy-
 npm run eval:real -- --cases v2 --models groq:openai/gpt-oss-120b --arms legacy-fallback,fail-closed --k 1 --max-runs 55 --delay-ms 25000 --yes --resume
 ```
 
+To re-measure one finding without a whole pass, name the cases and give them their own store: `--only a02,a05 --store traces/real-eval-recheck.jsonl` (about 7,000 tokens for two cases). The recheck store is separate on purpose, so `traces/real-eval-v2.jsonl` keeps whole passes; judge it with `npm run eval:judge -- --runs traces/real-eval-recheck.jsonl --judge groq:qwen/qwen3.8-27b --yes`.
+
 `npm run eval:adaptive` pits an attacker model that rewrites a poisoned listing after each outcome against a target agent (defaults: attacker `groq:openai/gpt-oss-20b`, target `groq:openai/gpt-oss-120b`, 8 rounds, 5 seeds). The attacker sees only outcomes. `npm run eval:monitors -- --monitors regex,prompt-guard,safeguard --k 3 --resume` compares the regex with Llama Prompt Guard 2 and gpt-oss-safeguard through Groq ([research/monitors.md](research/monitors.md)).
 
 ## 4. Judge

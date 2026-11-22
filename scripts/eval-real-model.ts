@@ -14,6 +14,7 @@ import { JsonlStore } from "../src/eval/real/store.js";
 //   npm run eval:real -- --models anthropic:<model-id>,google:<model-id> --k 3 --yes [--max-calls N] [--concurrency 1] [--delay-ms N] [--timeout-ms N]
 //   Free run (GROQ_API_KEY only): npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:llama-3.3-70b-versatile --k 1 --yes
 //
+// Re-measure single cases: add `--only a02,a05 --store traces/real-eval-recheck.jsonl` (then `npm run eval:judge -- --runs traces/real-eval-recheck.jsonl --judge groq:qwen/qwen3.8-27b --yes`).
 // Case set v2 (about 65 cases, controlled before/after, resumable across days; see docs/EVIDENCE.md):
 //   npm run eval:real -- --cases v2 --models groq:openai/gpt-oss-120b --arms legacy-fallback,fail-closed --k 3 --plan-days          prints the plan and the days, calls nothing
 //   npm run eval:real -- --cases v2 --models groq:openai/gpt-oss-120b --arms legacy-fallback,fail-closed --k 3 --yes --resume [--max-runs N] [--delay-ms N]
@@ -44,7 +45,14 @@ if (maxArg !== undefined && !(maxCalls! >= 1)) { console.error("--max-calls need
 const yes = process.argv.includes("--yes");
 const v2 = flag("--cases") === "v2" || flag("--arms") !== undefined || process.argv.includes("--plan-days");
 if (flag("--cases") !== undefined && flag("--cases") !== "v2") { console.error('--cases accepts only "v2" (the v1 set is the default)'); process.exit(5); }
-const cases = v2 ? buildCasesV2(1) : [...REAL_CASES, ...ADVERSARIAL_CASES];
+const allCases = v2 ? buildCasesV2(1) : [...REAL_CASES, ...ADVERSARIAL_CASES];
+// --only a02,x07 runs just those cases (to re-measure one finding). Use it with its own --store so the main store keeps whole passes.
+const only = flag("--only")?.split(",").map((x) => x.trim()).filter(Boolean);
+if (only) {
+  const unknown = only.filter((id) => !allCases.some((c) => c.id === id));
+  if (unknown.length) { console.error(`--only: unknown case id(s) ${unknown.join(", ")}`); process.exit(5); }
+}
+const cases = only ? allCases.filter((c) => only.includes(c.id)) : allCases;
 
 const num = (name: string, def: number, min: number) => { const v = flag(name); return v === undefined ? def : Math.max(min, Number(v) || def); };
 const concurrency = num("--concurrency", 1, 1), delayMs = num("--delay-ms", 0, 0);
