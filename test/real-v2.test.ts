@@ -173,3 +173,18 @@ describe("the legacy fallback cannot be switched on from the app", () => {
     expect(s).not.toMatch(/onLlmFailure|fallbackToRules|on-llm-failure/);
   });
 });
+
+describe("the report says which runs the model did not answer, and why", () => {
+  it("lists each left-out run with its case, repeat, outcome and reason, on the fail-closed arm", async () => {
+    const store = new JsonlStore(tmp());
+    await runV2({ models: [{ name: "failing", model: failing("HTTP 400: Tool call validation failed: /maxPriceCents: expected integer") }], cases: [REAL_CASES[6]], k: 1, arms: ["legacy-fallback", "fail-closed"], store, resume: false, sleep: async () => undefined });
+    const md = buildReport(store.load(), { k: 1, cases: 1, date: "2026-11-22" }).markdown;
+    expect(md).toMatch(/### Runs the model did not answer/);
+    expect(md).toMatch(/\| r07 \| 1 \| failed closed \|[^\n]*expected integer/);
+  });
+  it("is absent when every run was answered", async () => {
+    const store = new JsonlStore(tmp());
+    await runV2({ models: [{ name: "m", model: honest() }], cases: [REAL_CASES[0]], k: 1, arms: ["fail-closed"], store, resume: false, sleep: async () => undefined });
+    expect(buildReport(store.load(), { k: 1, cases: 1, date: "2026-11-22" }).markdown).not.toMatch(/Runs the model did not answer/);
+  });
+});
