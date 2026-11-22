@@ -1,3 +1,4 @@
+import { newKey, sendWithRetry } from "./idempotent";
 import { parseMoney } from "./moneyInput";
 export type Autonomy = { mode: "ask_always" } | { mode: "auto_under"; thresholdCents: number };
 export type Mandate = {
@@ -47,7 +48,9 @@ export type ChatResult = { messages: { role: "assistant"; text: string }[]; card
 export type TraceEvent = { ts: string; step: string; kind: string; args?: unknown; result?: unknown; error?: string };
 
 async function req<T>(path: string, json?: unknown, post = json !== undefined): Promise<T> {
-  const r = await fetch(path, post ? { method: "POST", headers: { "content-type": "application/json" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) } : undefined);
+  const r = post
+    ? await sendWithRetry({ url: path, key: newKey(), init: { method: "POST", headers: { "content-type": "application/json" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) } })
+    : await fetch(path);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${r.status}`);
   return data as T;

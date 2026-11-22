@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ShortcutHint } from "../web/src/shared";
 import { Toast } from "../web/src/Toast";
 import { createUndoQueue } from "../web/src/undo";
 
@@ -74,5 +75,16 @@ describe("the toast", () => {
     expect(css).toMatch(/\.toast\s*\{[^}]*animation:\s*toast-in\s*\.18s/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*\.toast\s*\{\s*animation:\s*none/);
     expect(css).toContain("env(safe-area-inset-bottom)");
+  });
+});
+
+
+describe("shortcut hint under the composer (4)", () => {
+  it("names the two keys that matter, as keyboard keys, and is hidden on touch screens", () => {
+    const html = renderToStaticMarkup(createElement(ShortcutHint));
+    expect(html).toMatch(/<kbd>Enter<\/kbd>/);
+    expect(html).toMatch(/<kbd>Shift<\/kbd>\+<kbd>Enter<\/kbd>/);
+    const css = readFileSync(new URL("../web/src/details.css", import.meta.url), "utf8");
+    expect(css).toMatch(/@media \(hover: none\)\s*\{\s*\.kbdhint\s*\{\s*display:\s*none/);
   });
 });

@@ -46,3 +46,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (pointer: coarse) { .toast-undo { min-height: 44px; min-width: 44px; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Shortcut hint under the composer. */
+.kbdhint { margin: 6px 0 0; }
+kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--paper); color: var(--ink); }
+@media (hover: none) { .kbdhint { display: none; } }
