@@ -46,5 +46,5 @@ Commands that call a real model (`eval:real`, `eval:adaptive`, `eval:monitors`, 
 ## Working agreements
 
 - One topic per pull request; use the template and put choices you made under "Decisions".
-- Product and safety decisions belong to the maintainer and are recorded in [docs/DECISIONS.md](docs/DECISIONS.md). Where something is not specified, take the smallest reasonable choice and flag it; do not record a rationale nobody gave.
+- Product and safety decisions belong to the maintainer and are recorded in [docs/DECISIONS.md](docs/DECISIONS.md). Where something is not specified, take the smallest reasonable choice and flag it in the pull request under "Decisions"; never add a choice of your own to `docs/DECISIONS.md`, and do not record a rationale nobody gave.
 - Ask before anything outward-facing or hard to reverse (publishing, deleting branches, changing hosting settings).
