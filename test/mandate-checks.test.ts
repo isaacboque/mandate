@@ -50,6 +50,20 @@ describe("checkCart: one test per check, pass and fail", () => {
     expect(ok(m, cart(line()), "merchant")).toBe(true);
     expect(ok(m, cart(line({ merchant: "scamshop" })), "merchant")).toBe(false);
   });
+  it("quantity is per product across the whole cart, however the units are split over lines", () => {
+    const m = { ...mandate, maxQuantityPerItem: 1, totalBudgetCents: 50000, perItemCapCents: 9000 };
+    const split = cart(...Array.from({ length: 5 }, () => line({ productId: "shoe-court-1", unitPriceCents: 7900, quantity: 1 })));
+    expect(ok(m, split, "quantity")).toBe(false);
+    const reason = checkCart(m, split, NOW).find((r) => r.name === "quantity")!.reason;
+    expect(reason).toContain("shoe-court-1");
+    expect(reason).toContain("5");
+    // Two lines of 2 and 1 against a limit of 3 are 3 units: fine. Against 2 they are 3 units: blocked.
+    const two = cart(line({ productId: "a", quantity: 2 }), line({ productId: "a", quantity: 1 }));
+    expect(ok({ ...m, maxQuantityPerItem: 3 }, two, "quantity")).toBe(true);
+    expect(ok({ ...m, maxQuantityPerItem: 2 }, two, "quantity")).toBe(false);
+    // Different products are counted separately.
+    expect(ok(m, cart(line({ productId: "a" }), line({ productId: "b" })), "quantity")).toBe(true);
+  });
   it("quantity", () => {
     expect(ok(mandate, cart(line({ quantity: 1 })), "quantity")).toBe(true);
     expect(ok(mandate, cart(line({ quantity: 10 })), "quantity")).toBe(false);

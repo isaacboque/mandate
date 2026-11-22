@@ -55,8 +55,16 @@ export function checkCart(mandate: Mandate, cart: Cart, now: Date, opts: { spent
   add("merchant", merchants.length === 0 ? [] : lines.filter((l) => !merchants.includes(l.merchant))
     .map((l) => `${l.productId} is sold by "${l.merchant}", not on the allowlist`), merchants.length === 0 ? "any merchant allowed" : "all merchants allowed");
 
-  add("quantity", lines.filter((l) => !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > mandate.maxQuantityPerItem)
-    .map((l) => `${l.productId} quantity ${l.quantity} is outside 1..${mandate.maxQuantityPerItem}`), "quantities within the limit");
+  // Each line must be a whole number of at least 1 and within the limit, and the limit also holds per product for the whole cart:
+  // splitting one product over several lines must not get around it, and a bad line must not be hidden inside a good sum.
+  const unitsByProduct = new Map<string, number>();
+  for (const l of lines) unitsByProduct.set(l.productId, (unitsByProduct.get(l.productId) ?? 0) + l.quantity);
+  add("quantity", [
+    ...lines.filter((l) => !Number.isInteger(l.quantity) || l.quantity < 1 || l.quantity > mandate.maxQuantityPerItem)
+      .map((l) => `${l.productId} quantity ${l.quantity} is outside 1..${mandate.maxQuantityPerItem}`),
+    ...[...unitsByProduct].filter(([id, n]) => lines.filter((l) => l.productId === id).length > 1 && !(n <= mandate.maxQuantityPerItem))
+      .map(([id, n]) => `${id} has ${n} units in total over several lines, the limit per product is ${mandate.maxQuantityPerItem}`),
+  ], "quantities within the limit");
 
   const expires = Date.parse(mandate.expiresAt);
   add("expiry", !(now.getTime() < expires) ? [`mandate expired at ${mandate.expiresAt}`] : [], `valid until ${mandate.expiresAt}`);

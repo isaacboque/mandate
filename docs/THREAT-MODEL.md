@@ -44,7 +44,7 @@ Each row says who, what they control, what they want, which layer stops them, wh
 ## Not claimed
 
 - No Claude result and no general real-model rate: the real-model run (2026-11-21) is three open-weight models served by Groq, k = 1, 19 runs per model, in a sandbox ([EVIDENCE.md](EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude)). It measured money outside the mandate terms 0/19 per model and one attacker-chosen purchase inside the terms by an LLM (gpt-oss-20b); it also found the fallback flaw closed by "LLM failure fails closed" below. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
-- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (60) and 11 named checks.
+- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (61) and 11 named checks.
 - No production use, no users, no revenue, no prize or hackathon placement; no real money; no merchant handoff.
 - A person approving a bad cart, a compromised server, a stolen session, or a lying catalog are not covered (see the limits below).
 
@@ -57,11 +57,11 @@ Each row says who, what they control, what they want, which layer stops them, wh
 | Write a reason for each line | Approve, edit the mandate, or raise the budget |
 | | Read product text as instructions: it is quoted JSON, never part of the system prompt |
 
-## Attacks covered (60 scenarios, `npm run eval`)
+## Attacks covered (61 scenarios, `npm run eval`)
 
 An independent oracle re-derives every captured payment from the raw fixture rows and the mandate it was made under; it never calls the guardrail code.
 
-- **Over-spending:** total budget, per-item cap, quantity (including zero and negative), currency mismatch, cumulative budget across carts, two pending carts approved past the budget, auto-buy across carts.
+- **Over-spending:** total budget, per-item cap, quantity (including zero and negative, and one product split over several cart lines), currency mismatch, cumulative budget across carts, two pending carts approved past the budget, auto-buy across carts.
 - **Scope:** category not allowed, sibling and leaf categories in the tree, merchant not on the allowlist, hard attribute (size) mismatch.
 - **Time and drift:** mandate expired at proposal or between approval and capture, price drifting above the cap, stale price, item out of stock, mandate replaced after the proposal.
 - **Bypassing the approval queue:** pay without approval, with a rejected approval, with an unknown approval id; approving a blocked proposal; auto-buy on a blocked cart or above its threshold; retries that could pay twice.
@@ -81,7 +81,7 @@ The chat agent has exactly 8 tools: search, get product, propose cart, draft con
 
 Limit: figures the model writes in chat text are not verified; cards carry numbers from server state, and the approval of an `auto_under` cart follows the rule in the human-signed contract, not the agent.
 
-Result: spend safety 60/60, guardrails 28/28, injection 7/7, task success 12/12, agent 13/13.
+Result: spend safety 61/61, guardrails 29/29, injection 7/7, task success 12/12, agent 13/13.
 
 ## Layer results
 

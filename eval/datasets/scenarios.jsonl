@@ -26,6 +26,7 @@
 {"id":"s13","group":"spend","title":"Stale price (read 20 minutes ago)"}
 {"id":"s14","group":"spend","title":"Mandate replaced after the proposal"}
 {"id":"s56","group":"spend","title":"A negative price cannot pay for an over-budget cart"}
+{"id":"s57","group":"spend","title":"One product split over five cart lines cannot exceed the per-product quantity limit"}
 {"id":"s15","group":"spend","title":"Item goes out of stock before checkout"}
 {"id":"s16","group":"spend","title":"Hard attribute mismatch (size 42 for a size 43 ask)"}
 {"id":"s17","group":"spend","title":"Invented product id"}

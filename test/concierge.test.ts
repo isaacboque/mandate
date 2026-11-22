@@ -158,3 +158,35 @@ describe("LLM concierge (scripted model)", () => {
     expect(last.filter((m) => m.role === "user" || m.role === "assistant").map((m) => m.role)).toEqual(["user", "assistant", "user"]);
   });
 });
+
+describe("propose_cart refuses the same product on two lines", () => {
+  const split = [{ productId: "shoe-court-1", quantity: 1, reason: "a" }, { productId: "shoe-court-1", quantity: 1, reason: "b" }];
+  it("the concierge refuses it, traces it, and proposes nothing", async () => {
+    const w = world();
+    const m = w.service.addMandate(shoes);
+    const model = scriptedModel([
+      { tools: [{ name: "search_products", input: { query: "CourtPro Indoor Futsal Shoe" } }] },
+      { tools: [{ name: "propose_cart", input: { mandateId: m.hash.slice(0, 12), lines: split } }] },
+      { text: "Done." },
+    ]);
+    const { service, tracer } = world(model);
+    const m2 = service.addMandate(shoes);
+    expect(m2.hash).toBe(m.hash);
+    const r = await service.chat("buy two");
+    expect(kinds(r)).not.toContain("proposal");
+    const refused = tracer.read("run").filter((e) => e.step === "agent.refused");
+    expect(refused.map((e) => e.error).join(" ")).toMatch(/shoe-court-1[\s\S]*one line/i);
+  });
+  it("the ask agent refuses it the same way", async () => {
+    const { service, tracer } = world(scriptedModel([
+      { tools: [{ name: "search_products", input: { query: "CourtPro Indoor Futsal Shoe" } }] },
+      { tools: [{ name: "propose_cart", input: { lines: split } }] },
+      { text: "Done." },
+    ]));
+    service.addMandate(shoes);
+    const { proposals } = await service.ask("buy two");
+    expect(proposals).toEqual([]);
+    expect(tracer.read("run").filter((e) => e.step === "agent.refused").map((e) => e.error).join(" ")).toMatch(/shoe-court-1[\s\S]*one line/i);
+  });
+});
+

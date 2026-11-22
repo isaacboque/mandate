@@ -93,6 +93,9 @@ export function buildConciergeTools(port: ConciergePort, out: ConciergeOut) {
         if (lines.some((l) => l.quantity === null)) return refuse("quantity must be a finite whole number", { mandateId, lines: raw.lines.map((l) => ({ productId: l.productId, quantity: String(l.quantity) })) });
         const input = { ...raw, lines: lines as { productId: string; quantity: number; reason: string }[] };
         if (!known(mandateId)) return refuse(`Unknown contract ${mandateId}; call list_mandates`, { mandateId });
+        const ids = input.lines.map((l) => l.productId);
+        const twice = ids.find((id, i) => ids.indexOf(id) !== i);
+        if (twice) return refuse(`Product ${twice} is on more than one line; put all its units on one line`, input);
         const unknown = input.lines.find((l) => !port.seen.has(l.productId));
         if (unknown) return refuse(`Product ${unknown.productId} was not returned by the catalog this turn`, input);
         const p = await port.proposeCart(mandateId, input, "chat");
