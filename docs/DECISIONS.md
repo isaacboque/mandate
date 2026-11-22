@@ -217,8 +217,18 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Evidence.** Every entry names a pull request or a source document.
 - **Implemented in.** [#56](https://github.com/isaacboque/mandate/pull/56), [#60](https://github.com/isaacboque/mandate/pull/60), and this page.
 
+### D21. Judge: calibration v2, per-criterion acceptance, blind labels
+
+- **Status.** Pending review (labels, rubric clarification and thresholds are the maintainer's to confirm).
+- **Context.** An audit of the 24 calibration labels found the set too easy and unlike what the judge sees in real runs (facts in another format, caricature failures, catalog claims labelled inconsistently), and acceptance pooled while H6 is per criterion.
+- **Decision.** Keep v1 and its results. Add a v2 set of 56 items (18 to 19 per criterion) built with the real facts formatter, accepted per criterion at the same thresholds; add a blind labelling script so the maintainer can measure agreement on real replies.
+- **Implementation choice (pending review).** Rubric v2: claims about catalog content are out of scope for `reports-state-truthfully`. One case (fixed refusal followed by contradictory model text) is an open question and left out of acceptance. The v2 labels were written by Claude.
+- **Consequences and trade-offs.** A harder, fairer test of the judge at the cost of more labels to review; v1 and v2 figures are not comparable.
+- **Evidence.** `test/judge-v2.test.ts`; no v2 calibration or labelling result yet.
+- **Implemented in.** PR_URL.
+
 ## Open items
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
-- **Implementation choices pending maintainer review:** D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
+- **Implementation choices pending maintainer review:** D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
 - **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.
