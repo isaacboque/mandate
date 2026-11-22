@@ -20,7 +20,7 @@ export function describeMandate(m: Mandate): string {
  * A pending draft as an editable form. Fields the agent filled say so; Sign sends the fields exactly as they are here.
  * Nothing is signed until the person presses the button, and the agent has no way to press it.
  */
-export function DraftForm({ draft, config, busy, run, onDone, onSigned }: { draft: PendingDraft; config: Config; busy: boolean; run: RunFn; onDone: () => void; onSigned?: (draft: PendingDraft) => void }) {
+export function DraftForm({ draft, config, busy, run, onDone, onSigned, onDiscard }: { draft: PendingDraft; config: Config; busy: boolean; run: RunFn; onDone: () => void; onSigned?: (draft: PendingDraft) => void; onDiscard?: (draft: PendingDraft) => void }) {
   const live = config.demoMode === "live";
   const sym = symbol(draft.mandate.currency);
   const [f, setF] = useState<FormState>(() => formFromMandate(draft.mandate));
@@ -40,7 +40,8 @@ export function DraftForm({ draft, config, busy, run, onDone, onSigned }: { draf
   const shopSuggestions = (config.seen?.merchants ?? []).map((s) => ({ value: s.value, note: `${s.count} found` }));
   const id = draft.id;
   const sign = () => run(() => api.signDraft(draft.id, m)).then((r) => { if (r) { onDone(); onSigned?.(draft); } });
-  const discard = () => run(() => api.discardDraft(draft.id)).then((r) => r && onDone());
+  // With an undo toast behind it (onDiscard) there is no confirm step: the draft goes at once and can be brought back for a few seconds.
+  const discard = () => (onDiscard ? onDiscard(draft) : run(() => api.discardDraft(draft.id)).then((r) => r && onDone()));
 
   return (
     <article className="card draftform" aria-label="Contract draft to review">

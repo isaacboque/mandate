@@ -151,6 +151,12 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await check("1 draft form");
   await tapTargets("1 contracts");
   await shot("2-draft-form");
+  // Undo toast: discarding a draft hides it at once and offers Undo; Undo brings the very same draft back. (The request is only sent after 8 s.)
+  await page.getByRole("button", { name: "Discard" }).click();
+  await must("1 undo toast", (await page.getByRole("status").filter({ hasText: "Draft discarded" }).count()) === 1 && (await page.getByRole("button", { name: "Sign contract" }).count()) === 0, "discarding a draft shows an Undo toast (role=status) and hides the draft");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Sign contract" }).waitFor();
+  await must("1 undo restores", (await page.getByRole("status").filter({ hasText: "Draft discarded" }).count()) === 0, "Undo brings the draft back and the toast goes");
 
   // Ticket 12: text typed in the category field and not confirmed with Enter is kept on blur, with a visible hint.
   const cats = page.getByLabel(/^Categories/);
