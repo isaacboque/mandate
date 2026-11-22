@@ -11,7 +11,7 @@ const GROUPED = /^\d{1,3}$/;
 export function parseMoney(text: string): number {
   const stripped = text.replace(CURRENCY_WORDS, " ").replace(/[€$£]/g, " ").trim();
   // A space between digits is a thousands separator only before a group of exactly three digits ("1 234"); "9 0" or "90 50" is not an amount.
-  const t = stripped.replace(/(?<=\d)[   ](?=\d{3}(?!\d))/g, "");
+  const t = stripped.replace(/(?<=\d)[ \u00A0\u202F](?=\d{3}(?!\d))/g, "");
   if (!/^[\d.,]+$/.test(t) || !/\d/.test(t)) return NaN;
 
   const thousands = (parts: string[]) => GROUPED.test(parts[0]) && parts.slice(1).every((p) => p.length === 3);

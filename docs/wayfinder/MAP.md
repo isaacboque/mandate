@@ -12,7 +12,7 @@ Mandate was a PayPal AI Hackathon project; the hackathon closed without a submis
 - [Is the claim "I broke two guardrails on purpose" reproducible?](tickets/01-mutation-claim.md): it was a manual, one-off claim. Now `npm run eval:mutants` switches off each of the guardrails in turn and all are caught (10 at that date, 11 now; docs/MUTATION.md).
 - [Do README/docs numbers still match the repo?](tickets/03-claims-audit.md): yes at that date: 10 named checks, 46 scenarios (27/7/12), 166 tests before that PR (177 after). Today (2026-11-19): 11 checks, 56 scenarios (28/7/12/9), 289 tests; CI runs typecheck, test, eval, mutants, build.
 
-- [Full review before the LinkedIn post](../REVIEW-2026-11-17.md): code, UX, UI and claims; 25 findings, most fixed in the review PR (tests 177 → 197, eval and mutation unchanged).
+- [Full review before the LinkedIn post](../history/review-2026-11-17.md): code, UX, UI and claims; 25 findings, most fixed in the review PR (tests 177 → 197, eval and mutation unchanged).
 
 ## Destination 2
 Mandate is an agent-first project (chat + contracts), with the guardrail re-proven: 11 checks, 55 scenarios (27/7/12/9), 11/11 mutants caught. Spec: [AGENT-SPEC](../AGENT-SPEC.md).
@@ -28,7 +28,7 @@ The web app is agent-first: a chat beside a contracts panel, every authority-mov
 
 ## Destination 5 (2026-11-20)
 - Detector measured apart from the structural controls: `npm run eval:injection-variants` (78 variants; detector 19/78, money outside the mandate 0/78). Open improvement: [25 detector hardening](tickets/25-detector-hardening.md).
-- Write-up for a reviewer: [WRITEUP.md](../WRITEUP.md) (question, setup in control terms, results, what failed, 5 next experiments); a demo GIF (`npm run demo:gif`); one current post in [LINKEDIN.md](../LINKEDIN.md). The real-model rows stay `TODO(Isaac)` until `npm run eval:real` is run.
+- Write-up for a reviewer: [WRITEUP.md](../WRITEUP.md) (question, setup in control terms, results, what failed, 5 next experiments); a demo GIF (`npm run demo:gif`). The real-model rows stay pending until `npm run eval:real` is run.
 
 - Resolved 2026-11-21: [26 LLM failure falls back to the rules agent](tickets/26-fallback-fail-closed.md): a configured LLM that fails now fails closed (nothing proposed, error card); the rules agent answers only with no LLM.
 

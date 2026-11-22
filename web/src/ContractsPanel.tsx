@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AmendmentDiff } from "./AmendmentDiff";
-import { api, money, type Amendment, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
+import { api, money, type Amendment, type Config, type MandateView, type PendingDraft } from "./api";
 import { countdown, meter, sortContracts } from "./cards";
 import { DraftForm } from "./DraftForm";
 import { Icon } from "./icons";
@@ -66,8 +66,8 @@ function ContractCard({ v, busy, run, onChanged, now }: { v: MandateView; busy: 
   );
 }
 
-export function ContractsPanel({ config, contracts, drafts, amendments, proposals, busy, run, onChanged, onDraftSigned, id }: {
-  config: Config; contracts: MandateView[]; drafts: PendingDraft[]; amendments: Amendment[]; proposals: Proposal[]; busy: boolean; run: RunFn; onChanged: () => void; onDraftSigned?: (draft: PendingDraft) => void; id?: string;
+export function ContractsPanel({ config, contracts, drafts, amendments, busy, run, onChanged, onDraftSigned, id }: {
+  config: Config; contracts: MandateView[]; drafts: PendingDraft[]; amendments: Amendment[]; busy: boolean; run: RunFn; onChanged: () => void; onDraftSigned?: (draft: PendingDraft) => void; id?: string;
 }) {
   const now = useNow();
   const pendingDrafts = drafts.filter((d) => d.status === "pending");

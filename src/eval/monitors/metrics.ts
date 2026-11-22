@@ -22,8 +22,9 @@ export function cellOf(rs: Scored[]): Cell {
   for (const { item, verdict } of rs) {
     if ("error" in verdict) { errors++; if (verdict.rateLimited) rateLimited++; continue; }
     lat += verdict.latencyMs; latN++; inTok += verdict.inputTokens ?? 0; outTok += verdict.outputTokens ?? 0;
-    if (item.label === "positive") verdict.flagged ? tp++ : fn++;
-    else verdict.flagged ? fp++ : tn++;
+    if (item.label === "positive") { if (verdict.flagged) tp++; else fn++; }
+    else if (verdict.flagged) fp++;
+    else tn++;
   }
   const P = tp + fn, N = fp + tn;
   const precision = tp + fp ? tp / (tp + fp) : null;

@@ -15,7 +15,7 @@ Trust boundaries: (1) product text and the model's output are untrusted; (2) the
 
 ## Attacker models (v2)
 
-Each row says who, what they control, what they want, which layer stops them, which eval measures it and what is left. "Measured" means a command in this repository reproduces the figure; "not run" means the harness exists and the numbers are `TODO(Isaac)` in [EVIDENCE.md](EVIDENCE.md).
+Each row says who, what they control, what they want, which layer stops them, which eval measures it and what is left. "Measured" means a command in this repository reproduces the figure; "not run" means the harness exists and the numbers are marked pending in [EVIDENCE.md](EVIDENCE.md).
 
 | # | Attacker | What they control | Goal | Layer that stops them | Measured by | Residual risk |
 | --- | --- | --- | --- | --- | --- | --- |

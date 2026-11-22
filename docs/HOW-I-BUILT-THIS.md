@@ -8,18 +8,18 @@ Isaac set the direction, made the decisions and reviewed the results. Claude Cod
 
 ## Tooling
 
-I used Claude Code (Claude Sonnet 5.5; two commits carry a Claude Fable 5.2 trailer) for implementation: it worked through the work items in [PLAN.md](PLAN.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
+I used Claude Code (Claude Sonnet 5.5; two commits carry a Claude Fable 5.2 trailer) for implementation: it worked through the work items in [hackathon plan](history/hackathon-plan.md) one pull request at a time, on its own branch, with the checks in [AGENTS.md](../AGENTS.md) run before each PR, and wrote its smaller product choices into each PR description under "Decisions". At runtime the app can use a different model (Gemini by default) as the shopping agent; that is part of the product, not of how it was built.
 
 ## Who decided what
 
 | Decided by Isaac | Delegated to Claude |
 | --- | --- |
-| The project, its pitch and its scope, written down as [PLAN.md](PLAN.md) ("Decided by Isaac") | Writing the code, tests and docs for each work item (M1–M8 and the later PRs) |
+| The project, its pitch and its scope, written down as [hackathon plan](history/hackathon-plan.md) ("Decided by Isaac") | Writing the code, tests and docs for each work item (M1–M8 and the later PRs) |
 | The core design: the agent can only propose, guardrails are plain code outside the LLM, PayPal pays only after approval and a checkout re-check | The details inside each guardrail, recorded per PR under "Decisions" (for example the 10-minute price freshness window, exclusive expiry, empty merchant list means any merchant) |
 | The stack, the work-item order and the rule "one PR per work item, CI must pass" ([AGENTS.md](../AGENTS.md)) | Working around tool limits, such as calling the PayPal Orders v2 REST API directly because the toolkit's `create_order` only accepts USD |
 | Reusing the trace, approval queue and design system from my own earlier project ([Reuse](../README.md#reuse)) | Reading the Channel3 API: price units, cheapest in-stock offer, attribute mapping, with a smoke script for me to confirm them |
-| What the eval must measure: spend safety at 100%, injection resistance, task success (PLAN.md, "Eval") | Writing the eval scenarios, the scripted "fooled" model and the independent oracle |
-| Saying plainly that the merchant of record is a sandbox account and a real merchant handoff is not built (PLAN.md, "Architecture") | Holding scope on submission day, e.g. no "any category" option and no EU to US size conversion |
+| What the eval must measure: spend safety at 100%, injection resistance, task success ([hackathon plan](history/hackathon-plan.md), "Eval") | Writing the eval scenarios, the scripted "fooled" model and the independent oracle |
+| Saying plainly that the merchant of record is a sandbox account and a real merchant handoff is not built ([hackathon plan](history/hackathon-plan.md), "Architecture") | Holding scope on submission day, e.g. no "any category" option and no EU to US size conversion |
 | The merge rule: every change goes through a pull request, and nothing merges unless CI passes ([AGENTS.md](../AGENTS.md)) | Opening each pull request with its checks run and its decisions written down, so the diff and the reasoning can be read together |
 
 ## How the output was checked

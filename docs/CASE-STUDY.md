@@ -2,7 +2,7 @@
 
 An agent you talk to, bound by contracts it cannot sign. (Earlier framing: give a shopping agent a signed mandate, not your wallet.) This is the long version of the project: what it does, how it is built, what went wrong and what it still cannot do. Sandbox only: no real money moves.
 
-Links: [GitHub](https://github.com/isaacboque/mandate) · [live demo](https://mandate-gb6t.onrender.com) (fixtures, simulated payments, no keys) · [live mode](https://mandate-live-7q2i.onrender.com) (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, so the demo mode is the easy way to try it). Free instances can take about 30 s to wake up.
+Links: [GitHub](https://github.com/isaacboque/mandate) · [live demo](https://isaacboque.github.io/mandate/) (fixtures, simulated payments, no keys) · [live mode](https://mandate-live-7q2i.onrender.com) (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, so the demo mode is the easy way to try it). Free instances can take about 30 s to wake up.
 
 ---
 
