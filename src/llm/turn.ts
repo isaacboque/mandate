@@ -77,6 +77,10 @@ export async function runGuardedLlmTurn<T>(o: {
   label: string;
 }): Promise<TurnResult<T>> {
   const slot = await o.gate.acquire(o.onStatus);
+  if ("exhausted" in slot && slot.busy) {
+    o.onFailure("rate_limit_minute", "model queue full");
+    return { ok: false, failure: failureFor("rate_limit_minute", slot.resetInSec, o.label) };
+  }
   if ("exhausted" in slot) {
     o.onFailure("budget", "daily turn budget used up");
     return { ok: false, failure: failureFor("budget", slot.resetInSec, o.label) };

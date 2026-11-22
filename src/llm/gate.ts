@@ -4,7 +4,11 @@
  * refused without calling the provider at all. Deep on purpose: queue, budget and day rollover live here, callers only `acquire`.
  */
 export type Slot = { release(): void };
-export type Exhausted = { exhausted: true; resetInSec: number };
+/** `busy`: refused because too many turns are already waiting (not because the day's budget is spent). */
+export type Exhausted = { exhausted: true; resetInSec: number; busy?: true };
+
+/** What a turn refused for a full queue is told to wait. */
+const BUSY_RETRY_SEC = 10;
 
 export class LlmGate {
   private busy = false;
@@ -12,8 +16,8 @@ export class LlmGate {
   private used = 0;
   private day = "";
 
-  /** `dailyBudget`: turns per UTC day (0 or undefined = no limit). */
-  constructor(private opts: { dailyBudget?: number; now?: () => Date } = {}) {}
+  /** `dailyBudget`: turns per UTC day (0 or undefined = no limit). `maxQueue`: turns allowed to wait behind the running one (undefined = unbounded); past it a turn is refused as busy. */
+  constructor(private opts: { dailyBudget?: number; maxQueue?: number; now?: () => Date } = {}) {}
 
   private now() { return (this.opts.now ?? (() => new Date()))(); }
 
@@ -25,6 +29,9 @@ export class LlmGate {
     if (budget > 0 && this.used >= budget) {
       const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
       return { exhausted: true, resetInSec: Math.ceil((next - now.getTime()) / 1000) };
+    }
+    if (this.busy && this.opts.maxQueue !== undefined && this.waiting.length >= this.opts.maxQueue) {
+      return { exhausted: true, busy: true, resetInSec: BUSY_RETRY_SEC }; // refused: does not use the budget
     }
     this.used++;
     if (this.busy) {

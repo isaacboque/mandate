@@ -82,3 +82,48 @@ describe("LlmGate: one model call at a time, and a daily budget", () => {
     for (let i = 0; i < 5; i++) { const s = await gate.acquire(); if ("exhausted" in s) throw new Error("limited"); s.release(); }
   });
 });
+
+describe("LlmGate: a capped waiting queue", () => {
+  it("past maxQueue waiting turns, a turn is refused as busy without waiting and without using the daily budget", async () => {
+    const gate = new LlmGate({ maxQueue: 2, dailyBudget: 10 });
+    const first = await gate.acquire();
+    if ("exhausted" in first) throw new Error("unexpected");
+    const w1 = gate.acquire(), w2 = gate.acquire();
+    const over = await gate.acquire();
+    expect(over).toMatchObject({ exhausted: true, busy: true });
+    first.release();
+    for (const w of [w1, w2]) { const s = await w; if ("exhausted" in s) throw new Error("unexpected"); s.release(); }
+    // 3 turns used the budget (first + two waiters); the refused one did not.
+    const again = await gate.acquire();
+    expect("exhausted" in again).toBe(false);
+  });
+
+  it("with no maxQueue the queue is unbounded, as before", async () => {
+    const gate = new LlmGate();
+    const first = await gate.acquire();
+    if ("exhausted" in first) throw new Error("unexpected");
+    const waiters = Array.from({ length: 20 }, () => gate.acquire());
+    await Promise.resolve();
+    first.release();
+    for (const w of waiters) { const s = await w; if ("exhausted" in s) throw new Error("unexpected"); s.release(); }
+  });
+
+  it("a busy refusal gives the honest limit card and never runs the turn", async () => {
+    const { runGuardedLlmTurn } = await import("../src/llm/turn.js");
+    const gate = new LlmGate({ maxQueue: 0 });
+    const hold = await gate.acquire();
+    if ("exhausted" in hold) throw new Error("unexpected");
+    let ran = false;
+    const failures: string[] = [];
+    const r = await runGuardedLlmTurn({ gate, sleep: async () => {}, run: async () => { ran = true; return 1; }, canRetry: () => true, onFailure: (k) => failures.push(k), label: "Groq free tier" });
+    hold.release();
+    expect(ran).toBe(false);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failure.card).toMatchObject({ type: "llm_limited", variant: "minute" });
+      expect(r.failure.text).toMatch(/busy/i);
+      expect(r.failure.text).toMatch(/nothing was proposed or spent/i);
+    }
+    expect(failures).toEqual(["rate_limit_minute"]);
+  });
+});
