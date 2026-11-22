@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { modelFor } from "../src/llm/model.js";
 import { buildMonitorDataset } from "../src/eval/monitors/dataset.js";
