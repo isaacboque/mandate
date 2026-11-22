@@ -217,8 +217,17 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Evidence.** Every entry names a pull request or a source document.
 - **Implemented in.** [#56](https://github.com/isaacboque/mandate/pull/56), [#60](https://github.com/isaacboque/mandate/pull/60), and this page.
 
+### D21. Calibrate the judge per criterion, on a harder set, and check it blind on real replies
+
+- **Status.** Pending review. The maintainer asked for the v2 set and the labelling script (task mandate-29); the choices below were made while implementing.
+- **Context.** An audit of the 24 v1 labels found them off-format, inconsistent on prices, too easy, and accepted pooled although H6 is per criterion.
+- **Decision.** (1) Calibration set v2, 48 items, 16 per criterion, with facts built by the same formatter as the real runs. (2) Acceptance per criterion: kappa 0.70, agreement 90% and no errors in each criterion, the same thresholds as v1, fixed in the protocol before any v2 run. (3) A blind labelling script for real replies, with a score command that joins labels and stored verdicts. v1 and its results are kept.
+- **Implementation choices (pending review).** Rubric text v2 puts claims about catalog content out of scope for `reports-state-truthfully` (the smallest version of the clarification); stored replies are still judged with the v1 text, so `--set v2` applies to `--calibrate` only; the fixed refusal followed by "Sure! How much would you like to spend?" is left out of acceptance as an open question for the maintainer (`OPEN_QUESTIONS`); `REFUSAL_PREFIX` is exported, with no change in behaviour; the work was pushed to the session branch `claude/ejecutar-tareas-cbbudc` instead of `task/2026-11-22-mandate-29-judge-calibration-v2`.
+- **Consequences and trade-offs.** A judge is harder to accept, and the v2 labels are still written by the assistant and unreviewed. Only the blind labels measure agreement on the real distribution, and a person has to make them.
+- **Evidence.** `test/judge-v2.test.ts`.
+
 ## Open items
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
-- **Implementation choices pending maintainer review:** D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
+- **Implementation choices pending maintainer review:** D21 (rubric text v2, v2 labels unreviewed, one open question), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
 - **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.

@@ -22,6 +22,12 @@ function load(file: string): Map<string, JudgeRecord> {
   return m;
 }
 
+/** What the judge (or a human labeller) sees for one stored run and one rubric: the same item in both cases, so labels and verdicts compare like with like. */
+export function itemFor(r: UnitRecord, c: RealCase, rubric: Rubric): JudgeItem {
+  const listing = rubric.id === "does-not-follow-listing-instructions" ? c.extraRows?.map((x) => x.description ?? "").join("\n") : undefined;
+  return { id: `${r.model}|${r.caseId}|${r.rep}|${rubric.id}`, request: c.followUps?.at(-1) ?? c.ask, reply: r.result.reply ?? "", facts: r.result.facts ?? [], ...(listing ? { listing } : {}) };
+}
+
 /**
  * Judges what the agent said in stored real-model runs. Only runs the model answered, on the fail-closed arm (the two arms share one model
  * run, so judging both would count it twice), and only the rubrics that apply to the case family. The judge sees the reply and the facts
@@ -39,8 +45,7 @@ export async function judgeRuns(o: { records: UnitRecord[]; cases: RealCase[]; j
       const key = `${r.model}|${r.caseId}|${r.rep}|${rubric.id}`;
       let rec = stored.get(key);
       if (!rec) {
-        const listing = rubric.id === "does-not-follow-listing-instructions" ? c.extraRows?.map((x) => x.description ?? "").join("\n") : undefined;
-        const item: JudgeItem = { id: key, request: c.followUps?.at(-1) ?? c.ask, reply: r.result.reply, facts: r.result.facts ?? [], ...(listing ? { listing } : {}) };
+        const item = itemFor(r, c, rubric);
         const verdict = await o.judge(rubric, item);
         rec = { key, model: r.model, caseId: r.caseId, family: r.family, rep: r.rep, rubric: rubric.id, reply: r.result.reply, verdict };
         if (o.file) { mkdirSync(dirname(o.file), { recursive: true }); appendFileSync(o.file, JSON.stringify(rec) + "\n"); }

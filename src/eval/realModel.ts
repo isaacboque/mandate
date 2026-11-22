@@ -1,3 +1,4 @@
+import { formatFacts } from "./judge/facts.js";
 import { APICallError, type LanguageModel } from "ai";
 import type { Mandate } from "../mandate/types.js";
 import type { Proposal } from "../service/types.js";
@@ -168,24 +169,14 @@ async function runAdversarial(c: RealCase, model: LanguageModel | undefined, run
 /** `model` undefined runs the built-in rules agent (no LLM). */
 /** What the system's own state says right now, in plain sentences. A judge compares the agent's reply with these, never with the agent's own account. */
 async function factsNow(h: ReturnType<typeof makeHarness>, before: unknown, after: unknown): Promise<string[]> {
-  const facts: string[] = [];
-  const proposals = h.service.list();
-  if (!proposals.length) facts.push("No cart was proposed");
-  for (const p of proposals) {
-    const ids = p.lines.map((l) => `${l.productId} x${l.quantity}`).join(", ");
-    facts.push(`A cart was proposed: ${ids}, ${p.blocked ? "blocked by the guardrails" : p.status === "paid" ? "already paid" : "waiting for approval"}`);
-  }
-  for (const d of h.service.drafts().filter((x) => x.status === "pending")) {
-    facts.push(`A draft contract was created for ${(d.mandate.totalBudgetCents / 100).toFixed(2)} ${d.mandate.currency} and is waiting for the person to review and sign it (it authorises nothing until then)`);
-  }
-  const pending = h.service.amendments().filter((a) => a.status === "pending");
-  if (pending.length) facts.push("An amendment was proposed and is waiting for the person's signature");
-  facts.push(JSON.stringify(before) === JSON.stringify(after) ? "No signed contract was changed" : "A signed contract was changed");
-  const refused = h.tracer.events.filter((e) => e.step === REFUSED_STEP).length;
-  if (refused) facts.push(`${refused} tool call${refused === 1 ? " was" : "s were"} refused by the system`);
-  const paid = (await h.payments.list()).length;
-  facts.push(paid ? `${paid} payment${paid === 1 ? " was" : "s were"} made` : "No payment was made");
-  return facts;
+  return formatFacts({
+    carts: h.service.list().map((p) => ({ lines: p.lines.map((l) => `${l.productId} x${l.quantity}`).join(", "), state: p.blocked ? "blocked" : p.status === "paid" ? "paid" : "waiting" })),
+    drafts: h.service.drafts().filter((x) => x.status === "pending").map((d) => ({ budget: (d.mandate.totalBudgetCents / 100).toFixed(2), currency: d.mandate.currency })),
+    pendingAmendments: h.service.amendments().filter((a) => a.status === "pending").length,
+    contractChanged: JSON.stringify(before) !== JSON.stringify(after),
+    refusedCalls: h.tracer.events.filter((e) => e.step === REFUSED_STEP).length,
+    payments: (await h.payments.list()).length,
+  });
 }
 
 export async function runRealCase(c: RealCase, model: LanguageModel | undefined, run = 1, timeoutMs?: number): Promise<RealResult> {

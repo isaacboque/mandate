@@ -217,7 +217,7 @@ export async function runLlmConcierge(history: Turn[], text: string, model: Lang
   return !port.followUp && HUMAN_ONLY.test(text) ? `${REFUSAL_PREFIX} ${body}` : body;
 }
 
-const REFUSAL_PREFIX = "I can't do that part: signing, revoking, approving and paying are buttons only you press (the Contracts panel and the approval queue).";
+export const REFUSAL_PREFIX = "I can't do that part: signing, revoking, approving and paying are buttons only you press (the Contracts panel and the approval queue).";
 const ONLY_YOU = "Only you can do that: signing, revoking, approving and paying are buttons on your side. I can draft, propose and explain.";
 const HUMAN_ONLY = /^\W*(?:please\s+)?(?:sign|approve|pay|revoke|cancel)\b|\b(?:sign|approve|pay for|revoke|cancel)\b.*\b(?:it|them|this|that|contract|mandate|order|cart|proposal)\b/i;
 const AMEND = /\b(raise|increase|bump|amend|extend|change|set|lower|reduce)\b.*\b(budget|limit|cap)\b/i;
