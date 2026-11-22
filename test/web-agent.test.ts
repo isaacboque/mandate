@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Amendment, MandateView, PendingDraft, Proposal } from "../web/src/api.js";
 import { attention, countdown, meter, parseCards, sortContracts } from "../web/src/cards.js";
 import { describeChange } from "../web/src/diff.js";
-import { formFromMandate, hintsOf, mandateFromForm, problemsOf } from "../web/src/draftForm.js";
+import { formFromMandate, hintsOf, mandateFromForm, problemsOf } from "../web/src/draftFormState.js";
 
 const mandate = { currency: "EUR", totalBudgetCents: 9000, perItemCapCents: 9000, allowedCategories: ["shoes"], maxQuantityPerItem: 1, expiresAt: "2030-01-01T10:00:00.000Z", autonomy: { mode: "ask_always" as const } };
 const draft = (over: Partial<PendingDraft> = {}): PendingDraft => ({ id: "draft_1", source: "agent", mandate, understood: [], warnings: [], status: "pending", createdAt: "", ...over });
