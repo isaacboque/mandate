@@ -9,6 +9,7 @@ import { runTransition } from "./transition";
 import { modelBadge, stepsDone } from "./stepper";
 import { TracePanel } from "./TracePanel";
 import { Tour } from "./Tour";
+import { useRevalidate } from "./useRevalidate";
 import { useRun } from "./useRun";
 
 type Tab = "chat" | "contracts";
@@ -50,6 +51,7 @@ export default function App() {
     return { c, d, a, p: p.slice().reverse() };
   }, []);
   const refresh = useCallback(() => { load().catch((e) => setError(friendlyError((e as Error).message))); }, [load, setError]);
+  useRevalidate(refresh, !busy && !sending);
 
   // Reloading the page must not lose the session: restore the conversation text and whatever is still waiting for the person.
   useEffect(() => {
