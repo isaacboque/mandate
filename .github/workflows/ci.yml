@@ -15,6 +15,7 @@ jobs:
       - name: Audit production dependencies (report only)
         run: npm audit --omit=dev
         continue-on-error: true
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - name: Every guardrail is load-bearing (mutants)

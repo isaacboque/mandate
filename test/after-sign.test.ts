@@ -14,9 +14,8 @@ const draftThenCart = (h: () => ReturnType<typeof makeHarness>) => beats([
 
 describe("after the person signs a draft made in the chat, the agent carries on", () => {
   it("one follow-up turn on the person's behalf: a cart for the original ask, nothing approved or paid", async () => {
-    let h!: ReturnType<typeof makeHarness>;
-    const m = draftThenCart(() => h);
-    h = makeHarness({}, { model: m.model, noMandate: true });
+    const m = draftThenCart(() => h); // the script reads `h` lazily, when the model is first called
+    const h = makeHarness({}, { model: m.model, noMandate: true });
     const first = await h.service.chat(ASK);
     const card = first.cards[0];
     if (card.type !== "draft") throw new Error("expected a draft card");
@@ -42,8 +41,7 @@ describe("after the person signs a draft made in the chat, the agent carries on"
   });
 
   it("only once per draft, and only for a draft the chat made", async () => {
-    let h!: ReturnType<typeof makeHarness>;
-    h = makeHarness({}, { model: draftThenCart(() => h).model, noMandate: true });
+    const h = makeHarness({}, { model: draftThenCart(() => h).model, noMandate: true });
     const first = await h.service.chat(ASK);
     const card = first.cards[0];
     if (card.type !== "draft") throw new Error("expected a draft card");

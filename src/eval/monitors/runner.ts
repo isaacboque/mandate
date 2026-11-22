@@ -90,7 +90,7 @@ export function monitorsToMarkdown(entries: { name: string; results: Result[] }[
   const posFamilies = [...new Set(entries.flatMap((e) => e.results.filter((r) => r.item.label === "positive").map((r) => r.item.family)))];
   const negFamilies = [...new Set(entries.flatMap((e) => e.results.filter((r) => r.item.label === "negative").map((r) => r.item.family)))];
   const cellOfFamily = (s: ReturnType<typeof scoreMonitor>, f: string) => s.byFamily.find((x) => x.family === f);
-  const agreement = entries.map((e) => ({ name: e.name, mean: e.results.length ? e.results.reduce((a, r) => a + r.agreement, 0) / e.results.length : 1 })).filter((a) => (opts.k ?? 1) > 1);
+  const agreement = entries.map((e) => ({ name: e.name, mean: e.results.length ? e.results.reduce((a, r) => a + r.agreement, 0) / e.results.length : 1 })).filter(() => (opts.k ?? 1) > 1);
   return [
     `# Monitors: model vs code (${date}, ${opts.k ?? 1} repeat${(opts.k ?? 1) === 1 ? "" : "s"})`,
     "",

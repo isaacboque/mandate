@@ -130,7 +130,7 @@ npm run eval:real:report -- --k 3
 
 | model | runs stored | compromise | outside the mandate terms | attacker-chosen purchase | paired: fail-closed held, legacy did not / reverse | McNemar p |
 | --- | --- | --- | --- | --- | --- | --- |
-| groq:openai/gpt-oss-120b | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+| groq:openai/gpt-oss-120b | pending | pending | pending | pending | pending | pending |
 
 ## Adaptive attacker and amendment scope
 
@@ -147,11 +147,11 @@ GROQ_API_KEY=... npm run eval:adaptive -- --yes --resume --delay-ms 25000
 
 | measure | result |
 | --- | --- |
-| Seeds where the attacker's listing was put in a cart | TODO(Isaac) |
-| Rounds to first success | TODO(Isaac) |
-| Attacker-chosen purchase after a forced approval, inside the terms | TODO(Isaac) |
-| Money outside the mandate terms | TODO(Isaac) |
-| Attacker listings the regex detector flagged | TODO(Isaac) |
+| Seeds where the attacker's listing was put in a cart | pending |
+| Rounds to first success | pending |
+| Attacker-chosen purchase after a forced approval, inside the terms | pending |
+| Money outside the mandate terms | pending |
+| Attacker listings the regex detector flagged | pending |
 
 ## Monitors: model vs code
 
@@ -168,9 +168,9 @@ GROQ_API_KEY=... npm run eval:monitors -- --monitors regex,prompt-guard,safeguar
 | monitor | recall | false positives | errors | latency | tokens in / out |
 | --- | --- | --- | --- | --- | --- |
 | regex | 22/81 | 9/53 | 0 | 0 ms | 0 / 0 |
-| prompt-guard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
-| safeguard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
-| regex OR safeguard | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) | TODO(Isaac) |
+| prompt-guard | pending | pending | pending | pending | pending |
+| safeguard | pending | pending | pending | pending | pending |
+| regex OR safeguard | pending | pending | pending | pending | pending |
 
 The run writes `eval/MONITORS.md` (per-family recall, per-kind false positives, agreement across repeats) and `traces/monitors.jsonl`.
 

@@ -37,13 +37,13 @@ How Mandate got to be what it is: the product, safety and evaluation decisions, 
 
 - **Decision.** The model has no tool that pays. The checks that matter (`checkCart` at proposal, a re-check at checkout) are deterministic code outside the model, and an independent oracle that never calls that code judges every captured payment.
 - **Why.** Code written by a model, or a model acting at runtime, can be wrong in ways that are hard to see; a pure function can be tested line by line and behaves the same whatever any model says. Source: [HOW-I-BUILT-THIS.md](HOW-I-BUILT-THIS.md).
-- **Decided by.** Isaac ([PLAN.md](PLAN.md), "Decided by Isaac 2026-11-11").
+- **Decided by.** Isaac ([hackathon plan](history/hackathon-plan.md), "Decided by Isaac 2026-11-11").
 - **Verified by.** `npm run eval` (60 scenarios, spend safety 60/60) and `npm run eval:mutants` (switching off any one of the 11 guardrails fails the eval: 11 of 11).
 
 ### D2. Sandbox only, declared as a limit
 
 - **Decision.** The merchant of record is a PayPal sandbox account and a real merchant handoff is not built. The README, [THREAT-MODEL.md](THREAT-MODEL.md) and [EVIDENCE.md](EVIDENCE.md) say so instead of implying otherwise.
-- **Decided by.** Isaac ([PLAN.md](PLAN.md), section "Architecture").
+- **Decided by.** Isaac ([hackathon plan](history/hackathon-plan.md), section "Architecture").
 - **Verified by.** The limit is stated in each of those documents; nothing in the code moves real money.
 
 ### D3. Agent-first refocus
@@ -157,7 +157,7 @@ How Mandate got to be what it is: the product, safety and evaluation decisions, 
 - **Context.** The regex detector flags 19 of 78 obfuscated injections ([EVIDENCE.md](EVIDENCE.md)).
 - **Decision.** Run the experiment: a model monitor (Llama Prompt Guard 2, gpt-oss-safeguard) against the regex, on one dataset of 81 attacks and 53 negatives that include 40 hard negatives.
 - **Quote.** "monitor con modelo vs monitor de código" *(model monitor vs code monitor)*.
-- **Consequence.** The harness exists and the regex baseline is measured (22 of 81 attacks flagged, 9 of 53 false positives). The model rows are not run yet: they need Isaac's Groq key (`TODO(Isaac)` in EVIDENCE.md).
+- **Consequence.** The harness exists and the regex baseline is measured (22 of 81 attacks flagged, 9 of 53 false positives). The model rows are not run yet: they need Isaac's Groq key (marked pending in EVIDENCE.md).
 - **Decided by.** Isaac, 2026-11-21.
 - **Implemented in.** [#55](https://github.com/isaacboque/mandate/pull/55).
 - **Verified by.** `test/monitors.test.ts`; `npm run eval:monitors -- --monitors regex` reproduces 19 of 78 on the variants.

@@ -33,7 +33,7 @@ describe("catalog: a price that makes no sense is not a product", () => {
   const search = (products: unknown[]) => new Channel3Catalog("k", { fetch: fetching(products), now: () => NOW, cacheMs: 0 }).search("x");
 
   it("drops offers priced at zero, below zero or beyond what JSON can say, and keeps the cheapest valid one", async () => {
-    const [p] = await search([{ id: "a", title: "Shoe", offers: [offer(0, "free.example"), offer(-5, "neg.example"), offer(1e999, "inf.example"), offer(79.9, "ok.example")] }]);
+    const [p] = await search([{ id: "a", title: "Shoe", offers: [offer(0, "free.example"), offer(-5, "neg.example"), offer(Number.POSITIVE_INFINITY, "inf.example"), offer(79.9, "ok.example")] }]);
     expect(p).toMatchObject({ id: "a", merchant: "ok.example", priceCents: 7990 });
   });
   it("a product whose only offers are invalid is not returned at all", async () => {

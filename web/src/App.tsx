@@ -63,7 +63,7 @@ export default function App() {
         }
       })
       .catch((e) => setBootError(friendlyError((e as Error).message)));
-  }, [bootTry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bootTry]); // boots once, and again only when the person presses "try again"
 
   const upsert = (p: Proposal) => setProposals((all) => (all.some((x) => x.id === p.id) ? all.map((x) => (x.id === p.id ? p : x)) : [p, ...all]));
   const proposalMap = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
@@ -191,7 +191,7 @@ export default function App() {
                 />
               </div>
               <div id="contracts-pane" className="pane contractspane" role="tabpanel" aria-labelledby="tab-contracts" tabIndex={-1}>
-                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} proposals={proposals} busy={busy || sending} run={run} onChanged={refresh} onDraftSigned={onDraftSigned} />
+                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} busy={busy || sending} run={run} onChanged={refresh} onDraftSigned={onDraftSigned} />
               </div>
             </div>
           </>
