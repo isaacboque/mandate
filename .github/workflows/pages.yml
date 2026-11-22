@@ -27,7 +27,7 @@ jobs:
           mkdir _site
           cp site/index.html site/status.js site/demo.mp4 site/demo.webm site/demo.gif site/poster.png _site/
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
