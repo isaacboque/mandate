@@ -14,9 +14,10 @@ npm run lint && npm run typecheck && npm test && npm run build
 npm run eval                 # 60 deterministic scenarios judged by an independent oracle
 npm run eval:mutants         # each guardrail switched off in turn: the eval must fail
 npm run eval:injection-variants
+npm run eval:datasets        # regenerate eval/datasets/*.jsonl when scenarios or cases change
 ```
 
-Commands that call a real model (`eval:real`, `eval:adaptive`, `eval:monitors`) cost quota and need a key from the person's own environment. Do not run them unless asked, and never print or store a key.
+Commands that call a real model (`eval:real`, `eval:adaptive`, `eval:monitors`, `eval:judge`) cost quota and need a key from the person's own environment. Do not run them unless asked, and never print or store a key.
 
 ## Where things are
 

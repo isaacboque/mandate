@@ -15,6 +15,7 @@
     "smoke:orders": "tsx scripts/smoke-orders.ts",
     "eval": "tsx scripts/eval.ts",
     "screenshots": "tsx scripts/screenshots.ts",
+    "eval:datasets": "tsx scripts/export-datasets.ts",
     "eval:mutants": "vitest run test/mutation.test.ts",
     "eval:injection-variants": "tsx scripts/eval-injection-variants.ts",
     "eval:monitors": "tsx scripts/eval-monitors.ts",
@@ -23,6 +24,7 @@
     "eval:real": "tsx scripts/eval-real-model.ts",
     "eval:real:report": "tsx scripts/eval-real-report.ts",
     "eval:adaptive": "tsx scripts/eval-adaptive.ts",
+    "eval:judge": "tsx scripts/eval-judge.ts",
     "keepalive:report": "tsx scripts/keepalive-report.ts",
     "landing:screenshots": "tsx scripts/landing-screenshots.ts",
     "dev": "concurrently -n api,web \"tsx watch src/index.ts\" \"vite web\""

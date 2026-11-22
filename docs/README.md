@@ -24,7 +24,7 @@
 | --- | --- |
 | [CONFIGURATION.md](CONFIGURATION.md) | Every environment variable, and how a model key is chosen |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Demo and live modes, hosting, the landing page and the keep-alive |
-| [EVALUATION.md](EVALUATION.md) | How to run each evaluation, and what it costs |
+| [EVALUATION.md](EVALUATION.md) | The evaluations by stage: task definitions, golden datasets, automated checks, the judge, interpretation, and how to run each |
 | [EVAL-PROTOCOL.md](EVAL-PROTOCOL.md) | The hypotheses, design and reporting rules of the real-model evaluations, fixed before they were run |
 | [MUTATION.md](MUTATION.md) | Why switching each guardrail off in turn validates the eval |
 | [DEMO.md](DEMO.md) | A 60-second walk-through |
