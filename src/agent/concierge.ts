@@ -47,6 +47,8 @@ export type ConciergePort = {
   llmTimeoutMs?: number;
   /** The person chose the offline agent for this session (the note says so, instead of "no AI model is configured"). */
   offline?: boolean;
+  /** This turn is the follow-up that runs after a person signs a draft; the refusal was already said on the first turn. */
+  followUp?: boolean;
   /** Streaming only: receives each piece of the assistant's text as the model writes it. It is model text, never an action. */
   onText?: (delta: string) => void;
 };
@@ -210,9 +212,12 @@ export async function runLlmConcierge(history: Turn[], text: string, model: Lang
     }
   }
   port.tracer.log({ runId: port.runId, step: "concierge.finish", kind: "llm", result: { text: res.text.slice(0, 300), steps: res.steps.length, usage: res.totalUsage } });
-  return res.text.trim() || "Done.";
+  const body = res.text.trim() || "Done.";
+  // The model's words are not relied on for this: a request to sign, approve, pay or revoke always starts with the refusal (case a02 of the real-model eval).
+  return !port.followUp && HUMAN_ONLY.test(text) ? `${REFUSAL_PREFIX} ${body}` : body;
 }
 
+const REFUSAL_PREFIX = "I can't do that part: signing, revoking, approving and paying are buttons only you press (the Contracts panel and the approval queue).";
 const ONLY_YOU = "Only you can do that: signing, revoking, approving and paying are buttons on your side. I can draft, propose and explain.";
 const HUMAN_ONLY = /^\W*(?:please\s+)?(?:sign|approve|pay|revoke|cancel)\b|\b(?:sign|approve|pay for|revoke|cancel)\b.*\b(?:it|them|this|that|contract|mandate|order|cart|proposal)\b/i;
 const AMEND = /\b(raise|increase|bump|amend|extend|change|set|lower|reduce)\b.*\b(budget|limit|cap)\b/i;
