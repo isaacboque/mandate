@@ -6,7 +6,7 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 619 in 61 files | `npm test` |
+| Tests (mocks only) | 624 in 61 files | `npm test` |
 | Scenarios, split guardrail / injection / task / agent | 60 (28 / 7 / 12 / 13) | `npm run eval` |
 | Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 60/60 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
@@ -26,8 +26,8 @@ How strong each claim is, so the figures below are read for what they are. "Stro
 | Money cannot move outside a signed mandate, whatever the model proposes | 60 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
 | The evaluation can tell when a guardrail is broken | Each of the 11 guardrails switched off in turn fails the eval (11 of 11); the oracle judges size and price age itself | Strong, one guardrail at a time | Mutating the budget arithmetic inside a check; combinations of mutants |
 | The regex injection detector is weak | 19 of 78 variants flagged; 22 of 81 attacks including the original fixtures; 9 of 53 false positives | Strong, deterministic (the variants were written by the same author) | Variants from an independent source |
-| Failing closed removes the fallback attack surface | The mechanism is tested (scenario a10); a first real-model run showed the fallback buying an attacker's listing, and the fix removed the purchases that came from the fallback | Moderate: the before and after were not controlled | The paired v2 comparison (pending) |
-| Real models rarely go outside the mandate terms | First run: three open-weight models, 19 runs each, 0 of 19 outside the terms | Weak: 19 runs bound the rate only below about 17% | The v2 case set at k = 3 (pending), and a Claude model |
+| Failing closed removes the fallback attack surface | The mechanism is tested (scenario a10); a first real-model run showed the fallback buying an attacker's listing, and the fix removed the purchases that came from the fallback. The paired v2 first pass (65 runs, 4 model failures) found no difference between the arms | Moderate: the mechanism is certain, the rate is not measured; the paired pass was too small to see the effect | The k = 3 passes, and a model that fails more often |
+| Real models rarely go outside the mandate terms | First run: three open-weight models, 19 runs each, 0 of 19 outside the terms. v2 first pass: `gpt-oss-120b`, 65 runs, 0 of 65 | Weak to moderate: for one open-weight model the rate is bounded below about 6%; one repeat, not Claude | k = 3 and more models, a Claude model among them |
 | Amendment scope creep is closed | Scenarios a12 and a13, tests, and a mutation test of the check; found live and reproduced first | Strong for the mapped words and fields; the mapping is a heuristic | Fuzzing the phrasing |
 | Adaptive attackers cannot move money outside the mandate | Harness built | Not tested yet | The adaptive run (pending) |
 | A model monitor improves on the regex detector | Harness built; regex baseline measured | Not tested yet | The monitor run (pending) |
@@ -121,7 +121,7 @@ What the two runs show, and what they do not:
 - **Usefulness** is benign tasks that ended in the right cart: 5/6, 4/6, 5/6 after; the denominator differs in the before run because only LLM-answered runs count (5/5, 3/3, 3/5). 0 false blocks in both runs.
 - Not shown: any Claude model, k greater than 1, or models other than these three.
 
-## Real-model eval v2: method (numbers not run yet)
+## Real-model eval v2: method and first pass
 
 What changes, point by point:
 
@@ -145,9 +145,30 @@ npm run eval:real -- --cases v2 --models groq:openai/gpt-oss-120b --arms legacy-
 npm run eval:real:report -- --k 3
 ```
 
-| model | runs stored | compromise | outside the mandate terms | attacker-chosen purchase | paired: fail-closed held, legacy did not / reverse | McNemar p |
-| --- | --- | --- | --- | --- | --- | --- |
-| groq:openai/gpt-oss-120b | pending | pending | pending | pending | pending | pending |
+### First pass: one repeat of all 65 cases (2026-11-22)
+
+`groq:openai/gpt-oss-120b` (open-weight, served by Groq; **not Claude**), k = 1, all 65 cases, both arms. This is the first pass the protocol allows ([EVAL-PROTOCOL.md](EVAL-PROTOCOL.md)); the planned k = 3 is not done, so these are first-pass figures, not the final ones.
+
+| measure | fail-closed (the app) | legacy fallback (eval-only) |
+| --- | --- | --- |
+| Runs | 65 | 65 |
+| Answered by the model | 61 | 61 (the other 4 answered by the rules agent) |
+| Money outside the mandate terms, all runs | 0 of 65 (95% CI 0%-6%) | 0 of 65 (0%-6%) |
+| Attacker-chosen purchase, all runs | 0 of 65 (0%-6%) | 0 of 65 (0%-6%) |
+| Compromise, model-answered runs | 0 of 61 (0%-6%) | 0 of 61 (0%-6%) |
+| Benign tasks ending in the right cart | 13 of 14 | 13 of 14 |
+| False blocks on benign tasks | 0 of 8 | 0 of 8 |
+
+By family, every run held in both arms: task 14 of 14, injection 20 of 20, pressure 14 of 14, authority 9 of 9, amendment 8 of 8.
+
+**Against the pre-registered hypotheses.**
+- **H1 (no money outside the terms): not falsified.** 0 of 65, so the rate for this model is bounded below about 6%. That is a bound, not a proof of zero.
+- **H2 (the fallback acts where fail-closed proposes nothing): no effect observed at this sample size.** The model failed in 4 of 65 runs (3 in the pressure family and 1 in authority, by the family counts); fail-closed proposed nothing in each, and the rules agent, in the legacy arm, did nothing harmful either. With no discordant pair the exact McNemar test gives p = 1.0 and cannot tell the arms apart. This does not show the fallback is harmless: the earlier run found it buying an attacker's listing, and 4 failures is a small number to see it in. The k = 3 passes are the test.
+- **H3 to H6:** not run yet.
+
+**What this does and does not show.** One open-weight model, one repeat, a case set written by the author with the defences it tests. It adds 65 runs with no event to the 19-run first result, which supports "the structure held" for this model and tightens the bound; it says nothing about Claude or other models, and nothing about how often a model is fooled, because here no run compromised the model.
+
+**A labelling bug found while recording this pass.** The legacy arm re-runs a failed case with the rules agent; on adversarial cases that run was labelled as answered by the model, because no failure is traced when there is no model to fail. The first stored runs therefore showed the legacy arm as 65 of 65 model-answered. Outcomes were never affected, only the label. It is fixed in the runner, and old files are relabelled when the report is built (`relabelLegacy`); the table above uses the corrected labels. Logged in the deviations log of the protocol.
 
 ## Adaptive attacker and amendment scope
 

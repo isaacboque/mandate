@@ -188,3 +188,18 @@ describe("the report says which runs the model did not answer, and why", () => {
     expect(buildReport(store.load(), { k: 1, cases: 1, date: "2026-11-22" }).markdown).not.toMatch(/Runs the model did not answer/);
   });
 });
+
+describe("the legacy arm is labelled by who answered", () => {
+  const x07 = ADVERSARIAL_CASES.find((c) => c.id === "x07")!;
+  it("an adversarial case answered by the rules agent after a failed model call is labelled rules, not model-answered", async () => {
+    const recs = await runUnit({ model: failing(), modelName: "m", c: x07, rep: 1, arms: ["legacy-fallback", "fail-closed"] });
+    expect(recs.find((r) => r.arm === "fail-closed")!.result.mode).toBe("failed_closed");
+    expect(recs.find((r) => r.arm === "legacy-fallback")!.result.mode).toBe("rules");
+  });
+  it("stored runs from before the fix are relabelled when the report is built, so the two arms add up", async () => {
+    const recs = await runUnit({ model: failing(), modelName: "m", c: x07, rep: 1, arms: ["legacy-fallback", "fail-closed"] });
+    const old = recs.map((r) => (r.arm === "legacy-fallback" ? { ...r, result: { ...r.result, mode: "llm" as const } } : r)); // what the first stored runs looked like
+    const md = buildReport(old, { k: 1, cases: 1, date: "2026-11-22" }).markdown;
+    expect(md).toMatch(/\| legacy-fallback \| 0\/1 \| 0 \/ 1 \/ 0 \|/);
+  });
+});

@@ -2,7 +2,7 @@
 
 What the real-model evaluations will test, how, and how the results will be reported, written before any of them was run. The aim is that the analysis cannot be chosen after seeing the data.
 
-**Status.** Registered 2026-11-22. At the time of writing no result from the v2 case set, the adaptive attacker or the monitor comparison is recorded in this repository. The tooling is described in [EVALUATION.md](EVALUATION.md); results go in [EVIDENCE.md](EVIDENCE.md).
+**Status.** Registered 2026-11-22, before any run. A first pass of the v2 case set (k = 1, `gpt-oss-120b`) was recorded afterwards; see the deviations log and [EVIDENCE.md](EVIDENCE.md). The adaptive attacker, the monitor comparison, the judge and the k = 3 passes have no results yet. The tooling is described in [EVALUATION.md](EVALUATION.md).
 
 ## Hypotheses
 
@@ -55,3 +55,5 @@ Replies are judged by a model only for what the agent says, with three criteria 
 ## Deviations log
 
 - 2026-11-22: before any run, added the judge stage (H6, the Judge section and the 24 labelled replies), the golden dataset files in `eval/datasets/`, and the comparison with a baseline in `eval:real:report`. No result existed to influence them.
+- 2026-11-22: first pass recorded (65 cases, k = 1, `gpt-oss-120b`), as the Design section allows ("k = 1 is an acceptable first pass and is labelled as such"). While recording it, found that the legacy arm's rules-agent runs on adversarial cases were labelled as model-answered (a labelling bug: no failure is traced when there is no model). Outcomes were unaffected. Fixed in the runner, and old files are relabelled at report time; the figures in EVIDENCE.md use the corrected labels. No case, hypothesis or threshold was changed after seeing the data.
+- 2026-11-22: judge calibration, first attempt: all 24 calls ended in an error (reason not shown by the first version of the script). Changed after that, before any judge verdict existed: the calibration keeps and prints the error reason, a rate limit is waited out and retried twice, and the script pauses 2 s between calls by default. Rubrics, labels and acceptance thresholds are unchanged.

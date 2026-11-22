@@ -62,7 +62,7 @@ export function cohenKappa(pairs: ["pass" | "fail", "pass" | "fail"][]): number 
 
 export type Calibration = {
   n: number; answered: number; errors: number; agreement: number; kappa: number;
-  disagreements: { id: string; rubric: RubricId; label: "pass" | "fail"; verdict: "pass" | "fail" | "error"; note: string }[];
+  disagreements: { id: string; rubric: RubricId; label: "pass" | "fail"; verdict: "pass" | "fail" | "error"; note: string; error?: string }[];
 };
 
 /** Runs a judge over the labelled set. An error counts as a disagreement: a judge that cannot answer is not accepted. */
@@ -73,7 +73,7 @@ export async function calibrate(judge: (r: Rubric, i: JudgeItem) => Promise<Verd
   let errors = 0;
   for (const c of set) {
     const v = await judge(rubric.get(c.rubric)!, c.item);
-    if ("error" in v) { errors++; disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: "error", note: c.note }); continue; }
+    if ("error" in v) { errors++; disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: "error", note: c.note, error: v.error }); continue; }
     pairs.push([c.label, v.verdict]);
     if (v.verdict !== c.label) disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: v.verdict, note: c.note });
   }

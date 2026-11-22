@@ -27,11 +27,21 @@ type UnitOpts = { model: LanguageModel; modelName: string; c: RealCase; rep: num
 export async function runUnit(o: UnitOpts): Promise<UnitRecord[]> {
   const [run] = await runRealModelEval(o.model, [o.c], 1, { sleep: o.sleep, timeoutMs: o.timeoutMs, maxRetries: o.maxRetries });
   const failClosed: RealResult = { ...run, run: o.rep };
+  // With no model the rules agent answers, but an adversarial case reports "llm" when no failure was traced (there was no model to fail): label it by who answered.
   const legacy: RealResult = failClosed.mode === "failed_closed" && !failClosed.rateLimited
-    ? { ...(await runRealCase(o.c, undefined, o.rep, o.timeoutMs)), llmError: failClosed.llmError }
+    ? { ...(await runRealCase(o.c, undefined, o.rep, o.timeoutMs)), mode: "rules", llmError: failClosed.llmError }
     : failClosed;
   const result: Record<Arm, RealResult> = { "fail-closed": failClosed, "legacy-fallback": legacy };
   return o.arms.map((arm) => ({ key: unitKey(o.modelName, arm, o.c.id, o.rep), model: o.modelName, arm, caseId: o.c.id, family: familyOf(o.c), rep: o.rep, result: result[arm] }));
+}
+
+/**
+ * Stored runs from before the labelling fix: a legacy-arm run whose fail-closed twin failed was answered by the rules agent, whatever its stored
+ * mode says. Applied when a report is built, so old files give the same tables as new ones. Outcomes are untouched; only the label changes.
+ */
+export function relabelLegacy(records: UnitRecord[]): UnitRecord[] {
+  const failed = new Set(records.filter((r) => r.arm === "fail-closed" && r.result.mode === "failed_closed" && !r.result.rateLimited).map((r) => `${r.model}|${r.caseId}|${r.rep}`));
+  return records.map((r) => (r.arm === "legacy-fallback" && r.result.mode === "llm" && failed.has(`${r.model}|${r.caseId}|${r.rep}`) ? { ...r, result: { ...r.result, mode: "rules" as const } } : r));
 }
 
 /** Every case k times per model, both arms per run. With `resume`, a run whose lines are all stored is skipped. */

@@ -50,7 +50,7 @@ The real-model rows are small (k = 1, open-weight models, not Claude); the befor
 
 ## Limits
 
-The real-model numbers above are v1 (19 cases, k=1). Method v2, built and not run yet, replaces them with 65 cases, repeats, a controlled paired before/after and an exact test (docs/EVIDENCE.md); v2 supersedes v1 when its tables are filled.
+The real-model numbers above are v1 (19 cases, k=1). Method v2 replaces them with 65 cases, repeats, a controlled paired before/after and an exact test (docs/EVIDENCE.md). Its first pass (one repeat of 65 cases, `gpt-oss-120b`) found no money outside the terms and no difference between the arms; the repeats are pending, and v2 supersedes v1 when they are done.
 
 Sandbox only, no real money. Finite scenarios; one check mutated at a time, not the budget arithmetic inside a check. The scripted suites use a scripted model; the real-model run is one run of three open-weight models served by Groq (k = 1, 19 runs each), not a Claude result. The catalog is trusted for price and stock. One user per session, no authentication design. No users, revenue, prize or production use.
 
