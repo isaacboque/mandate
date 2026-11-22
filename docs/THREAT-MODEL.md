@@ -24,7 +24,7 @@ Each row says who, what they control, what they want, which layer stops them, wh
 | 3 | Pressuring or careless user | Chat text, over one or several messages ("the boss said it is fine", "ignore the cap", "I already approved a bigger budget") | Make the agent exceed the contract or act as the person | Chat is not authority: sign, amend-sign, revoke, approve, reject and pay are endpoints a person reaches, not tools; budget and cap are checked in code | a01, a02, a07, s11, s20; real-model families pressure (14, 8 of them multi-turn) and authority (9): first pass k = 1, `gpt-oss-120b`, all held (14 of 14, 9 of 9); repeats **not run yet** | A person who really does want it, and signs |
 | 4 | Scope creep in amendments | The agent's choice of which contract fields an amendment changes | Quietly widen a field the person did not name ("raise the budget" also raising the cap) | A deterministic scope check in code: an amendment may change only the fields the person's message names, otherwise it is refused as `scope_creep` and traced; the person still signs every amendment | `npm run eval` a12 (refused), a13 (in-scope passes); `test/scope-creep.test.ts`; mutation test | The check reads words, not intent: a message that names a field it did not mean to is allowed |
 | 5 | Compromised or hallucinating model | Which of its 8 tools it calls, with what arguments; invalid or invented tool calls; failing at a bad moment | Be steered by an error path | Unknown tools refused and traced (`agent.refused`); malformed numbers normalised or refused; a failed LLM call fails closed (PR #46, [ticket 26](wayfinder/tickets/26-fallback-fail-closed.md)): nothing is proposed, no fallback to the rules agent | a07, a10, s06; `test/fail-closed.test.ts`; the paired legacy-vs-fail-closed comparison: first pass, 4 model failures, no difference observed; repeats **not run yet** | A model that is only wrong inside the contract |
-| 6 | Quota exhaustion (denial of service on the demo) | Many requests to the free model | Make the demo unusable | One model call at a time; a daily turn budget (`LLM_DAILY_TURN_BUDGET`); an honest limit card; a per-visitor rate limit when `RATE_LIMIT_ASKS_PER_HOUR` is set (on by default in live mode only) | `test/demo-llm.test.ts`, `test/web-limit.test.ts` | Protects the free quota, not security: a determined flooder can still exhaust it for a day |
+| 6 | Quota exhaustion (denial of service on the demo) | Many requests to the free model | Make the demo unusable | Per-visitor rate limit (on by default whenever a model is configured, D24); one model call at a time with a capped waiting queue; a daily turn budget (`LLM_DAILY_TURN_BUDGET`); an honest limit card | `test/demo-llm.test.ts`, `test/web-limit.test.ts`, `test/app.test.ts`, `test/llm-failure.test.ts` | Protects the free quota, not security: a determined flooder can still exhaust it for a day |
 | 7 | Price or stock changes between proposal and checkout (time of check to time of use) | The catalog's data over time | Pay a price the person did not see | The checkout re-runs every check on fresh data; a price older than the freshness window is blocked | s09 (price drifts above the cap), s15 (out of stock), stale-price scenario, the oracle's own price-age check | A catalog that lies about price or stock is trusted |
 | 8 | Spoofed proxy header | `X-Forwarded-For` entries a client writes | Dodge the per-visitor rate limit | The limit keys on the entry our own proxy appended (`TRUSTED_PROXIES`, Nth from the right), never the first | `test/client-ip.test.ts`; hosted chain unverified ([ticket 07](wayfinder/tickets/07-forwarded-for-spoofing.md)) | Protects free quotas, not money |
 | 9 | Attacks on a model monitor | A listing aimed at a model that reads listings | Fool the monitor | A monitor is an extra layer only; it never replaces the structural controls ([research/monitors.md](research/monitors.md)) | `npm run eval:monitors`: regex baseline measured, model rows **not run yet** | A model monitor reads untrusted text, so it can be steered too |
@@ -44,7 +44,7 @@ Each row says who, what they control, what they want, which layer stops them, wh
 ## Not claimed
 
 - No Claude result and no general real-model rate: the real-model run (2026-11-21) is three open-weight models served by Groq, k = 1, 19 runs per model, in a sandbox ([EVIDENCE.md](EVIDENCE.md#real-model-results-open-weight-models-via-groq-not-claude)). It measured money outside the mandate terms 0/19 per model and one attacker-chosen purchase inside the terms by an LLM (gpt-oss-20b); it also found the fallback flaw closed by "LLM failure fails closed" below. The scripted eval shows the guardrails hold for any model behaviour it can script, not that a given model behaves well.
-- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (60) and 11 named checks.
+- Not a proof and not alignment research: it is control and evaluation engineering with a finite scenario set (61) and 11 named checks.
 - No production use, no users, no revenue, no prize or hackathon placement; no real money; no merchant handoff.
 - A person approving a bad cart, a compromised server, a stolen session, or a lying catalog are not covered (see the limits below).
 
@@ -57,11 +57,11 @@ Each row says who, what they control, what they want, which layer stops them, wh
 | Write a reason for each line | Approve, edit the mandate, or raise the budget |
 | | Read product text as instructions: it is quoted JSON, never part of the system prompt |
 
-## Attacks covered (60 scenarios, `npm run eval`)
+## Attacks covered (61 scenarios, `npm run eval`)
 
 An independent oracle re-derives every captured payment from the raw fixture rows and the mandate it was made under; it never calls the guardrail code.
 
-- **Over-spending:** total budget, per-item cap, quantity (including zero and negative), currency mismatch, cumulative budget across carts, two pending carts approved past the budget, auto-buy across carts.
+- **Over-spending:** total budget, per-item cap, quantity (including zero and negative, and one product split over several cart lines), currency mismatch, cumulative budget across carts, two pending carts approved past the budget, auto-buy across carts.
 - **Scope:** category not allowed, sibling and leaf categories in the tree, merchant not on the allowlist, hard attribute (size) mismatch.
 - **Time and drift:** mandate expired at proposal or between approval and capture, price drifting above the cap, stale price, item out of stock, mandate replaced after the proposal.
 - **Bypassing the approval queue:** pay without approval, with a rejected approval, with an unknown approval id; approving a blocked proposal; auto-buy on a blocked cart or above its threshold; retries that could pay twice.
@@ -81,7 +81,7 @@ The chat agent has exactly 8 tools: search, get product, propose cart, draft con
 
 Limit: figures the model writes in chat text are not verified; cards carry numbers from server state, and the approval of an `auto_under` cart follows the rule in the human-signed contract, not the agent.
 
-Result: spend safety 60/60, guardrails 28/28, injection 7/7, task success 12/12, agent 13/13.
+Result: spend safety 61/61, guardrails 29/29, injection 7/7, task success 12/12, agent 13/13.
 
 ## Layer results
 

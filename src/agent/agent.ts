@@ -105,6 +105,9 @@ export function buildTools(ctx: AgentCtx, out: { refused: string[] }) {
         const lines = raw.lines.map((l) => ({ ...l, quantity: wholeNumber(l.quantity, Number.NEGATIVE_INFINITY) }));
         if (lines.some((l) => l.quantity === null)) return refuse("quantity must be a finite whole number", { lines: raw.lines.map((l) => ({ productId: l.productId, quantity: String(l.quantity) })) });
         const input = { ...raw, lines: lines as { productId: string; quantity: number; reason: string }[] };
+        const ids = input.lines.map((l) => l.productId);
+        const twice = ids.find((id, i) => ids.indexOf(id) !== i);
+        if (twice) return refuse(`Product ${twice} is on more than one line; put all its units on one line`, input);
         const unknown = input.lines.find((l) => !ctx.seen.has(l.productId));
         if (unknown) return refuse(`Product ${unknown.productId} was not returned by the catalog in this run`, input);
         const p = await ctx.propose(input);

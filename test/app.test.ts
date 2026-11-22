@@ -27,3 +27,34 @@ describe("money", () => {
     expect(() => parseCents("1.234")).toThrow();
   });
 });
+
+describe("per-visitor limits on the public demo", () => {
+  const hits = (l: { hit(ip: string): { ok: boolean } }, n: number, ip = "1.1.1.1") => Array.from({ length: n }, () => l.hit(ip).ok);
+  it("mock mode with no model stays unlimited", () => {
+    const { limiter, categoryLimiter } = serviceFromEnv({});
+    expect(limiter.enabled).toBe(false);
+    expect(categoryLimiter.enabled).toBe(false);
+  });
+  it("mock mode with a model limits one visitor to 10 per hour, and the day to the model turn budget", () => {
+    const { limiter } = serviceFromEnv({ GROQ_API_KEY: "gsk_fake", LLM_PROVIDER: "groq" });
+    expect(limiter.enabled).toBe(true);
+    expect(hits(limiter, 10).every(Boolean)).toBe(true);
+    expect(limiter.hit("1.1.1.1")).toMatchObject({ ok: false, message: expect.stringContaining("10 searches per hour") });
+    expect(limiter.hit("2.2.2.2").ok).toBe(true); // another visitor is not affected
+  });
+  it("the daily cap defaults to LLM_DAILY_TURN_BUDGET", () => {
+    const { limiter } = serviceFromEnv({ GROQ_API_KEY: "gsk_fake", LLM_DAILY_TURN_BUDGET: "3", RATE_LIMIT_ASKS_PER_HOUR: "0" });
+    expect(hits(limiter, 3, "a")).toEqual([true, true, true]);
+    expect(limiter.hit("b")).toMatchObject({ ok: false, message: expect.stringContaining("Demo limit reached for today") });
+  });
+  it("explicit values win, and 0 turns a limit off", () => {
+    const env = { GROQ_API_KEY: "gsk_fake" };
+    expect(hits(serviceFromEnv({ ...env, RATE_LIMIT_ASKS_PER_HOUR: "2" }).limiter, 3)).toEqual([true, true, false]);
+    const off = serviceFromEnv({ ...env, RATE_LIMIT_ASKS_PER_HOUR: "0", DAILY_ASK_CAP: "0" }).limiter;
+    expect(off.enabled).toBe(false);
+  });
+  it("live mode keeps its own defaults", () => {
+    const { limiter } = serviceFromEnv({ DEMO_MODE: "live", CHANNEL3_API_KEY: "fake", PAYPAL_CLIENT_ID: "fake", PAYPAL_CLIENT_SECRET: "fake" });
+    expect(hits(limiter, 13).filter(Boolean)).toHaveLength(12);
+  });
+});

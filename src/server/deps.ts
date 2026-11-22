@@ -18,7 +18,7 @@ const num = (v: string | undefined, fallback: number) => (v !== undefined && v !
  * DEMO_MODE=mock (default): fixtures + mock payments, no keys. DEMO_MODE=live: Channel3 + PayPal sandbox.
  * The LLM is used when a key is set. Each visitor gets their own service (mandate, budget, proposals, trace);
  * the catalog, the model and the PayPal token client are shared.
- * Live mode limits searches per visitor and per day (RATE_LIMIT_ASKS_PER_HOUR, DAILY_ASK_CAP) to protect free quotas.
+ * Live mode, and any mode with a model configured, limit searches per visitor and per day (RATE_LIMIT_ASKS_PER_HOUR, DAILY_ASK_CAP) to protect free quotas.
  */
 export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const config: Config = configFromEnv(env);
@@ -35,7 +35,8 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const model = hasLlmKey(env) ? modelFromEnv(env) : undefined;
   // One model call at a time for the whole server, and a daily turn budget so a public demo on a free quota does not burn it in a day
   // (LLM_DAILY_TURN_BUDGET, default 150 turns per UTC day, 0 = no limit). Past it, turns get the honest "quota used up" card without calling the provider.
-  const llmGate = new LlmGate({ dailyBudget: num(env.LLM_DAILY_TURN_BUDGET, 150) });
+  const dailyBudget = num(env.LLM_DAILY_TURN_BUDGET, 150);
+  const llmGate = new LlmGate({ dailyBudget, maxQueue: num(env.LLM_MAX_QUEUE, 8) });
   const llm = describeLlm(env);
   const llmLabel = llm?.provider === "groq" ? "Groq free tier" : llm ? `${llm.provider} quota` : undefined;
   // Where PayPal sends the buyer back to. Render sets RENDER_EXTERNAL_URL itself.
@@ -51,7 +52,8 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   };
 
   const sessions = new SessionStore(makeService, { ttlMs: num(env.SESSION_TTL_MINUTES, 120) * 60 * 1000, max: num(env.MAX_SESSIONS, 300) });
-  const limiter = new RateLimiter(num(env.RATE_LIMIT_ASKS_PER_HOUR, live ? 12 : 0), num(env.DAILY_ASK_CAP, live ? 300 : 0));
+  // A configured model has a small shared quota, so it is limited per visitor in every mode; mock mode with no model stays unlimited.
+  const limiter = new RateLimiter(num(env.RATE_LIMIT_ASKS_PER_HOUR, live ? 12 : model ? 10 : 0), num(env.DAILY_ASK_CAP, live ? 300 : model ? dailyBudget : 0));
   const categoryLimiter = new RateLimiter(num(env.RATE_LIMIT_CATEGORIES_PER_HOUR, live ? 120 : 0), 0);
   return { sessions, makeService, limiter, categoryLimiter, config, agentMode: model ? ("llm" as const) : ("rules" as const) };
 }

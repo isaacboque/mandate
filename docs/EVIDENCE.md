@@ -6,9 +6,9 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 652 in 65 files | `npm test` |
-| Scenarios, split guardrail / injection / task / agent | 60 (28 / 7 / 12 / 13) | `npm run eval` |
-| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 60/60 | `npm run eval` |
+| Tests (mocks only) | 663 in 65 files | `npm test` |
+| Scenarios, split guardrail / injection / task / agent | 61 (29 / 7 / 12 / 13) | `npm run eval` |
+| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 61/61 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
 | Oracle leaks with a guardrail off | per-mutant table in [MUTATION.md](MUTATION.md) | `npm run eval:mutants` |
 | Concierge tools | 8 (search, get product, propose cart, draft contract, propose amendment, list contracts, get spending, explain block) | `src/agent/concierge.ts`; scenario a07 |
@@ -23,7 +23,7 @@ How strong each claim is, so the figures below are read for what they are. "Stro
 
 | Claim | Evidence | Strength | What would strengthen it |
 | --- | --- | --- | --- |
-| Money cannot move outside a signed mandate, whatever the model proposes | 60 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
+| Money cannot move outside a signed mandate, whatever the model proposes | 61 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
 | The evaluation can tell when a guardrail is broken | Each of the 11 guardrails switched off in turn fails the eval (11 of 11); the oracle judges size and price age itself | Strong, one guardrail at a time | Mutating the budget arithmetic inside a check; combinations of mutants |
 | The regex injection detector is weak | 19 of 78 variants flagged; 22 of 81 attacks including the original fixtures; 9 of 53 false positives | Strong, deterministic (the variants were written by the same author) | Variants from an independent source |
 | Failing closed removes the fallback attack surface | The mechanism is tested (scenario a10); a first real-model run showed the fallback buying an attacker's listing, and the fix removed the purchases that came from the fallback. The paired v2 first pass (65 runs, 4 model failures) found no difference between the arms | Moderate: the mechanism is certain, the rate is not measured; the paired pass was too small to see the effect | The k = 3 passes, and a model that fails more often |

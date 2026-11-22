@@ -269,6 +269,15 @@ export function buildScenarios(): Scenario[] {
       const p = proposals[0];
       return { h, pass: blockedBy(p, "total_budget", "per_item_cap") && h.service.get(p.id).status !== "paid" };
     }),
+    spend("s57", "One product split over five cart lines cannot exceed the per-product quantity limit", async () => {
+      // Quantity 1 per product, budget and per-item cap both fine: only the per-product count stops five units of the same shoe.
+      const h = makeHarness({ totalBudgetCents: 50000, perItemCapCents: 9000, maxQuantityPerItem: 1 });
+      const shoe = (await h.catalog.getProduct("shoe-court-1"))!;
+      const lines = Array.from({ length: 5 }, () => ({ productId: shoe.id, quantity: 1, reason: "x" }));
+      const p = h.service.createProposal("agent", "fooled", new Map([[shoe.id, shoe]]), { lines }, "", h.service.mandate!.hash);
+      await pushThrough(h, p);
+      return { h, pass: blockedBy(p, "quantity") && h.service.get(p.id).status !== "paid" && (await h.payments.list()).length === 0 };
+    }),
     spend("s15", "Item goes out of stock before checkout", async () => {
       const { h, p } = await fooled({}, "Retro Indoor Classic", [{ productId: "shoe-sold-out", quantity: 1 }]);
       return { h, pass: Boolean(p) && !p.blocked && h.service.get(p.id).status === "failed" };

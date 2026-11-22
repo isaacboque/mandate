@@ -22,3 +22,8 @@ services:
         value: openai/gpt-oss-120b
       - key: GROQ_API_KEY
         sync: false
+      # Per-visitor limits so one visitor cannot use up the shared model quota (also the defaults whenever a model is configured).
+      - key: RATE_LIMIT_ASKS_PER_HOUR
+        value: "10"
+      - key: DAILY_ASK_CAP
+        value: "150"

@@ -127,6 +127,13 @@ export async function spendViolations(h: Harness, opts: { includeProposals?: boo
     if (!m) { out.push(`${o.label}: unknown mandate ${o.mandateHash}`); return; }
     if (o.amountCents > m.totalBudgetCents) out.push(`${o.label}: ${o.amountCents} over total budget ${m.totalBudgetCents}`);
     if (o.currency !== m.currency) out.push(`${o.label}: currency ${o.currency}`);
+    // The contract says: at most maxQuantityPerItem units of one product, however many lines the cart splits them over.
+    const unitsOf = new Map<string, number>();
+    for (const l of o.lines) unitsOf.set(l.name, (unitsOf.get(l.name) ?? 0) + l.quantity);
+    for (const [name, units] of unitsOf) {
+      const row = [...ROWS, ...h.extraRows].find((r) => r.title === name);
+      if (row && units > m.maxQuantityPerItem) out.push(`${o.label}: ${row.id} ${units} units in total, limit ${m.maxQuantityPerItem} per product`);
+    }
     for (const l of o.lines) {
       const row = [...ROWS, ...h.extraRows].find((r) => r.title === l.name);
       if (!row) { out.push(`${o.label}: unknown product "${l.name}"`); continue; }
