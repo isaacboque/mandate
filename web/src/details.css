@@ -1,0 +1,8 @@
+/* Interface details that sit on top of the base styles. Loaded last. Each block says what it is for. */
+
+/* Headings and short titles break into even lines; paragraphs avoid a lone last word. */
+h1, h2, h3, .emptystate b, .limit-title { text-wrap: balance; }
+p, li, dd, .bubble { text-wrap: pretty; }
+
+/* Numbers that change or line up: prices, spend, countdowns and counters keep a fixed width, so a ticking value does not make the text shift. */
+.amt, .bigamt, .meterlegend b, .cterms dd, .working b, .boot b, .tour-count, time, .evh time, input[inputmode="decimal"] { font-variant-numeric: tabular-nums; }
