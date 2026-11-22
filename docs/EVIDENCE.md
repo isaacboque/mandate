@@ -6,7 +6,7 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 
 | Figure | Value | Reproduce |
 | --- | --- | --- |
-| Tests (mocks only) | 542 in 49 files | `npm test` |
+| Tests (mocks only) | 577 in 54 files | `npm test` |
 | Scenarios, split guardrail / injection / task / agent | 60 (28 / 7 / 12 / 13) | `npm run eval` |
 | Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 60/60 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
@@ -31,6 +31,7 @@ How strong each claim is, so the figures below are read for what they are. "Stro
 | Amendment scope creep is closed | Scenarios a12 and a13, tests, and a mutation test of the check; found live and reproduced first | Strong for the mapped words and fields; the mapping is a heuristic | Fuzzing the phrasing |
 | Adaptive attackers cannot move money outside the mandate | Harness built | Not tested yet | The adaptive run (pending) |
 | A model monitor improves on the regex detector | Harness built; regex baseline measured | Not tested yet | The monitor run (pending) |
+| The agent's replies describe the system's state truthfully and decline authority requests correctly | A model judge is built, with 24 labelled replies for calibration | Not tested yet | Calibrating a judge, then judging the stored v2 replies (pending); labels reviewed by the maintainer |
 | The controls do not make the agent useless | First run: no false block on a small number of benign tasks | Weak | The v2 task family, with false blocks reported with intervals |
 
 ## How to reproduce in 3 commands

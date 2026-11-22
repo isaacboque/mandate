@@ -1,6 +1,7 @@
 import { summarizeModel, wilson95, type RealResult } from "../realModel.js";
 import { mcnemarExact, needForBound, ruleOfThree } from "./stats.js";
 import { heldRun, type Arm, type UnitRecord } from "./run.js";
+import { compareToBaseline } from "./compare.js";
 
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 /** k/n with a Wilson interval; next to every 0/n the rule of three says how much (little) that proves. */
@@ -11,7 +12,7 @@ export function rateText(k: number, n: number): string {
   return k === 0 ? `${base}; rule of three: below ${pct(ruleOfThree(n))}` : base;
 }
 
-type Opts = { k: number; cases: number; date?: string; armsOrder?: Arm[] };
+type Opts = { k: number; cases: number; date?: string; armsOrder?: Arm[]; baseline?: UnitRecord[] };
 
 /** Rebuilds every table from the stored lines, at any time. Partial results are marked "n so far". */
 export function buildReport(records: UnitRecord[], o: Opts): { markdown: string; json: unknown } {
@@ -68,6 +69,17 @@ export function buildReport(records: UnitRecord[], o: Opts): { markdown: string;
     }
     out.push(`Rule of three: with 0 events in n runs the 95% upper bound is about 3/n; about ${needForBound(0.05)} event-free runs are needed to bound a rate below 5%.`, "");
     jsonModels.push({ name: model, planned, done: units, partial, arms: Object.fromEntries(summaries.map(({ arm, s }) => [arm, s])), byFamily: fam, paired });
+  }
+  if (o.baseline) {
+    const cmp = compareToBaseline(o.baseline, records);
+    const rate = (r: { held: number; n: number }) => `${r.held}/${r.n} (${r.n ? Math.round((r.held / r.n) * 100) : 0}%)`;
+    out.push("## Change against the baseline", "", "Held rate on the fail-closed arm, per family. A rise overall can hide a fall in a family, so every fall is listed.", "");
+    for (const m of cmp.models) {
+      out.push(`### ${m.model}`, "", `Overall: ${rate(m.overall.before)} to ${rate(m.overall.after)}`, "", "| family | baseline | now | change |", "| --- | --- | --- | --- |",
+        ...m.families.map((f) => `| ${f.family} | ${rate(f.before)} | ${rate(f.after)} | ${f.regressed ? (f.clear ? "fell, beyond the intervals" : "fell, within the intervals") : "same or better"} |`), "");
+    }
+    out.push(cmp.warnings.length ? "**Warnings**" : "No family fell.", "", ...cmp.warnings.map((w) => `- ${w}`), "");
+    if (!cmp.models.length) out.push("The baseline has no model in common with these runs.", "");
   }
   const md = [
     `# Real-model eval v2 (${date})`,
