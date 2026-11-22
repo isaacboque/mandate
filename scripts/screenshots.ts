@@ -48,7 +48,7 @@ const log = (s: string) => console.log(s);
 
 async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: string, vp: (typeof VIEWPORTS)[number], reduced: boolean) {
   const tag = `${vp.name}${reduced ? "+reduced-motion" : ""}`;
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: reduced ? "reduce" : "no-preference", deviceScaleFactor: vp.scale });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: reduced ? "reduce" : "no-preference", deviceScaleFactor: vp.scale, hasTouch: vp.width < 700, isMobile: vp.width < 700 });
   await ctx.addInitScript(() => {
     (window as unknown as { __csp: string[] }).__csp = [];
     document.addEventListener("securitypolicyviolation", (e) => (window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
@@ -87,6 +87,16 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
       log(`  [${tag}] ${step}: running animations ${a.length}${a.length ? " " + a.join(",") : ""}`);
       if (a.length) findings.push({ run: tag, step, what: `animations under reduced motion: ${a.join(",")}` });
     }
+  };
+  /** On a touch screen every visible control is at least 44 x 44 px. Tag remove buttons (the small x inside a tag) are the one known exception: a bigger target would overlap the next tag. */
+  const tapTargets = async (step: string) => {
+    if (vp.width >= 700) return;
+    const small = await page.evaluate(() =>
+      [...document.querySelectorAll("button, a[href], [role=tab], summary")]
+        .map((el) => ({ el, r: el.getBoundingClientRect(), hidden: getComputedStyle(el).visibility === "hidden" || Boolean(el.closest(".sr-only")) || Boolean(el.closest(".tag")) }))
+        .filter((x) => x.r.width > 0 && x.r.height > 0 && !x.hidden && (x.r.width < 44 || x.r.height < 44))
+        .map((x) => ({ what: `${x.el.tagName.toLowerCase()}.${x.el.className || ""} "${(x.el.textContent ?? "").trim().slice(0, 24)}"`, w: Math.round(x.r.width), h: Math.round(x.r.height) })));
+    await must(step, small.length === 0, `touch targets are at least 44 x 44${small.length ? ` (too small: ${small.map((x) => `${x.what} ${x.w}x${x.h}`).join("; ")})` : ""}`);
   };
   const fires = async (step: string, name: string, selector: string) => {
     const a = await page.evaluate((sel) => document.querySelector(sel)?.getAnimations({ subtree: true }).map((x) => (x as CSSAnimation).animationName) ?? [], selector);
@@ -133,11 +143,13 @@ async function run(browser: Awaited<ReturnType<typeof chromium.launch>>, url: st
   await page.getByRole("group", { name: "draft card" }).waitFor();
   await must("1 draft", (await page.locator(".statuschip.active").count()) === 0, "no active contract before a person signs");
   await check("1 chat with draft card");
+  await tapTargets("1 chat");
   await shot("1-chat-draft");
   await tab("Contracts");
   await page.getByRole("button", { name: "Sign contract" }).waitFor();
   await must("1 draft form", (await page.getByText("from the agent").count()) > 0, "fields filled by the agent are marked");
   await check("1 draft form");
+  await tapTargets("1 contracts");
   await shot("2-draft-form");
 
   // Ticket 12: text typed in the category field and not confirmed with Enter is kept on blur, with a visible hint.

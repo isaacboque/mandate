@@ -6,3 +6,19 @@ p, li, dd, .bubble { text-wrap: pretty; }
 
 /* Numbers that change or line up: prices, spend, countdowns and counters keep a fixed width, so a ticking value does not make the text shift. */
 .amt, .bigamt, .meterlegend b, .cterms dd, .working b, .boot b, .tour-count, time, .evh time, input[inputmode="decimal"] { font-variant-numeric: tabular-nums; }
+
+/* The page extends under a notch, a Dynamic Island or a home indicator (viewport-fit=cover); the insets keep every control clear of them. They are 0 on a normal screen. */
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* Continuous corners (the "squircle"): only Chromium draws them today and every other browser ignores the property, so it sits next to the unchanged border-radius. */
+@supports (corner-shape: squircle) {
+  .card, .chat, .primary, .ghost, .chip, .example, .tour, .logo, .minicard, .confirm, .working, .alert, .ok, .badge, .bubble { corner-shape: squircle; }
+}
+
+/* Touch targets: on a touch screen every control is at least 44 by 44 px, drawn or padded, never overlapping its neighbours.
+   Replaces the old 36 px minimum for small controls and the extended hit areas (::after) that could reach into the next control. */
+@media (pointer: coarse) {
+  .chip, .ghost.small, .linklike, .tabs button, .tour-toggle, summary { min-height: 44px; min-width: 44px; }
+  .linklike, .tour-toggle, summary { display: inline-flex; align-items: center; justify-content: center; }
+  .linklike::after, .ghost.small::after, .chip::after, .stepper button::after { content: none; }
+}
