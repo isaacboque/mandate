@@ -22,3 +22,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   .linklike, .tour-toggle, summary { display: inline-flex; align-items: center; justify-content: center; }
   .linklike::after, .ghost.small::after, .chip::after, .stepper button::after { content: none; }
 }
+
+/* View transitions: a change on one page cross-fades in 160 ms, and the highlight of the active tab slides to the new tab in 200 ms (both under 300 ms).
+   Between pages the landing page and the demo are different origins, which the browser does not transition. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; animation-timing-function: ease-out; }
+.tabs button.on { view-transition-name: active-tab; }
+::view-transition-group(active-tab) { animation-duration: 200ms; animation-timing-function: ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

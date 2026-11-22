@@ -5,6 +5,7 @@ import { attention, parseCards } from "./cards";
 import { Chat, type ChatItem } from "./Chat";
 import { ContractsPanel } from "./ContractsPanel";
 import { friendlyError } from "./errors";
+import { runTransition } from "./transition";
 import { modelBadge, stepsDone } from "./stepper";
 import { TracePanel } from "./TracePanel";
 import { Tour } from "./Tour";
@@ -39,6 +40,8 @@ export default function App() {
   const [bootTry, setBootTry] = useState(0);
   const [bootError, setBootError] = useState<string>();
   const { busy, error, setError, run } = useRun();
+  /** Switching tab, or opening the trace, animates as a view transition (under reduced motion it just happens). */
+  const goTab = (t: Tab) => runTransition(() => setTab(t));
   const nextId = useMemo(() => { let n = 0; return () => ++n; }, []);
 
   const load = useCallback(async () => {
@@ -101,7 +104,7 @@ export default function App() {
    */
   const onDraftSigned = (draft: PendingDraft) => {
     if (draft.source !== "agent" || !draft.ask) return;
-    setTab("chat");
+    goTab("chat");
     void runTurn({ afterSign: draft.id }, { role: "note", text: "Contract signed. Looking for what you asked…" });
   };
 
@@ -139,7 +142,7 @@ export default function App() {
   };
 
   const onReview = () => {
-    setTab("contracts");
+    goTab("contracts");
     window.setTimeout(() => document.getElementById("contracts-pane")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
   };
 
@@ -165,7 +168,7 @@ export default function App() {
               </span>
             )}
             {config?.offline && config.llm && <button className="linklike" disabled={busy || sending} onClick={backToModel}>Back to the model</button>}
-            <button className="ghost small" onClick={() => setTraceOpen((o) => !o)} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
+            <button className="ghost small" onClick={() => runTransition(() => setTraceOpen((o) => !o))} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
           </div>
         </header>
 
@@ -176,10 +179,10 @@ export default function App() {
         {config && (
           <>
             <div className="tabs" role="tablist" aria-label="Chat or contracts">
-              <button role="tab" id="tab-chat" aria-selected={tab === "chat"} aria-controls="chat-pane" className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
+              <button role="tab" id="tab-chat" aria-selected={tab === "chat"} aria-controls="chat-pane" className={tab === "chat" ? "on" : ""} onClick={() => goTab("chat")}>
                 Chat{dots.chat && <i className="dot" aria-label="needs you" />}
               </button>
-              <button role="tab" id="tab-contracts" aria-selected={tab === "contracts"} aria-controls="contracts-pane" className={tab === "contracts" ? "on" : ""} onClick={() => setTab("contracts")}>
+              <button role="tab" id="tab-contracts" aria-selected={tab === "contracts"} aria-controls="contracts-pane" className={tab === "contracts" ? "on" : ""} onClick={() => goTab("contracts")}>
                 Contracts{dots.contracts && <i className="dot" aria-label="needs you" />}
               </button>
             </div>
