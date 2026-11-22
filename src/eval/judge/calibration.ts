@@ -60,38 +60,49 @@ export function cohenKappa(pairs: ["pass" | "fail", "pass" | "fail"][]): number 
   return (po - pe) / (1 - pe);
 }
 
-export type CriterionResult = { n: number; answered: number; errors: number; agreement: number; kappa: number };
 export type Calibration = {
-  n: number;
-  /** Per criterion, so a criterion cannot be carried by the others. Acceptance for v2 is per criterion (see `acceptedPerCriterion`). */
-  byRubric: Partial<Record<RubricId, CriterionResult>>; answered: number; errors: number; agreement: number; kappa: number;
+  n: number; answered: number; errors: number; agreement: number; kappa: number;
   disagreements: { id: string; rubric: RubricId; label: "pass" | "fail"; verdict: "pass" | "fail" | "error"; note: string; error?: string }[];
 };
 
 /** Runs a judge over the labelled set. An error counts as a disagreement: a judge that cannot answer is not accepted. */
 export async function calibrate(judge: (r: Rubric, i: JudgeItem) => Promise<Verdict>, set: Labeled[] = CALIBRATION, rubrics: Rubric[] = RUBRICS): Promise<Calibration> {
   const rubric = new Map(rubrics.map((r) => [r.id, r]));
-  const per = new Map<RubricId, { pairs: ["pass" | "fail", "pass" | "fail"][]; n: number; errors: number }>();
   const pairs: ["pass" | "fail", "pass" | "fail"][] = [];
   const disagreements: Calibration["disagreements"] = [];
   let errors = 0;
   for (const c of set) {
     const v = await judge(rubric.get(c.rubric)!, c.item);
-    const mine = per.get(c.rubric) ?? { pairs: [], n: 0, errors: 0 };
-    per.set(c.rubric, mine); mine.n++;
-    if ("error" in v) { errors++; mine.errors++; disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: "error", note: c.note, error: v.error }); continue; }
-    pairs.push([c.label, v.verdict]); mine.pairs.push([c.label, v.verdict]);
+    if ("error" in v) { errors++; disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: "error", note: c.note, error: v.error }); continue; }
+    pairs.push([c.label, v.verdict]);
     if (v.verdict !== c.label) disagreements.push({ id: c.item.id, rubric: c.rubric, label: c.label, verdict: v.verdict, note: c.note });
   }
   const agree = pairs.filter(([a, b]) => a === b).length;
-  const byRubric: Calibration["byRubric"] = {};
-  for (const [id, m] of per) byRubric[id] = { n: m.n, answered: m.pairs.length, errors: m.errors, agreement: m.pairs.filter(([a, b]) => a === b).length / m.n, kappa: cohenKappa(m.pairs) };
-  return { n: set.length, byRubric, answered: pairs.length, errors, agreement: agree / set.length, kappa: cohenKappa(pairs), disagreements };
+  return { n: set.length, answered: pairs.length, errors, agreement: agree / set.length, kappa: cohenKappa(pairs), disagreements };
 }
 
 export const accepted = (c: Calibration) => c.errors === 0 && c.kappa >= ACCEPT.kappa && c.agreement >= ACCEPT.agreement;
 
-/** v2 acceptance: the same thresholds as v1, applied to EACH criterion (H6 is per criterion; a pooled figure can hide a criterion that fails). A criterion with no items is not accepted. */
-export function acceptedPerCriterion(c: Calibration, ids: RubricId[] = RUBRICS.map((r) => r.id)): boolean {
-  return ids.every((id) => { const r = c.byRubric[id]; return Boolean(r) && r!.errors === 0 && r!.kappa >= ACCEPT.kappa && r!.agreement >= ACCEPT.agreement; });
+/** v2 acceptance is per criterion, as H6 is: each of the three must reach the thresholds on its own items, and the pooled figures are reported beside them. */
+export type CalibrationV2 = Calibration & { perRubric: Record<RubricId, Calibration> };
+
+export async function calibrateV2(judge: (r: Rubric, i: JudgeItem) => Promise<Verdict>, set: Labeled[], rubrics: Rubric[]): Promise<CalibrationV2> {
+  const pooled = await calibrate(judge, set, rubrics);
+  const perRubric = {} as Record<RubricId, Calibration>;
+  for (const r of rubrics) {
+    const ids = new Set(set.filter((c) => c.rubric === r.id).map((c) => c.item.id));
+    const verdicts = new Map(pooled.disagreements.map((d) => [d.id, d]));
+    const mine = set.filter((c) => c.rubric === r.id);
+    const dis = mine.flatMap((c) => (verdicts.has(c.item.id) ? [verdicts.get(c.item.id)!] : []));
+    const errors = dis.filter((d) => d.verdict === "error").length;
+    const pairs = mine.flatMap((c): ["pass" | "fail", "pass" | "fail"][] => {
+      const d = verdicts.get(c.item.id);
+      if (d?.verdict === "error") return [];
+      return [[c.label, d ? (d.verdict as "pass" | "fail") : c.label]];
+    });
+    perRubric[r.id] = { n: ids.size, answered: pairs.length, errors, agreement: pairs.filter(([a, b]) => a === b).length / ids.size, kappa: cohenKappa(pairs), disagreements: dis };
+  }
+  return { ...pooled, perRubric };
 }
+
+export const acceptedV2 = (c: CalibrationV2) => Object.values(c.perRubric).every(accepted);

@@ -170,10 +170,10 @@ async function runAdversarial(c: RealCase, model: LanguageModel | undefined, run
 /** What the system's own state says right now, in plain sentences. A judge compares the agent's reply with these, never with the agent's own account. */
 async function factsNow(h: ReturnType<typeof makeHarness>, before: unknown, after: unknown): Promise<string[]> {
   return formatFacts({
-    carts: h.service.list().map((p) => ({ lines: p.lines.map((l) => `${l.productId} x${l.quantity}`).join(", "), state: p.blocked ? "blocked" : p.status === "paid" ? "paid" : "waiting" })),
-    drafts: h.service.drafts().filter((x) => x.status === "pending").map((d) => ({ budget: (d.mandate.totalBudgetCents / 100).toFixed(2), currency: d.mandate.currency })),
-    pendingAmendments: h.service.amendments().filter((a) => a.status === "pending").length,
-    contractChanged: JSON.stringify(before) !== JSON.stringify(after),
+    carts: h.service.list().map((p) => ({ ids: p.lines.map((l) => `${l.productId} x${l.quantity}`).join(", "), state: p.blocked ? "blocked" : p.status === "paid" ? "paid" : "waiting" })),
+    drafts: h.service.drafts().filter((x) => x.status === "pending").map((d) => ({ cents: d.mandate.totalBudgetCents, currency: d.mandate.currency })),
+    amendmentPending: h.service.amendments().some((a) => a.status === "pending"),
+    signedContractChanged: JSON.stringify(before) !== JSON.stringify(after),
     refusedCalls: h.tracer.events.filter((e) => e.step === REFUSED_STEP).length,
     payments: (await h.payments.list()).length,
   });

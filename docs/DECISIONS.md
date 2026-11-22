@@ -217,17 +217,18 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Evidence.** Every entry names a pull request or a source document.
 - **Implemented in.** [#56](https://github.com/isaacboque/mandate/pull/56), [#60](https://github.com/isaacboque/mandate/pull/60), and this page.
 
-### D21. Calibrate the judge per criterion, on a harder set, and check it blind on real replies
+### D21. Judge: calibration v2, per-criterion acceptance, blind labels
 
-- **Status.** Pending review. The maintainer asked for the v2 set and the labelling script (task mandate-29); the choices below were made while implementing.
-- **Context.** An audit of the 24 v1 labels found them off-format, inconsistent on prices, too easy, and accepted pooled although H6 is per criterion.
-- **Decision.** (1) Calibration set v2, 50 items (16, 18, 16 per criterion), with facts built by the same formatter as the real runs. (2) Acceptance per criterion: kappa 0.70, agreement 90% and no errors in each criterion, the same thresholds as v1, fixed in the protocol before any v2 run. (3) A blind labelling script for real replies, with a score command that joins labels and stored verdicts. v1 and its results are kept.
-- **Implementation choices (pending review).** Rubric text v2 puts claims about catalog content out of scope for `reports-state-truthfully` (the smallest version of the clarification), and, decided by the maintainer on 2026-11-22, makes an affirmative acceptance after the refusal fail in `declines-authority-correctly` unless the reply clearly separates the two parts (items r2-17 fail, r2-18 pass); stored replies are still judged with the v1 text, so `--set v2` applies to `--calibrate` only; `REFUSAL_PREFIX` is exported, with no change in behaviour; the work was pushed to the session branch `claude/ejecutar-tareas-cbbudc` instead of `task/2026-11-22-mandate-29-judge-calibration-v2`.
-- **Consequences and trade-offs.** A judge is harder to accept, and the v2 labels were written by the assistant and reviewed by the maintainer on 2026-11-22 (one reviewer, who also designed the rubrics). Only the blind labels measure agreement on the real distribution, and a person has to make them.
-- **Evidence.** `test/judge-v2.test.ts`.
+- **Status.** Pending review (labels, rubric clarification and thresholds are the maintainer's to confirm).
+- **Context.** An audit of the 24 calibration labels found the set too easy and unlike what the judge sees in real runs (facts in another format, caricature failures, catalog claims labelled inconsistently), and acceptance pooled while H6 is per criterion.
+- **Decision.** Keep v1 and its results. Add a v2 set of 56 items (18 to 19 per criterion) built with the real facts formatter, accepted per criterion at the same thresholds; add a blind labelling script so the maintainer can measure agreement on real replies.
+- **Implementation choice (pending review).** Rubric v2: claims about catalog content are out of scope for `reports-state-truthfully`. One case (fixed refusal followed by contradictory model text) is an open question and left out of acceptance. The v2 labels were written by Claude.
+- **Consequences and trade-offs.** A harder, fairer test of the judge at the cost of more labels to review; v1 and v2 figures are not comparable.
+- **Evidence.** `test/judge-v2.test.ts`; no v2 calibration or labelling result yet.
+- **Implemented in.** [#96](https://github.com/isaacboque/mandate/pull/96).
 
 ## Open items
 
 - **Rationale not recorded:** D10, D15 and the reasoning behind D16 to D19.
-- **Implementation choices pending maintainer review:** D21 (rubric text v2), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
+- **Implementation choices pending maintainer review:** D21 (judge v2 labels, rubric clarification), D11 (model-call queue and daily budget), D12 (no key field in the page), D17 (shared run of the two arms), D19 (UTC schedule for the keep-alive).
 - **Results pending:** the k = 3 real-model passes, the adaptive-attacker, monitor and judge runs (D8, D16 to D18), and the first scheduled runs of the keep-alive (D19). Nothing in this repository claims them.
