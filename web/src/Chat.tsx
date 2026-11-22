@@ -5,7 +5,7 @@ import { limitCopy } from "./limit";
 import { Icon } from "./icons";
 import { CHECK_LABEL } from "./labels";
 import { ProposalCard } from "./ProposalCard";
-import { Working, sendKey, symbol } from "./shared";
+import { ShortcutHint, Working, sendKey, symbol } from "./shared";
 import type { RunFn } from "./useRun";
 
 /** `note`: a short line the app adds on the person's behalf (for example after they sign), shown small and centred, not as a message. */
@@ -155,10 +155,11 @@ export function Chat({ items, ctx, sending, streaming = "", onSend, onAttack }: 
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
         <label htmlFor="chat-input" className="sr-only">Message the agent</label>
         <textarea
-          id="chat-input" ref={input} className="ask" rows={2} maxLength={500} value={text} placeholder="e.g. Indoor futsal shoes, max 90 €" disabled={false}
+          id="chat-input" ref={input} className="ask" rows={2} aria-describedby="composer-hint" maxLength={500} value={text} placeholder="e.g. Indoor futsal shoes, max 90 €" disabled={false}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (sendKey(e)) { e.preventDefault(); send(); } }}
         />
+        <ShortcutHint />
         <div className="composer-actions">
           <button type="button" className="ghost danger small" disabled={ctx.busy} onClick={onAttack} title="Loads a poisoned listing that tells the agent to buy 10 units">Try an attack</button>
           <button type="submit" className="primary" disabled={sending || text.trim().length < 1}>{sending ? "Sending…" : "Send"}</button>

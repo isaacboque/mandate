@@ -53,3 +53,11 @@ flowchart LR
 - The budget belongs to the mandate, not to a cart: approved and paid amounts count against it.
 - The guardrails fail closed when data is missing or unreadable (a bad date, a missing size or category). A price that is not a whole number of cents above zero is dropped when the catalog is read; making `checkCart` itself refuse it is [ticket 08](wayfinder/tickets/08-checkcart-price-sanity.md).
 - Tests and the eval use mocks only; no keys, no network.
+
+## Retries and idempotency
+
+Every POST from the web app carries an `Idempotency-Key`, one UUID per user action and the same on every retry of it (`web/src/idempotent.ts`). The server (`src/server/idempotency.ts`) keeps the first answer for ten minutes, scoped to the visitor and the route, and answers a retry with it instead of acting again. The same key with a different body is refused (422); two requests with one key at the same moment run once; a 5xx or a 429 is not kept, so a retry gets a real second attempt; the streaming chat route is left out. The client retries only network errors and 502, 503 and 504 (a host that is waking up), twice, with a growing wait. Payment logic is untouched: approving and paying are already idempotent per approval, and this only makes a retried request answer the same. The button is disabled while a request runs (`useRun`), so one click is one action.
+
+## Interface details
+
+Small behaviours that make the interface feel finished, each with a test or a check in the browser run (`npm run screenshots`): a skeleton in the shape of the workspace after 300 ms of loading; view transitions for switching tab or opening the trace; an Undo toast (role `status`, 8 seconds, request sent when the time is up) for discarding a draft, while sign, amend, revoke, approve and pay keep explicit buttons; revalidation of state when the window regains focus or the network returns (never while an action runs; nothing is served from a cache, because the state is money); tabular figures for amounts and counters; balanced headings; safe-area insets; 44 by 44 px touch targets on touch screens; continuous corners where the browser supports them; every animation under 300 ms and off under reduced motion.

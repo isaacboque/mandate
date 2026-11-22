@@ -1,12 +1,14 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { getCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { clientIpFrom } from "./clientIp.js";
+import { idempotency } from "./idempotency.js";
 import type { MandateService } from "../service/service.js";
 import type { RateLimiter } from "./limits.js";
-import { SessionStore } from "./sessions.js";
+import { SESSION_COOKIE, SessionStore } from "./sessions.js";
 import { MandateInput } from "../mandate/input.js";
 import { describeLlm } from "../llm/model.js";
 
@@ -72,6 +74,9 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     c.header("content-security-policy", CSP);
   });
   app.use("/api/*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Request too large" }, 413) }));
+
+  // A retried request (same Idempotency-Key) answers what the first attempt produced instead of acting twice. The streaming route is left out: nothing to replay.
+  app.use("/api/*", idempotency({ scope: (c) => getCookie(c, SESSION_COOKIE) ?? clientIp(c), skip: (path) => path === "/api/chat/stream" }));
 
   app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 

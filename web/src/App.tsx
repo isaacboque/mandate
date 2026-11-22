@@ -5,9 +5,13 @@ import { attention, parseCards } from "./cards";
 import { Chat, type ChatItem } from "./Chat";
 import { ContractsPanel } from "./ContractsPanel";
 import { friendlyError } from "./errors";
+import { Toast } from "./Toast";
+import { createUndoQueue } from "./undo";
+import { runTransition } from "./transition";
 import { modelBadge, stepsDone } from "./stepper";
 import { TracePanel } from "./TracePanel";
 import { Tour } from "./Tour";
+import { useRevalidate } from "./useRevalidate";
 import { useRun } from "./useRun";
 
 type Tab = "chat" | "contracts";
@@ -39,6 +43,8 @@ export default function App() {
   const [bootTry, setBootTry] = useState(0);
   const [bootError, setBootError] = useState<string>();
   const { busy, error, setError, run } = useRun();
+  /** Switching tab, or opening the trace, animates as a view transition (under reduced motion it just happens). */
+  const goTab = (t: Tab) => runTransition(() => setTab(t));
   const nextId = useMemo(() => { let n = 0; return () => ++n; }, []);
 
   const load = useCallback(async () => {
@@ -47,6 +53,15 @@ export default function App() {
     return { c, d, a, p: p.slice().reverse() };
   }, []);
   const refresh = useCallback(() => { load().catch((e) => setError(friendlyError((e as Error).message))); }, [load, setError]);
+  useRevalidate(refresh, !busy && !sending);
+  // Discarding a draft is safe to take back: it goes at once, an Undo toast stays for 8 s, and the request is sent when the time is up.
+  const [, redraw] = useState(0);
+  const undo = useMemo(() => createUndoQueue({ onChange: () => redraw((n) => n + 1) }), []);
+  const onDiscardDraft = (d: PendingDraft) => undo.schedule({
+    id: d.id, label: "Draft discarded",
+    commit: () => { api.discardDraft(d.id).then(refresh).catch((e) => { setError(friendlyError((e as Error).message)); refresh(); }); },
+  });
+  const shownDrafts = drafts.map((d) => (undo.hidden(d.id) ? { ...d, status: "discarded" as const } : d));
 
   // Reloading the page must not lose the session: restore the conversation text and whatever is still waiting for the person.
   useEffect(() => {
@@ -101,7 +116,7 @@ export default function App() {
    */
   const onDraftSigned = (draft: PendingDraft) => {
     if (draft.source !== "agent" || !draft.ask) return;
-    setTab("chat");
+    goTab("chat");
     void runTurn({ afterSign: draft.id }, { role: "note", text: "Contract signed. Looking for what you asked…" });
   };
 
@@ -139,11 +154,11 @@ export default function App() {
   };
 
   const onReview = () => {
-    setTab("contracts");
+    goTab("contracts");
     window.setTimeout(() => document.getElementById("contracts-pane")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
   };
 
-  const dots = attention(drafts, amendments, proposals);
+  const dots = attention(shownDrafts, amendments, proposals);
   const resetDemo = () => run(() => api.reset()).then((r) => { if (r) { setItems([]); setFreshAttack(undefined); setTab("chat"); refresh(); } });
 
   return (
@@ -165,7 +180,7 @@ export default function App() {
               </span>
             )}
             {config?.offline && config.llm && <button className="linklike" disabled={busy || sending} onClick={backToModel}>Back to the model</button>}
-            <button className="ghost small" onClick={() => setTraceOpen((o) => !o)} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
+            <button className="ghost small" onClick={() => runTransition(() => setTraceOpen((o) => !o))} aria-pressed={traceOpen}>{traceOpen ? "Hide trace" : "Show trace"}</button>
           </div>
         </header>
 
@@ -176,10 +191,10 @@ export default function App() {
         {config && (
           <>
             <div className="tabs" role="tablist" aria-label="Chat or contracts">
-              <button role="tab" id="tab-chat" aria-selected={tab === "chat"} aria-controls="chat-pane" className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
+              <button role="tab" id="tab-chat" aria-selected={tab === "chat"} aria-controls="chat-pane" className={tab === "chat" ? "on" : ""} onClick={() => goTab("chat")}>
                 Chat{dots.chat && <i className="dot" aria-label="needs you" />}
               </button>
-              <button role="tab" id="tab-contracts" aria-selected={tab === "contracts"} aria-controls="contracts-pane" className={tab === "contracts" ? "on" : ""} onClick={() => setTab("contracts")}>
+              <button role="tab" id="tab-contracts" aria-selected={tab === "contracts"} aria-controls="contracts-pane" className={tab === "contracts" ? "on" : ""} onClick={() => goTab("contracts")}>
                 Contracts{dots.contracts && <i className="dot" aria-label="needs you" />}
               </button>
             </div>
@@ -187,16 +202,17 @@ export default function App() {
               <div id="chat-pane" className="pane chatpane" role="tabpanel" aria-labelledby="tab-chat">
                 <Chat
                   items={items} sending={sending} streaming={streamed} onSend={onSend} onAttack={onAttack}
-                  ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts, amendments, freshAttack, onReview, onFix, onRetry, onOffline, status, modelName: config.llm?.model.replace(/^[^/]+\//, ""), onProposalChange: (p) => { upsert(p); refresh(); } }}
+                  ctx={{ config, busy: busy || sending, run, proposals: proposalMap, drafts: shownDrafts, amendments, freshAttack, onReview, onFix, onRetry, onOffline, status, modelName: config.llm?.model.replace(/^[^/]+\//, ""), onProposalChange: (p) => { upsert(p); refresh(); } }}
                 />
               </div>
               <div id="contracts-pane" className="pane contractspane" role="tabpanel" aria-labelledby="tab-contracts" tabIndex={-1}>
-                <ContractsPanel config={config} contracts={contracts} drafts={drafts} amendments={amendments} busy={busy || sending} run={run} onChanged={refresh} onDraftSigned={onDraftSigned} />
+                <ContractsPanel config={config} contracts={contracts} drafts={shownDrafts} onDiscardDraft={onDiscardDraft} amendments={amendments} busy={busy || sending} run={run} onChanged={refresh} onDraftSigned={onDraftSigned} />
               </div>
             </div>
           </>
         )}
 
+        {undo.toast() && <Toast label={undo.toast()!.label} onUndo={() => undo.undo(undo.toast()!.id)} />}
         <footer className="foot">
           {config && <p className="muted small honest">{config.demoMode === "mock" ? "Demo: a fixture catalog and simulated payments. Nothing is bought and no real money moves." : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
           {config?.resettable && <button className="linklike" disabled={busy || sending} onClick={resetDemo}>Reset demo</button>}

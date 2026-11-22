@@ -1,0 +1,53 @@
+/* Interface details that sit on top of the base styles. Loaded last. Each block says what it is for. */
+
+/* Headings and short titles break into even lines; paragraphs avoid a lone last word. */
+h1, h2, h3, .emptystate b, .limit-title { text-wrap: balance; }
+p, li, dd, .bubble { text-wrap: pretty; }
+
+/* Numbers that change or line up: prices, spend, countdowns and counters keep a fixed width, so a ticking value does not make the text shift. */
+.amt, .bigamt, .meterlegend b, .cterms dd, .working b, .boot b, .tour-count, time, .evh time, input[inputmode="decimal"] { font-variant-numeric: tabular-nums; }
+
+/* The page extends under a notch, a Dynamic Island or a home indicator (viewport-fit=cover); the insets keep every control clear of them. They are 0 on a normal screen. */
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* Continuous corners (the "squircle"): only Chromium draws them today and every other browser ignores the property, so it sits next to the unchanged border-radius. */
+@supports (corner-shape: squircle) {
+  .card, .chat, .primary, .ghost, .chip, .example, .tour, .logo, .minicard, .confirm, .working, .alert, .ok, .badge, .bubble { corner-shape: squircle; }
+}
+
+/* Touch targets: on a touch screen every control is at least 44 by 44 px, drawn or padded, never overlapping its neighbours.
+   Replaces the old 36 px minimum for small controls and the extended hit areas (::after) that could reach into the next control. */
+@media (pointer: coarse) {
+  .chip, .ghost.small, .linklike, .tabs button, .tour-toggle, summary { min-height: 44px; min-width: 44px; }
+  .linklike, .tour-toggle, summary { display: inline-flex; align-items: center; justify-content: center; }
+  .linklike::after, .ghost.small::after, .chip::after, .stepper button::after { content: none; }
+}
+
+/* View transitions: a change on one page cross-fades in 160 ms, and the highlight of the active tab slides to the new tab in 200 ms (both under 300 ms).
+   Between pages the landing page and the demo are different origins, which the browser does not transition. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; animation-timing-function: ease-out; }
+.tabs button.on { view-transition-name: active-tab; }
+::view-transition-group(active-tab) { animation-duration: 200ms; animation-timing-function: ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Skeleton loaders: grey blocks in the shape of the real layout. The shimmer is a slow sweep, off under reduced motion. */
+.sk { display: block; border-radius: 8px; background: linear-gradient(90deg, var(--paper) 25%, #e6e9f2 37%, var(--paper) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+.sk-stack { display: grid; gap: 12px; }
+.sk-tab { flex: 1; display: grid; place-items: center; padding: 12px; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+/* Undo toast: bottom of the screen, clear of the home indicator, 8 s. It slides in over 180 ms; under reduced motion it just appears. */
+.toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); padding: 12px 14px 12px 18px; border-radius: 14px; background: var(--ink); color: #fff; box-shadow: 0 12px 32px -12px rgba(23, 26, 43, .5); animation: toast-in .18s ease-out both; }
+.toast-undo { background: none; border: 1px solid #5b6188; border-radius: 10px; padding: 8px 14px; color: #fff; font-weight: 650; cursor: pointer; min-height: 36px; }
+.toast-undo:hover { border-color: #fff; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (pointer: coarse) { .toast-undo { min-height: 44px; min-width: 44px; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Shortcut hint under the composer. */
+.kbdhint { margin: 6px 0 0; }
+kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--paper); color: var(--ink); }
+@media (hover: none) { .kbdhint { display: none; } }

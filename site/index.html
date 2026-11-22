@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mandate: agents trusted with a mandate, not with money</title>
 <meta name="description" content="A shopping agent that can only propose. A person signs the spending contract, and plain code checks every cart against it. Sandbox demo, no real money.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232457d6'/%3E%3Cpath d='M9 22V10l7 8 7-8v12' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -21,8 +21,10 @@
   html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 880px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.15; margin: 8px 0 8px; letter-spacing: -0.01em; }
-  .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 20px; max-width: 60ch; }
+  /* The page extends under a notch or a home indicator; nothing tappable sits beneath them. */
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.15; margin: 8px 0 8px; letter-spacing: -0.01em; text-wrap: balance; }
+  .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 20px; max-width: 60ch; text-wrap: pretty; }
   .brand { font-weight: 700; color: var(--accent); letter-spacing: 0.02em; }
   .status { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 24px; display: grid; gap: 12px; }
   .status > * { min-width: 0; }

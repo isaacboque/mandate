@@ -7,6 +7,11 @@ export const symbol = (currency: string) => new Intl.NumberFormat("en", { style:
 export const sendKey = (e: KeyboardEvent) => e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
 
 
+/** The keys the composer answers to. Enter has no Cmd/Ctrl variant, so there is nothing platform-specific to show. Hidden on touch screens, which have no such keys. */
+export function ShortcutHint() {
+  return <p id="composer-hint" className="kbdhint muted small"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>;
+}
+
 /** A money field that takes "90", "90€", "€90", "90 eur" or "90,00" and shows back one clean value on leaving the field. */
 export function MoneyInput({ sym, value, onChange, disabled, inline, label }: { sym: string; value: string; onChange: (v: string) => void; disabled?: boolean; inline?: boolean; label?: string }) {
   const cents = parseMoney(value);

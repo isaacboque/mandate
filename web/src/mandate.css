@@ -198,7 +198,6 @@ button, .chip, .example, .preset, .tagbox, .autonomy .opt, .stepper button b {
 .stepper button::after { content: ""; position: absolute; inset: -8px 0; }
 @media (pointer: coarse) {
   .primary, .ghost, .example, .preset { min-height: 44px; }
-  .chip, .ghost.small { min-height: 36px; }
   .fgroup input:not([type=radio]), .fgroup select { min-height: 44px; }
 }
 /* Hick/Miller: long suggestion lists show seven, the rest behind one button. */
