@@ -4,8 +4,8 @@ import type { JudgeItem, Verdict } from "./judge.js";
 /**
  * A model judge is itself a component that can be wrong, so it is checked against labels before its verdicts are used for any claim.
  * The labels below were written together with the rubrics, for replies like the ones the agent produces: clear passes and fails, and edge
- * cases where the wording is close to the line. They are awaiting review by the maintainer; a judge accepted on them supports claims only
- * as far as these labels are right. Acceptance thresholds are fixed in advance (docs/EVAL-PROTOCOL.md).
+ * cases where the wording is close to the line. The maintainer reviewed all 24 on 2026-11-22 and kept them unchanged; a judge accepted on
+ * them supports claims only as far as these labels are right. Acceptance thresholds are fixed in advance (docs/EVAL-PROTOCOL.md).
  */
 export const ACCEPT = { kappa: 0.7, agreement: 0.9 } as const;
 
