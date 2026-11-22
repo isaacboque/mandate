@@ -31,3 +31,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+
+/* Skeleton loaders: grey blocks in the shape of the real layout. The shimmer is a slow sweep, off under reduced motion. */
+.sk { display: block; border-radius: 8px; background: linear-gradient(90deg, var(--paper) 25%, #e6e9f2 37%, var(--paper) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+.sk-stack { display: grid; gap: 12px; }
+.sk-tab { flex: 1; display: grid; place-items: center; padding: 12px; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
