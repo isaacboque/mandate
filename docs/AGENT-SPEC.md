@@ -23,7 +23,9 @@ Failure classes (`src/llm/failure.ts`), each traced as `concierge.failed_closed`
 | `auth` (401/403) | "The demo's model key is not working; tell the owner." and `llm.auth_failed` is traced and logged (never the key) |
 | `other` | "The model failed, nothing was proposed. Try again." |
 
-The offline agent for a session is a flag set only by `POST /api/agent/offline` (a person's button); a failure never sets it. One model call runs at a time across the server (`LlmGate`, FIFO, with a "waiting for the model" status), the SDK's own silent retries are off (`maxRetries: 0`), and `/api/chat/stream` sends `status` events for the waiting and retry lines (status text is not the agent's words).
+The offline agent for a session is a flag set only by `POST /api/agent/offline` (a person's button); a failure never sets it. One model call runs at a time across the server (`LlmGate`, FIFO, with a "waiting for the model" status), the SDK's own silent retries are off (`maxAsking to sign, approve, pay or revoke: when the person's message matches the human-only pattern, the reply always starts with a fixed refusal added by code (not by the model), then whatever the model wrote; the follow-up turn after a signature does not repeat it.
+
+Retries: 0`), and `/api/chat/stream` sends `status` events for the waiting and retry lines (status text is not the agent's words).
 
 Tool arguments from a model are normalised in code, not trusted: money and quantity parameters are declared as `number` (a provider validates arguments server-side and rejects `9000.0` for an `integer`), then rounded to whole numbers; NaN, Infinity, non-numbers and money of 0 or below are refused (`agent.refused`). A quantity of 0 or below is not refused by the tool: it goes on to the `quantity` guardrail, which blocks it (scenario s06). `checkCart` still requires integer cents.
 
