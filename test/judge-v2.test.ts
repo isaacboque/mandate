@@ -6,7 +6,7 @@ import { accepted, acceptedV2, calibrateV2, CALIBRATION, ACCEPT } from "../src/e
 import { CALIBRATION_V2, OPEN_QUESTIONS_V2 } from "../src/eval/judge/calibrationV2.js";
 import { formatFacts } from "../src/eval/judge/facts.js";
 import { labelSession, loadLabels, renderCandidate, sampleCandidates, scoreLabels, type LabelRecord } from "../src/eval/judge/label.js";
-import { RUBRICS, RUBRICS_V2, rubricsFor, type RubricId } from "../src/eval/judge/rubrics.js";
+import { RUBRICS, RUBRICS_V2, rubricsFor, rubricsOf, type RubricId } from "../src/eval/judge/rubrics.js";
 import type { JudgeRecord } from "../src/eval/judge/run.js";
 import type { UnitRecord } from "../src/eval/real/run.js";
 import type { RealCase } from "../src/eval/realModel.js";
@@ -39,8 +39,21 @@ describe("calibration set v2", () => {
     expect(all.some((c) => c.rubric === IDS[0] && c.label === "pass" && c.item.facts.some((f) => f.startsWith("A draft contract")))).toBe(true);
     expect(all.some((c) => c.rubric === IDS[0] && c.label === "fail" && c.item.facts.some((f) => f.startsWith("A draft contract")) && /signed/.test(c.item.reply))).toBe(true);
     expect(of(IDS[2]).every((c) => c.item.listing)).toBe(true);
-    expect(OPEN_QUESTIONS_V2.length).toBeGreaterThan(0);
     for (const o of OPEN_QUESTIONS_V2) expect(CALIBRATION_V2.includes(o)).toBe(false);
+  });
+  it("v2-q-1 is decided: the refusal followed by an acceptance fails, its separated near-miss passes, and the rubric text says so", () => {
+    const get = (id: string) => CALIBRATION_V2.find((c) => c.item.id === id)!;
+    expect(get("v2-r2-20")).toMatchObject({ rubric: IDS[1], label: "fail" });
+    expect(get("v2-r2-20").item.reply).toMatch(/^I can't do that part: .*Sure! How much/);
+    expect(get("v2-r2-21")).toMatchObject({ rubric: IDS[1], label: "pass" });
+    expect(OPEN_QUESTIONS_V2).toEqual([]);
+    const r2 = (v: "v1" | "v2") => rubricsOf(v).find((r) => r.id === IDS[1])!;
+    expect(r2("v2").fail).toMatch(/affirmative acceptance/);
+    expect(r2("v1").fail).not.toMatch(/affirmative acceptance/);
+    expect(r2("v2").pass).toBe(r2("v1").pass);
+  });
+  it("has a subtle reports-state fail: an action the facts neither show nor contradict", () => {
+    expect(CALIBRATION_V2.find((c) => c.item.id === "v2-r1-19")).toMatchObject({ rubric: IDS[0], label: "fail" });
   });
   it("leaves v1 untouched at 24 items, and v1 r1-5 (the ambiguous one) is not reused as written", () => {
     expect(CALIBRATION).toHaveLength(24);
@@ -60,9 +73,9 @@ describe("calibration set v2", () => {
 });
 
 describe("rubric v2", () => {
-  it("only reports-state-truthfully changes, and it puts catalog claims out of scope; v1 text is unchanged", () => {
+  it("only two rubrics change (catalog claims out of scope; an acceptance after the refusal fails); v1 text is unchanged", () => {
     for (const [i, r] of RUBRICS.entries()) {
-      if (r.id === IDS[0]) { expect(RUBRICS_V2[i].pass).toContain("out of scope"); expect(RUBRICS_V2[i].pass.startsWith(r.pass)).toBe(true); } else expect(RUBRICS_V2[i]).toEqual(r);
+      if (r.id === IDS[0]) { expect(RUBRICS_V2[i].pass).toContain("out of scope"); expect(RUBRICS_V2[i].pass.startsWith(r.pass)).toBe(true); } else if (r.id === IDS[1]) { expect(RUBRICS_V2[i].pass).toBe(r.pass); expect(RUBRICS_V2[i].fail.startsWith(r.fail)).toBe(true); } else expect(RUBRICS_V2[i]).toEqual(r);
     }
     expect(RUBRICS[0].pass).not.toContain("catalog");
     expect(rubricsFor("authority", "v2")[0].pass).toContain("catalog");
@@ -79,12 +92,12 @@ describe("per-criterion acceptance", () => {
     expect(acceptedV2(c)).toBe(true);
   });
   it("a judge that is excellent on two criteria and bad on one is NOT accepted, though the pooled figures pass", async () => {
-    const bad = new Set(of(IDS[1]).slice(0, 4).map((c) => c.item.id)); // 4 flipped of 19 on one criterion
+    const bad = new Set(of(IDS[1]).slice(0, 4).map((c) => c.item.id)); // 4 flipped of 21 on one criterion
     const judge = async (_r: unknown, i: { id: string }) => { const l = CALIBRATION_V2.find((c) => c.item.id === i.id)!.label; return { verdict: bad.has(i.id) ? (l === "pass" ? "fail" : "pass") : l, reasoning: "x" }; };
     const c = await calibrateV2(judge as never, CALIBRATION_V2, RUBRICS_V2);
     expect(c.agreement).toBeGreaterThanOrEqual(ACCEPT.agreement);
     expect(accepted(c)).toBe(true);
-    expect(c.perRubric[IDS[1]].agreement).toBeCloseTo(15 / 19, 10);
+    expect(c.perRubric[IDS[1]].agreement).toBeCloseTo(17 / 21, 10);
     expect(acceptedV2(c)).toBe(false);
   });
   it("one error on one criterion fails that criterion", async () => {
