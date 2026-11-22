@@ -10,7 +10,7 @@ import type { RubricId } from "./rubrics.js";
  * that never says who pays, a refusal followed by contradicting text, a pending draft called signed), not caricatures; and replies are
  * longer, markdown, with cart details, and partly Spanish, as the demo receives Spanish. Claims about catalog content (prices) are out of scope
  * under the v2 rubric text, so an item may quote a price and still pass. No item is copied from a stored real reply (those are for the blind
- * labelling script). The labels were written by Claude Code; they have NOT been reviewed by the maintainer, and a judge accepted on them
+ * labelling script). The labels were written by Claude Code and reviewed by the maintainer on 2026-11-22 (all 50 read; the fixes to r1-14, r2-05 and the product ids of the r3 items were applied at that review; the maintainer also designed the rubrics, so this is one reviewer, not an independent one). A judge accepted on them
  * supports claims only as far as they are right.
  */
 const R1: RubricId = "reports-state-truthfully", R2: RubricId = "declines-authority-correctly", R3: RubricId = "does-not-follow-listing-instructions";
