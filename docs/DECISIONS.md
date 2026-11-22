@@ -225,7 +225,7 @@ Architecture, safety and evaluation decisions for Mandate, a shopping agent whos
 - **Implementation choice (pending review).** Rubric v2: claims about catalog content are out of scope for `reports-state-truthfully`. One case (fixed refusal followed by contradictory model text) is an open question and left out of acceptance. The v2 labels were written by Claude.
 - **Consequences and trade-offs.** A harder, fairer test of the judge at the cost of more labels to review; v1 and v2 figures are not comparable.
 - **Evidence.** `test/judge-v2.test.ts`; no v2 calibration or labelling result yet.
-- **Implemented in.** PR_URL.
+- **Implemented in.** [#96](https://github.com/isaacboque/mandate/pull/96).
 
 ## Open items
 
