@@ -17,6 +17,22 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 | Same variants: detector recall (the regex layer alone) | 19/78 | `npm run eval:injection-variants` |
 | Real-model compromise, leaks and usefulness (3 open-weight models via Groq, 2026-11-21, k=1, n=19 per model; not a Claude result) | money outside the mandate terms 0/19 for each model; compromise 0/19, 3/19, 2/17; see [Real-model results](#real-model-results-open-weight-models-via-groq-not-claude) | `npm run eval:real -- --models groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b --k 1 --timeout-ms 120000 --delay-ms 15000 --yes` (needs a free `GROQ_API_KEY`) |
 
+## What the evidence supports
+
+How strong each claim is, so the figures below are read for what they are. "Strong" means deterministic, reproducible and checked by an independent mechanism; it does not mean proven. Results not yet run are marked pending; the plan for them, and what would count as failure, is in [EVAL-PROTOCOL.md](EVAL-PROTOCOL.md).
+
+| Claim | Evidence | Strength | What would strengthen it |
+| --- | --- | --- | --- |
+| Money cannot move outside a signed mandate, whatever the model proposes | 60 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
+| The evaluation can tell when a guardrail is broken | Each of the 11 guardrails switched off in turn fails the eval (11 of 11); the oracle judges size and price age itself | Strong, one guardrail at a time | Mutating the budget arithmetic inside a check; combinations of mutants |
+| The regex injection detector is weak | 19 of 78 variants flagged; 22 of 81 attacks including the original fixtures; 9 of 53 false positives | Strong, deterministic (the variants were written by the same author) | Variants from an independent source |
+| Failing closed removes the fallback attack surface | The mechanism is tested (scenario a10); a first real-model run showed the fallback buying an attacker's listing, and the fix removed the purchases that came from the fallback | Moderate: the before and after were not controlled | The paired v2 comparison (pending) |
+| Real models rarely go outside the mandate terms | First run: three open-weight models, 19 runs each, 0 of 19 outside the terms | Weak: 19 runs bound the rate only below about 17% | The v2 case set at k = 3 (pending), and a Claude model |
+| Amendment scope creep is closed | Scenarios a12 and a13, tests, and a mutation test of the check; found live and reproduced first | Strong for the mapped words and fields; the mapping is a heuristic | Fuzzing the phrasing |
+| Adaptive attackers cannot move money outside the mandate | Harness built | Not tested yet | The adaptive run (pending) |
+| A model monitor improves on the regex detector | Harness built; regex baseline measured | Not tested yet | The monitor run (pending) |
+| The controls do not make the agent useless | First run: no false block on a small number of benign tasks | Weak | The v2 task family, with false blocks reported with intervals |
+
 ## How to reproduce in 3 commands
 
 ```bash

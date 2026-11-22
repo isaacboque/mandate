@@ -1,6 +1,6 @@
 # Running the evaluations
 
-What each evaluation measures, how to run it and what it costs. Results, with the command that produced each, are in [EVIDENCE.md](EVIDENCE.md); what they do and do not show is in [THREAT-MODEL.md](THREAT-MODEL.md).
+What each evaluation measures, how to run it and what it costs. The hypotheses, design and reporting rules for the real-model runs are fixed in [EVAL-PROTOCOL.md](EVAL-PROTOCOL.md). Results, with the command that produced each, are in [EVIDENCE.md](EVIDENCE.md); what they do and do not show is in [THREAT-MODEL.md](THREAT-MODEL.md).
 
 ## Without a key
 
