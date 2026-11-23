@@ -26,7 +26,7 @@ The key decision is where the power sits. The agent has eight tools: search, get
 
 Product titles and descriptions never go into the system prompt. They reach the model as quoted JSON data, and a detector flags injection-looking listings so the guardrails block them. Payments go through PayPal Orders v2 in the sandbox with idempotency, and a mock gateway follows the same rules for the demo. Everything is traced to JSONL and shown live in the UI.
 
-I wrote 60 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result on the fixture catalog: spend safety 100% (56/56), injection resistance 7/7, task success 12/12, agent scenarios 9/9. I also switch off each of the 11 guardrails in turn (`npm run eval:mutants`) to check that the eval fails when it should; all 11 are caught (see [MUTATION.md](MUTATION.md)).
+I wrote 56 deterministic scenarios as an eval. A scripted "fooled" model proposes carts the mandate forbids, and an independent oracle that never calls the guardrail code checks every captured payment against its mandate. Result on the fixture catalog: spend safety 100% (56/56), injection resistance 7/7, task success 12/12, agent scenarios 9/9. I also switch off each of the 11 guardrails in turn (`npm run eval:mutants`) to check that the eval fails when it should; all 11 are caught (see [MUTATION.md](MUTATION.md)).
 
 ### Challenges
 
