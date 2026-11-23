@@ -204,6 +204,23 @@ describe("HTTP API", () => {
   });
 });
 
+describe("reset", () => {
+  it("cannot be used to spend again what a contract already spent (audit H5)", async () => {
+    const { service } = setup();
+    const first = (await service.ask(ASK)).proposals[0];
+    await service.approve(first.id);
+    await service.pay(first.id);
+    expect(service.spentCents()).toBe(first.totalCents);
+    const hash = service.mandate!.hash;
+    service.reset();
+    // an empty session: no contract is left to spend under, so the old hash cannot buy anything either
+    expect(service.mandate).toBeNull();
+    expect(service.mandates()).toHaveLength(0);
+    await expect(service.ask(ASK, hash)).rejects.toThrow(/Unknown mandate|Create a mandate/);
+    await expect(service.ask(ASK)).rejects.toThrow(/Create a mandate/);
+  });
+});
+
 describe("LLM failure fails closed", () => {
   it("a 429 from the model proposes nothing: the rules agent does not take over, the failure is traced and the person is told", async () => {
     const { MockLanguageModelV4 } = await import("ai/test");

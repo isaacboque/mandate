@@ -358,6 +358,8 @@ export class MandateService {
 
   reset(): void {
     if (!this.isMock) throw new Error("Reset only exists in demo mode");
+    // Contracts go too: a contract's spend is never wiped while the contract stays active (audit H5).
+    this.records.clear();
     this.proposals.clear();
     this.pendingDrafts.clear();
     this.pendingAmendments.clear();
