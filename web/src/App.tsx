@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type Amendment, type BlockedView, type ChatInput, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
 import { Booting } from "./Booting";
 import { attention, parseCards } from "./cards";
@@ -13,6 +13,7 @@ import { TracePanel } from "./TracePanel";
 import { Tour } from "./Tour";
 import { useRevalidate } from "./useRevalidate";
 import { useRun } from "./useRun";
+import { quotaBadge, quotaNotice } from "./quota";
 
 type Tab = "chat" | "contracts";
 
@@ -26,6 +27,9 @@ function waitingItem(drafts: PendingDraft[], amendments: Amendment[], proposals:
   return cards.length ? { id, role: "agent", text: "Welcome back. These are waiting for you:", cards } : undefined;
 }
 
+/** Shown when the server forgot this browser's session while the page was open. */
+const RESTART_NOTICE = "The demo restarted (or your session expired), so your earlier contracts and carts were cleared. Start again below.";
+
 export default function App() {
   const [config, setConfig] = useState<Config>();
   const [contracts, setContracts] = useState<MandateView[]>([]);
@@ -33,6 +37,8 @@ export default function App() {
   const [amendments, setAmendments] = useState<Amendment[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [items, setItems] = useState<ChatItem[]>([]);
+  const itemsRef = useRef<ChatItem[]>([]);
+  itemsRef.current = items;
   const [tab, setTab] = useState<Tab>("chat");
   const [sending, setSending] = useState(false);
   const [streamed, setStreamed] = useState(""); // the agent's words so far in this turn; the final reply replaces it
@@ -47,9 +53,23 @@ export default function App() {
   const goTab = (t: Tab) => runTransition(() => setTab(t));
   const nextId = useMemo(() => { let n = 0; return () => ++n; }, []);
 
+  const quotaNoted = useRef(false);
   const load = useCallback(async () => {
     const [c, m, d, a, p] = await Promise.all([api.config(), api.mandates(), api.drafts(), api.amendments(), api.proposals()]);
     setConfig(c); setContracts(m); setDrafts(d); setAmendments(a); setProposals(p.slice().reverse());
+    // The server restarted (or the session expired) while this page stayed open: what the chat shows is gone from the server. Say so and
+    // show only what the server still has, instead of cards for contracts and carts that no longer exist.
+    if (c.restored && itemsRef.current.length > 0) {
+      const hist = await api.history().catch(() => []);
+      const kept: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? (t.text.startsWith("Contract signed. Looking for what you asked") ? "note" : "user") : "agent", text: t.text, cards: [] }));
+      const waiting = waitingItem(d, a, p.slice().reverse(), nextId());
+      setItems([{ id: nextId(), role: "note", text: RESTART_NOTICE, cards: [] }, ...kept, ...(waiting ? [waiting] : [])]);
+    }
+    // First time in this page session that searches use the demo catalog because the real catalog's quota ran out: say so once.
+    if (c.catalogQuota?.exhausted && !quotaNoted.current) {
+      quotaNoted.current = true;
+      setItems((cur) => [...cur, { id: nextId(), role: "agent", text: "", cards: [{ type: "note", message: quotaNotice(c.catalogQuota?.until) }] }]);
+    }
     return { c, d, a, p: p.slice().reverse() };
   }, []);
   const refresh = useCallback(() => { load().catch((e) => setError(friendlyError((e as Error).message))); }, [load, setError]);
@@ -174,6 +194,9 @@ export default function App() {
           </div>
           <div className="badges">
             {config && <span className={`badge ${config.demoMode === "mock" ? "" : "live"}`}>{config.demoMode === "mock" ? "Demo payments" : "PayPal sandbox"}</span>}
+            {config?.catalog && (config.catalogQuota?.exhausted
+              ? <span className="badge" title={quotaNotice(config.catalogQuota.until)}>{quotaBadge}</span>
+              : <span className={`badge ${config.catalog === "channel3" ? "live" : ""}`} title={config.catalog === "channel3" ? "Products come from the real Channel3 catalog." : "Products come from a built-in fixture catalog."}>{config.catalog === "channel3" ? "Real catalog (Channel3)" : "Fixture catalog"}</span>)}
             {config && (
               <span className={`badge agentbadge ${config.agent === "llm" ? "model" : "offline"}`} title={config.agent === "llm" ? "An AI model reads your words. Its failures never hand the turn to the offline agent: only you can switch." : "A built-in rules reader handles your words; no AI model is used."}>
                 {modelBadge(config)}
@@ -214,7 +237,7 @@ export default function App() {
 
         {undo.toast() && <Toast label={undo.toast()!.label} onUndo={() => undo.undo(undo.toast()!.id)} />}
         <footer className="foot">
-          {config && <p className="muted small honest">{config.demoMode === "mock" ? "Demo: a fixture catalog and simulated payments. Nothing is bought and no real money moves." : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
+          {config && <p className="muted small honest">{config.demoMode === "mock" ? `Demo: ${config.catalog === "channel3" ? "real products from Channel3" : "a fixture catalog"} and simulated payments. Nothing is bought and no real money moves.` : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
           {config?.resettable && <button className="linklike" disabled={busy || sending} onClick={resetDemo}>Reset demo</button>}
         </footer>
       </main>

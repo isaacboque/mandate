@@ -49,10 +49,12 @@ A configured model that fails never silently hands the turn to the offline agent
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `DEMO_MODE` | `mock` | `mock`: fixture catalog and simulated payments, no keys needed. `live`: Channel3 catalog and PayPal sandbox |
+| `DEMO_MODE` | `mock` | `mock`: simulated payments, fixture catalog by default, no keys needed. `live`: Channel3 catalog and PayPal sandbox |
 | `CURRENCY` | `EUR` | Display and mandate currency |
 | `PORT` | `8787` | HTTP port |
-| `CHANNEL3_API_KEY` | | Live mode: product catalog ([trychannel3.com](https://trychannel3.com), free tier) |
+| `CATALOG` | `channel3` in live mode, `fixtures` otherwise | `fixtures` or `channel3`: where products come from, independent of `DEMO_MODE`. `channel3` outside live mode (real products, simulated payments) needs `CHANNEL3_API_KEY`; without it the fixture catalog is used and `npm run doctor` and the start-up log say so |
+| `CHANNEL3_MONTHLY_BUDGET` | unset (no soft cap) | Optional. Requests per UTC month after which the server stops calling Channel3 and uses the fixture catalog until the 1st, before the provider refuses. The counter is in memory, so it resets on restart. When Channel3 itself reports the quota used up, the same fallback applies; the UI says so |
+| `CHANNEL3_API_KEY` | | Live mode, or `CATALOG=channel3`: product catalog ([trychannel3.com](https://trychannel3.com), free tier) |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | | Live mode: a PayPal **sandbox** app (Orders v2). Sandbox only: no real money moves |
 | `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY` | | Model keys, see above. Any one is enough |
 | `LLM_PROVIDER` | detected from the key | `google`, `openai`, `anthropic` or `groq` |

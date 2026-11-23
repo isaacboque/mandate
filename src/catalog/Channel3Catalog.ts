@@ -15,6 +15,37 @@ type C3Product = {
   variants?: { options?: { name?: string; values?: { label?: string; exists?: boolean }[] }[] } | null;
 };
 
+/** The provider's monthly quota is used up (`quota`), or it is answering too fast for a moment (`rate`). Never carries the key. */
+export class Channel3QuotaError extends Error {
+  constructor(readonly kind: "quota" | "rate", message: string, readonly until?: Date) {
+    super(message);
+    this.name = "Channel3QuotaError";
+  }
+}
+
+/**
+ * Tells quota exhaustion from a per-minute rate limit and from other failures. Channel3's docs were not reachable when this was written,
+ * so the rule is conservative: 402 is quota; 403 only when the body speaks of credits or quota; 429 is quota unless it reads as a short
+ * per-minute limit (a Retry-After of up to 5 minutes, or "per minute"/"rate limit" without any mention of month, quota or credits).
+ */
+export function classifyChannel3Failure(status: number, body: string, retryAfterSec?: number): "quota" | "rate" | null {
+  const text = body.toLowerCase();
+  const mentionsQuota = /quota|credit|month/.test(text);
+  if (status === 402) return "quota";
+  if (status === 403) return mentionsQuota ? "quota" : null;
+  if (status === 429) {
+    if (mentionsQuota) return "quota";
+    if ((retryAfterSec !== undefined && retryAfterSec > 0 && retryAfterSec <= 300) || /per (minute|second)|rate.?limit|too many requests/.test(text)) return "rate";
+    return "quota";
+  }
+  return null;
+}
+
+/** First instant of the next calendar month, UTC. */
+function nextMonthStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+}
+
 /**
  * Real catalog via Channel3 (https://channel3.ai/docs). Prices in the API are decimal major units
  * (e.g. 49.99); we convert to integer cents. We take the cheapest in-stock offer.
@@ -27,18 +58,59 @@ export class Channel3Catalog implements CatalogGateway {
 
   constructor(
     private apiKey: string,
-    private opts: { fetch?: typeof fetch; now?: () => Date; currency?: string; cacheMs?: number } = {},
+    private opts: { fetch?: typeof fetch; now?: () => Date; currency?: string; cacheMs?: number; monthlyBudget?: number } = {},
   ) {
     if (!apiKey) throw new Error("CHANNEL3_API_KEY is not set");
   }
 
+  private clock(): Date {
+    return (this.opts.now ?? (() => new Date()))();
+  }
+
+  /** Requests made this UTC month by this process (resets on restart and on the 1st). */
+  private month = "";
+  private count = 0;
+  private roll(): void {
+    const m = this.clock().toISOString().slice(0, 7);
+    if (m !== this.month) { this.month = m; this.count = 0; }
+  }
+  requestsThisMonth(): number {
+    this.roll();
+    return this.count;
+  }
+
+  private blockedUntil: Date | null = null;
+  /** When the quota is used up (provider said so, or the soft cap CHANNEL3_MONTHLY_BUDGET is reached): the 1st of next month (UTC). Null otherwise. */
+  exhaustedUntil(): Date | null {
+    const now = this.clock();
+    if (this.blockedUntil && now >= this.blockedUntil) this.blockedUntil = null;
+    if (this.blockedUntil) return this.blockedUntil;
+    const budget = this.opts.monthlyBudget;
+    if (budget && budget > 0 && this.requestsThisMonth() >= budget) return nextMonthStart(now);
+    return null;
+  }
+
   private async call(path: string, init: RequestInit): Promise<unknown> {
+    const until = this.exhaustedUntil();
+    if (until) throw new Channel3QuotaError("quota", "The real catalog's monthly quota is used up", until);
     const f = this.opts.fetch ?? fetch;
+    this.roll();
+    this.count++;
     const res = await f(`${BASE}${path}`, {
       ...init,
       headers: { "x-api-key": this.apiKey, "content-type": "application/json", ...(init.headers as Record<string, string>) },
     });
     if (res.status === 404) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const ra = Number(res.headers.get("retry-after"));
+      const kind = classifyChannel3Failure(res.status, body, Number.isFinite(ra) ? ra : undefined);
+      if (kind === "quota") {
+        this.blockedUntil = nextMonthStart(this.clock());
+        throw new Channel3QuotaError("quota", "The real catalog's monthly quota is used up", this.blockedUntil);
+      }
+      if (kind === "rate") throw new Channel3QuotaError("rate", "The real catalog is busy (per-minute limit); try again shortly");
+    }
     if (!res.ok) throw new Error(`Channel3 ${init.method ?? "GET"} ${path} failed with HTTP ${res.status}`);
     return res.json();
   }
@@ -67,7 +139,7 @@ export class Channel3Catalog implements CatalogGateway {
     try {
       json = (await this.call(`/v1/categories/search?query=${encodeURIComponent(q)}&limit=${Math.min(Math.max(limit, 1), 20)}`, { method: "GET" })) as typeof json;
     } catch {
-      return [];
+      return []; // the quota flag, if it was a quota error, is already set by call()
     }
     const hits = (json?.categories ?? []).filter((c) => c.slug).map((c) => ({
       slug: c.slug!.toLowerCase(),
