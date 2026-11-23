@@ -118,6 +118,72 @@ describe("one session per visitor", () => {
   });
 });
 
+describe("anonymous requests cannot push real visitors out (audit H3)", () => {
+  const from = (ip: string) => ({ "x-forwarded-for": ip });
+  const cfg = { demoMode: "mock" as const, currency: "EUR", trustedProxies: 1 };
+
+  it("300 cookieless requests keep the session of a visitor who signed a contract", async () => {
+    const store = new SessionStore(makeService, { max: 300, newPerMinute: 0 });
+    const app = createApp(store, cfg);
+    const real = browser(app, from("1.1.1.1"));
+    await real.call("/api/mandate", MANDATE);
+    for (let i = 0; i < 300; i++) await app.request("/api/config", { headers: from(`10.0.${i >> 8}.${i & 255}`) });
+    expect(store.size).toBeLessThanOrEqual(300);
+    expect((await real.call("/api/config")).json.mandate).not.toBeNull();
+  });
+
+  it("empty sessions are evicted before any session that holds state, oldest empty first", async () => {
+    let t = 1_000_000;
+    const store = new SessionStore(makeService, { max: 3, now: () => t, newPerMinute: 0 });
+    const app = createApp(store, cfg);
+    const stateful = browser(app, from("1.1.1.1"));
+    await stateful.call("/api/mandate", MANDATE); // oldest, but has a contract
+    t += 10;
+    const empty1 = browser(app, from("2.2.2.2"));
+    await empty1.call("/api/config");
+    t += 10;
+    const empty2 = browser(app, from("3.3.3.3"));
+    await empty2.call("/api/config");
+    t += 10;
+    await browser(app, from("4.4.4.4")).call("/api/config"); // at the cap: empty1 goes, not the older stateful one
+    expect((await stateful.call("/api/config")).json.mandate).not.toBeNull();
+    expect(store.size).toBe(3);
+    expect((await empty2.call("/api/config")).json.mandate).toBeNull();
+  });
+
+  it("one address can create only so many new sessions per minute, then the window slides", async () => {
+    let t = 1_000_000;
+    const store = new SessionStore(makeService, { now: () => t, newPerMinute: 3 });
+    const app = createApp(store, cfg);
+    for (let i = 0; i < 10; i++) await app.request("/api/config", { headers: from("7.7.7.7") });
+    expect(store.size).toBe(3); // the other seven were answered without being kept
+    await app.request("/api/config", { headers: from("8.8.8.8") });
+    expect(store.size).toBe(4); // someone else is unaffected
+    t += 61_000;
+    await app.request("/api/config", { headers: from("7.7.7.7") });
+    expect(store.size).toBe(5);
+  });
+
+  it("a request over the cap is still answered, and a visitor with a known cookie is never refused", async () => {
+    const store = new SessionStore(makeService, { newPerMinute: 1 });
+    const app = createApp(store, cfg);
+    const a = browser(app, from("5.5.5.5"));
+    await a.call("/api/mandate", MANDATE);
+    const over = await app.request("/api/config", { headers: from("5.5.5.5") });
+    expect(over.status).toBe(200);
+    expect(over.headers.get("set-cookie")).toBeNull(); // no session was kept, so no cookie
+    expect((await a.call("/api/config")).json.mandate).not.toBeNull(); // existing sessions keep working at any rate
+  });
+
+  it("a stale cookie after a restart still lands in one session (#109)", async () => {
+    const store = new SessionStore(makeService, { newPerMinute: 5 });
+    const app = createApp(store, cfg);
+    const id = "123e4567-e89b-12d3-a456-426614174000";
+    for (let i = 0; i < 4; i++) await app.request("/api/config", { headers: { cookie: `mandate_sid=${id}`, ...from("6.6.6.6") } });
+    expect(store.size).toBe(1);
+  });
+});
+
 describe("rate limits protect the free quotas", () => {
   it("limits searches per visitor per hour, then lets the window slide", () => {
     let t = 0;

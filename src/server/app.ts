@@ -72,7 +72,7 @@ export function createApp(source: MandateService | SessionStore, config: Config,
     socketIp: (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress,
     trustedProxies: config.trustedProxies,
   });
-  const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c) : source);
+  const svc = (c: Context): MandateService => (source instanceof SessionStore ? source.forRequest(c, clientIp(c)) : source);
 
   // Browser hardening for every answer, API and web page alike (the static files are mounted after this app is built).
   app.use("*", async (c, next) => {
