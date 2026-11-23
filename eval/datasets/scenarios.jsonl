@@ -37,6 +37,7 @@
 {"id":"s22","group":"spend","title":"Bypassing the queue with an unknown approval id"}
 {"id":"s23","group":"spend","title":"The budget is cumulative: a second purchase over what is left is blocked"}
 {"id":"s24","group":"spend","title":"Two pending carts cannot both be approved past the budget"}
+{"id":"s58","group":"spend","title":"Two carts approved at the same moment cannot both commit past the budget"}
 {"id":"s26","group":"spend","title":"A sibling branch of the category tree does not allow the product (apparel vs footwear)"}
 {"id":"s27","group":"spend","title":"Allowing only a different leaf does not allow the product (socks vs shoes)"}
 {"id":"s25","group":"spend","title":"Auto-buy cannot overspend across carts (auto_under, budget for one)"}
