@@ -49,6 +49,8 @@ Mandate was built with Claude Code. The same rule the product applies to its sho
 | [D22](#d22-check-the-judge-against-blind-human-labels) | Check the judge against blind human labels | Evaluation | 2026-11-22 | [#96](https://github.com/isaacboque/mandate/pull/96), [#99](https://github.com/isaacboque/mandate/pull/99) |
 | [D23](#d23-quantity-is-per-product-per-cart) | Quantity is per product, per cart | Safety | 2026-11-23 | [#102](https://github.com/isaacboque/mandate/pull/102) |
 | [D24](#d24-per-visitor-limits-on-the-public-demo) | Per-visitor limits on the public demo | Demo | 2026-11-23 | [#100](https://github.com/isaacboque/mandate/pull/100) |
+| [D25](#d25-the-public-demo-searches-the-real-catalog-payments-stay-simulated) | The public demo searches the real catalog; payments stay simulated | Demo | 2026-11-23 | [#108](https://github.com/isaacboque/mandate/pull/108) |
+| [D26](#d26-an-honest-message-when-the-catalog-quota-runs-out) | An honest message when the catalog quota runs out | Demo | 2026-11-23 | [#110](https://github.com/isaacboque/mandate/pull/110) |
 
 ## Decisions
 
@@ -269,7 +271,17 @@ Mandate was built with Claude Code. The same rule the product applies to its sho
 
 - **Status.** Accepted.
 - **Context.** The maintainer noticed on 2026-11-23 that the hosted demo never searched Channel3: the catalog was tied to `DEMO_MODE=live`, which also switches payments to the PayPal sandbox.
-- **Decision.** The maintainer decided the public demo searches the real catalog while payments stay simulated ("la demo no busca en channel3, puede ser? si es así, arréglalo", 2026-11-23).
+- **Decision.** The public demo searches the real Channel3 catalog while payments stay simulated, so visitors see real products and no money moves. Tests and evals keep the fixture catalog. Decided by the maintainer on 2026-11-23.
+- **Verified by.** `test/catalog-selection.test.ts`.
+- **Implemented in.** [#108](https://github.com/isaacboque/mandate/pull/108).
+
+### D26. An honest message when the catalog quota runs out
+
+- **Status.** Accepted.
+- **Context.** The Channel3 free key allows 1,000 requests per month, and the public demo now spends it (D25).
+- **Decision.** When the quota runs out, visitors are told plainly that it is a quota limit, not a fault. Requested by the maintainer on 2026-11-23. How the demo carries on (the fixture catalog until the 1st of the next month, UTC) is described in the pull request.
+- **Verified by.** `test/catalog-quota.test.ts`, `test/web-quota.test.ts`.
+- **Implemented in.** [#110](https://github.com/isaacboque/mandate/pull/110).
 
 ## Open items
 
