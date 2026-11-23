@@ -122,6 +122,18 @@ describe("double submit", () => {
     expect(tracer.events.filter((e) => e.step === "order.created")).toHaveLength(1);
   });
 
+  it("two different carts approved at once cannot commit more than the budget: the first wins, the second is refused", async () => {
+    const { service, tracer } = setup();
+    const a = (await service.ask(ASK)).proposals[0];
+    const b = (await service.ask(ASK)).proposals[0];
+    const [ra, rb] = await Promise.all([service.approve(a.id), service.approve(b.id)]);
+    expect(ra.status).toBe("awaiting_buyer");
+    expect(rb.status).toBe("failed");
+    expect(rb.error).toMatch(/total_budget/);
+    expect(service.spentCents()).toBeLessThanOrEqual(baseMandate.totalBudgetCents);
+    expect(tracer.events.filter((e) => e.step === "order.created")).toHaveLength(1);
+  });
+
   it("a second Approve after the first finished still says so", async () => {
     const { service } = setup();
     const { proposals } = await service.ask(ASK);

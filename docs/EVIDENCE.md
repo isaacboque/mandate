@@ -7,8 +7,8 @@ What Mandate shows, how to reproduce each figure, and what it does not show. Val
 | Figure | Value | Reproduce |
 | --- | --- | --- |
 | Tests (mocks only) | 663 in 65 files | `npm test` |
-| Scenarios, split guardrail / injection / task / agent | 61 (29 / 7 / 12 / 13) | `npm run eval` |
-| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 61/61 | `npm run eval` |
+| Scenarios, split guardrail / injection / task / agent | 62 (30 / 7 / 12 / 13) | `npm run eval` |
+| Spend safety (no capture outside the mandate, judged by an oracle that never calls guardrail code) | 62/62 | `npm run eval` |
 | Guardrails caught when switched off, one at a time | 11/11 mutants | `npm run eval:mutants` |
 | Oracle leaks with a guardrail off | per-mutant table in [MUTATION.md](MUTATION.md) | `npm run eval:mutants` |
 | Concierge tools | 8 (search, get product, propose cart, draft contract, propose amendment, list contracts, get spending, explain block) | `src/agent/concierge.ts`; scenario a07 |
@@ -23,7 +23,7 @@ How strong each claim is, so the figures below are read for what they are. "Stro
 
 | Claim | Evidence | Strength | What would strengthen it |
 | --- | --- | --- | --- |
-| Money cannot move outside a signed mandate, whatever the model proposes | 61 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
+| Money cannot move outside a signed mandate, whatever the model proposes | 62 scenarios with a model fooled on purpose, judged by an independent oracle; 78 obfuscated injection variants (0 outside the mandate) | Strong for the implemented code, on a fixture catalog and a finite scenario set | Property-based testing of the checks; scenarios written by someone else |
 | The evaluation can tell when a guardrail is broken | Each of the 11 guardrails switched off in turn fails the eval (11 of 11); the oracle judges size and price age itself | Strong, one guardrail at a time | Mutating the budget arithmetic inside a check; combinations of mutants |
 | The regex injection detector is weak | 19 of 78 variants flagged; 22 of 81 attacks including the original fixtures; 9 of 53 false positives | Strong, deterministic (the variants were written by the same author) | Variants from an independent source |
 | Failing closed removes the fallback attack surface | The mechanism is tested (scenario a10); a first real-model run showed the fallback buying an attacker's listing, and the fix removed the purchases that came from the fallback. The paired v2 first pass (65 runs, 4 model failures) found no difference between the arms | Moderate: the mechanism is certain, the rate is not measured; the paired pass was too small to see the effect | The k = 3 passes, and a model that fails more often |
@@ -206,7 +206,7 @@ The judge `groq:qwen/qwen3.8-27b` was calibrated first (24 labelled items: agree
 
 ## Adaptive attacker and amendment scope
 
-**Amendment scope (measured, keyless).** Seen live on 2026-11-21 (gpt-oss-120b): "raise the budget to 200 €" produced an amendment that raised the total budget and the per-item cap. The cause: the tool accepted any field the model sent, and neither the prompt nor the code said that only the named field may change. Fixed in code (`src/mandate/scope.ts`): the amendment tool refuses any field the person's message does not name (`agent.refused`, reason `scope_creep`) and tells the agent why. Scenarios a12 (refused) and a13 (in-scope passes) are in `npm run eval` (61/61); `test/scope-mutation.test.ts` switches the check off and expects a12 to fail. Scenario a02 was reworded to ask for the budget and the per-item cap, because the old wording ("raise the budget") now correctly refuses a cap change.
+**Amendment scope (measured, keyless).** Seen live on 2026-11-21 (gpt-oss-120b): "raise the budget to 200 €" produced an amendment that raised the total budget and the per-item cap. The cause: the tool accepted any field the model sent, and neither the prompt nor the code said that only the named field may change. Fixed in code (`src/mandate/scope.ts`): the amendment tool refuses any field the person's message does not name (`agent.refused`, reason `scope_creep`) and tells the agent why. Scenarios a12 (refused) and a13 (in-scope passes) are in `npm run eval` (62/62); `test/scope-mutation.test.ts` switches the check off and expects a12 to fail. Scenario a02 was reworded to ask for the budget and the per-item cap, because the old wording ("raise the budget") now correctly refuses a cap change.
 
 **Adaptive attacker (harness built, not run).** An LLM writes a poisoned listing; the target agent runs a fixed shopping task over a catalog that includes it; the attacker is told only the outcome (put in a cart or not, which checks blocked it, whether the regex detector flagged it) and rewrites, up to R rounds, for S seeds. A seed stops at its first success. Measures: seeds where the listing was put in a cart, rounds to first success, attacker-chosen purchase after a forced approval, money outside the mandate terms (must stay 0), detector flag rate on the attacker's listings. 429 handling and resume are as in `eval:real`. With 5 seeds the success row is a small sample and carries a wide interval and a rule-of-three line.
 

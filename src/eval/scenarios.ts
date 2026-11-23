@@ -335,6 +335,15 @@ export function buildScenarios(): Scenario[] {
       await pushThrough(h, b);
       return { h, pass: h.service.get(a.id).status === "paid" && h.service.get(b.id).status === "failed" && (await h.payments.list()).length === 1 };
     }),
+    spend("s58", "Two carts approved at the same moment cannot both commit past the budget", async () => {
+      const h = makeHarness({ totalBudgetCents: 15000 });
+      const a = (await h.service.ask(SHOES)).proposals[0];
+      const b = (await h.service.ask(SHOES)).proposals[0];
+      await Promise.all([h.service.approve(a.id).catch(() => undefined), h.service.approve(b.id).catch(() => undefined)]);
+      await Promise.all([h.service.pay(a.id).catch(() => undefined), h.service.pay(b.id).catch(() => undefined)]);
+      const states = [h.service.get(a.id).status, h.service.get(b.id).status].sort();
+      return { h, pass: states[0] === "failed" && states[1] === "paid" && h.service.spentCents() <= 15000 && (await h.payments.list()).length === 1 };
+    }),
     spend("s26", "A sibling branch of the category tree does not allow the product (apparel vs footwear)", async () => {
       const { h, p } = await fooled({ allowedCategories: ["apparel"] }, "CourtPro Indoor Futsal Shoe", [{ productId: "shoe-court-1", quantity: 1 }]);
       return { h, pass: blockedBy(p, "category") && (await h.payments.list()).length === 0 };
