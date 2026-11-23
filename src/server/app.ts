@@ -102,7 +102,8 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.get("/api/health", (c) => c.json({ ok: true, agent: config.llm ? "llm" : "rules", model: config.llm?.model ?? null, provider: config.llm?.provider ?? null }));
   app.get("/api/config", (c) => {
     const service = svc(c);
-    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
+    const restored = source instanceof SessionStore ? source.takeRestored(c) : false;
+    return c.json({ ...config, restored, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
   });
 
   // The person's switch between the model and the offline rules agent, for THIS session only. A failure never flips it.

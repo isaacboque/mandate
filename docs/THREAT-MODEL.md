@@ -36,7 +36,7 @@ Each row says who, what they control, what they want, which layer stops them, wh
 
 ## Assumptions
 
-- Single user per session; no accounts, no authentication design (HttpOnly in-memory session cookie, 2 hours idle).
+- Single user per session; no accounts, no authentication design (HttpOnly in-memory session cookie, 2 hours idle). A well-formed session id the server does not know (after a restart or expiry) is accepted and recreates an empty session under that id, so the requests a page fires at once converge on one session; this grants nothing (the session starts empty), the cookie stays HttpOnly and SameSite=Lax, and `onrender.com` is on the Public Suffix List, so another site cannot set it.
 - Sandbox: the payment layer is a mock in tests and the PayPal sandbox in the demo; no real money.
 - The oracle in `npm run eval` is independent code that re-derives each captured payment (and each approved cart that did not end in a capture) from raw fixture rows and the mandate; it is validated by `npm run eval:mutants`, which switches each of the 11 guardrails off in turn and expects the eval to fail ([MUTATION.md](MUTATION.md)). It checks one guardrail at a time and does not mutate the budget arithmetic.
 - The catalog is honest about price, stock and category.

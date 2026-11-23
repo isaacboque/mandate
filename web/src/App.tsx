@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type Amendment, type BlockedView, type ChatInput, type Config, type MandateView, type PendingDraft, type Proposal } from "./api";
 import { Booting } from "./Booting";
 import { attention, parseCards } from "./cards";
@@ -26,6 +26,9 @@ function waitingItem(drafts: PendingDraft[], amendments: Amendment[], proposals:
   return cards.length ? { id, role: "agent", text: "Welcome back. These are waiting for you:", cards } : undefined;
 }
 
+/** Shown when the server forgot this browser's session while the page was open. */
+const RESTART_NOTICE = "The demo restarted (or your session expired), so your earlier contracts and carts were cleared. Start again below.";
+
 export default function App() {
   const [config, setConfig] = useState<Config>();
   const [contracts, setContracts] = useState<MandateView[]>([]);
@@ -33,6 +36,8 @@ export default function App() {
   const [amendments, setAmendments] = useState<Amendment[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [items, setItems] = useState<ChatItem[]>([]);
+  const itemsRef = useRef<ChatItem[]>([]);
+  itemsRef.current = items;
   const [tab, setTab] = useState<Tab>("chat");
   const [sending, setSending] = useState(false);
   const [streamed, setStreamed] = useState(""); // the agent's words so far in this turn; the final reply replaces it
@@ -50,6 +55,14 @@ export default function App() {
   const load = useCallback(async () => {
     const [c, m, d, a, p] = await Promise.all([api.config(), api.mandates(), api.drafts(), api.amendments(), api.proposals()]);
     setConfig(c); setContracts(m); setDrafts(d); setAmendments(a); setProposals(p.slice().reverse());
+    // The server restarted (or the session expired) while this page stayed open: what the chat shows is gone from the server. Say so and
+    // show only what the server still has, instead of cards for contracts and carts that no longer exist.
+    if (c.restored && itemsRef.current.length > 0) {
+      const hist = await api.history().catch(() => []);
+      const kept: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? (t.text.startsWith("Contract signed. Looking for what you asked") ? "note" : "user") : "agent", text: t.text, cards: [] }));
+      const waiting = waitingItem(d, a, p.slice().reverse(), nextId());
+      setItems([{ id: nextId(), role: "note", text: RESTART_NOTICE, cards: [] }, ...kept, ...(waiting ? [waiting] : [])]);
+    }
     return { c, d, a, p: p.slice().reverse() };
   }, []);
   const refresh = useCallback(() => { load().catch((e) => setError(friendlyError((e as Error).message))); }, [load, setError]);
