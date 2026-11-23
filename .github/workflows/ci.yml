@@ -3,12 +3,14 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 20
       - run: npm ci --no-audit --no-fund
@@ -18,6 +20,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Coverage report (no threshold)
+        run: npm run coverage
       - name: Every guardrail is load-bearing (mutants)
         run: npm run eval:mutants
       - run: npm run eval
