@@ -6,8 +6,8 @@ import { createApp } from "./server/app.js";
 import { llmStartupLine } from "./llm/model.js";
 import { serviceFromEnv } from "./server/deps.js";
 
-const { sessions, config, limiter, categoryLimiter, agentMode } = serviceFromEnv();
-const app = createApp(sessions, config, limiter, categoryLimiter);
+const { sessions, config, limiter, categoryLimiter, catalogStatus, agentMode } = serviceFromEnv();
+const app = createApp(sessions, config, limiter, categoryLimiter, catalogStatus);
 if (existsSync("web/dist")) {
   app.use("/*", serveStatic({ root: "./web/dist" }));
   app.get("*", serveStatic({ path: "./web/dist/index.html" }));

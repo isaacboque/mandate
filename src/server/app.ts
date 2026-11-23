@@ -64,7 +64,7 @@ export const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'uns
  * `source` is one MandateService (tests, single-user use) or a SessionStore (the server: one service per visitor).
  * `limiter` optionally caps searches per visitor and per day to protect free-tier quotas.
  */
-export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter): Hono {
+export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter, catalogStatus?: () => { exhausted: boolean; until?: string }): Hono {
   const app = new Hono();
   // The per-visitor key: never the first X-Forwarded-For entry (the client writes that one), see clientIp.ts.
   const clientIp = (c: Context) => clientIpFrom({
@@ -103,7 +103,7 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.get("/api/config", (c) => {
     const service = svc(c);
     const restored = source instanceof SessionStore ? source.takeRestored(c) : false;
-    return c.json({ ...config, restored, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
+    return c.json({ ...config, ...(catalogStatus ? { catalogQuota: catalogStatus() } : {}), restored, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
   });
 
   // The person's switch between the model and the offline rules agent, for THIS session only. A failure never flips it.

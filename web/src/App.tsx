@@ -13,6 +13,7 @@ import { TracePanel } from "./TracePanel";
 import { Tour } from "./Tour";
 import { useRevalidate } from "./useRevalidate";
 import { useRun } from "./useRun";
+import { quotaBadge, quotaNotice } from "./quota";
 
 type Tab = "chat" | "contracts";
 
@@ -52,6 +53,7 @@ export default function App() {
   const goTab = (t: Tab) => runTransition(() => setTab(t));
   const nextId = useMemo(() => { let n = 0; return () => ++n; }, []);
 
+  const quotaNoted = useRef(false);
   const load = useCallback(async () => {
     const [c, m, d, a, p] = await Promise.all([api.config(), api.mandates(), api.drafts(), api.amendments(), api.proposals()]);
     setConfig(c); setContracts(m); setDrafts(d); setAmendments(a); setProposals(p.slice().reverse());
@@ -62,6 +64,11 @@ export default function App() {
       const kept: ChatItem[] = hist.map((t) => ({ id: nextId(), role: t.role === "user" ? (t.text.startsWith("Contract signed. Looking for what you asked") ? "note" : "user") : "agent", text: t.text, cards: [] }));
       const waiting = waitingItem(d, a, p.slice().reverse(), nextId());
       setItems([{ id: nextId(), role: "note", text: RESTART_NOTICE, cards: [] }, ...kept, ...(waiting ? [waiting] : [])]);
+    }
+    // First time in this page session that searches use the demo catalog because the real catalog's quota ran out: say so once.
+    if (c.catalogQuota?.exhausted && !quotaNoted.current) {
+      quotaNoted.current = true;
+      setItems((cur) => [...cur, { id: nextId(), role: "agent", text: "", cards: [{ type: "note", message: quotaNotice(c.catalogQuota?.until) }] }]);
     }
     return { c, d, a, p: p.slice().reverse() };
   }, []);
@@ -187,7 +194,9 @@ export default function App() {
           </div>
           <div className="badges">
             {config && <span className={`badge ${config.demoMode === "mock" ? "" : "live"}`}>{config.demoMode === "mock" ? "Demo payments" : "PayPal sandbox"}</span>}
-            {config?.catalog && <span className={`badge ${config.catalog === "channel3" ? "live" : ""}`} title={config.catalog === "channel3" ? "Products come from the real Channel3 catalog." : "Products come from a built-in fixture catalog."}>{config.catalog === "channel3" ? "Real catalog (Channel3)" : "Fixture catalog"}</span>}
+            {config?.catalog && (config.catalogQuota?.exhausted
+              ? <span className="badge" title={quotaNotice(config.catalogQuota.until)}>{quotaBadge}</span>
+              : <span className={`badge ${config.catalog === "channel3" ? "live" : ""}`} title={config.catalog === "channel3" ? "Products come from the real Channel3 catalog." : "Products come from a built-in fixture catalog."}>{config.catalog === "channel3" ? "Real catalog (Channel3)" : "Fixture catalog"}</span>)}
             {config && (
               <span className={`badge agentbadge ${config.agent === "llm" ? "model" : "offline"}`} title={config.agent === "llm" ? "An AI model reads your words. Its failures never hand the turn to the offline agent: only you can switch." : "A built-in rules reader handles your words; no AI model is used."}>
                 {modelBadge(config)}
