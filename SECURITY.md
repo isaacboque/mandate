@@ -1,6 +1,6 @@
 # Security policy
 
-Mandate is a sandbox project: no real money moves, and the demo uses fixture data and simulated or sandbox payments. Its subject is, however, the safety of an agent that can spend, so reports about the guardrails are welcome.
+Mandate is a sandbox project: no real money moves, and the hosted demo searches a real product catalog but its payments are simulated. Its subject is, however, the safety of an agent that can spend, so reports about the guardrails are welcome.
 
 **Report a vulnerability privately** through GitHub: *Security → Report a vulnerability* on this repository. Please do not open a public issue for a way to move money outside a mandate, to make the agent sign, approve or pay, or to read another visitor's session.
 

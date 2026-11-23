@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue (a way to move money outside a mandate, or to make the agent sign, approve or pay)
+    url: https://github.com/isaacboque/mandate/security/advisories/new
+    about: Please report these privately, not as a public issue.
