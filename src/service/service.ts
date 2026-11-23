@@ -356,6 +356,11 @@ export class MandateService {
     };
   }
 
+  /** True once the visitor has done anything: signed a contract, started a draft or amendment, got a proposal or chatted. */
+  hasState(): boolean {
+    return this.records.size > 0 || this.proposals.size > 0 || this.pendingDrafts.size > 0 || this.pendingAmendments.size > 0 || this.conversation.history().length > 0;
+  }
+
   reset(): void {
     if (!this.isMock) throw new Error("Reset only exists in demo mode");
     // Contracts go too: a contract's spend is never wiped while the contract stays active (audit H5).
