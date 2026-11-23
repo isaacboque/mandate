@@ -11,7 +11,7 @@ const ID = /^[0-9a-f-]{36}$/;
  * trace are never visible to, or spent by, anyone else. Idle sessions expire; the oldest is dropped at the cap.
  */
 export class SessionStore {
-  private sessions = new Map<string, { service: MandateService; seen: number }>();
+  private sessions = new Map<string, { service: MandateService; seen: number; restored?: boolean }>();
 
   constructor(
     private factory: (id: string) => MandateService,
@@ -37,21 +37,34 @@ export class SessionStore {
   forRequest(c: Context): MandateService {
     this.sweep();
     let id = getCookie(c, SESSION_COOKIE);
-    let entry = id && ID.test(id) ? this.sessions.get(id) : undefined;
+    const wellFormed = Boolean(id && ID.test(id));
+    let entry = wellFormed ? this.sessions.get(id!) : undefined;
     if (!entry) {
-      id = randomUUID();
+      // A well-formed id this server does not know (restart, deploy, spin-down, expiry): recreate the session under THAT id, so the
+      // several requests the page fires at once with the same stale cookie all land in one session instead of one each.
+      const restored = wellFormed;
+      id = restored ? id! : randomUUID();
       const max = this.opts.max ?? 300;
       while (this.sessions.size >= max) {
         const oldest = [...this.sessions.entries()].sort((a, b) => a[1].seen - b[1].seen)[0];
         if (!oldest) break;
         this.sessions.delete(oldest[0]);
       }
-      entry = { service: this.factory(id), seen: this.now() };
+      entry = { service: this.factory(id), seen: this.now(), ...(restored ? { restored: true } : {}) };
       this.sessions.set(id, entry);
     }
     entry.seen = this.now();
     const https = c.req.header("x-forwarded-proto") === "https" || c.req.url.startsWith("https:");
     setCookie(c, SESSION_COOKIE, id!, { httpOnly: true, sameSite: "Lax", path: "/", maxAge: Math.floor(this.ttl / 1000), secure: https });
     return entry.service;
+  }
+
+  /** True once after a session was recreated for a cookie the server had forgotten; the page uses it to say the demo restarted. */
+  takeRestored(c: Context): boolean {
+    const id = getCookie(c, SESSION_COOKIE);
+    const entry = id ? this.sessions.get(id) : undefined;
+    if (!entry?.restored) return false;
+    entry.restored = false;
+    return true;
   }
 }

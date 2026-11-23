@@ -17,6 +17,8 @@ export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 /** `trustedProxies`: how many proxies of our own sit in front of the app (0 = none: X-Forwarded-For is ignored). */
 export type Config = {
   demoMode: "mock" | "live"; currency: string; trustedProxies?: number;
+  /** Where products come from: the fixture catalog or the real Channel3 one. Independent of the payments mode. */
+  catalog: "fixtures" | "channel3";
   /** The one origin (the static landing page) that may read /api/health from a browser. Nothing else is opened to any origin. */
   siteOrigin?: string;
   /** The model that answers when one is configured (no key, ever). Absent when there is none. */
@@ -34,9 +36,17 @@ function siteOriginFrom(raw: string | undefined): string {
   return DEFAULT_SITE_ORIGIN;
 }
 
+/** CATALOG=fixtures|channel3; default channel3 in live mode, fixtures otherwise. Outside live mode, channel3 without a key falls back to fixtures. */
+export function catalogChoice(env: NodeJS.ProcessEnv, demoMode: "mock" | "live"): "fixtures" | "channel3" {
+  const asked = env.CATALOG === "channel3" || env.CATALOG === "fixtures" ? env.CATALOG : demoMode === "live" ? "channel3" : "fixtures";
+  if (asked === "channel3" && demoMode !== "live" && !(env.CHANNEL3_API_KEY ?? "").trim()) return "fixtures";
+  return asked;
+}
+
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const proxies = Number(env.TRUSTED_PROXIES);
-  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, siteOrigin: siteOriginFrom(env.PUBLIC_SITE_ORIGIN), ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
+  const demoMode = env.DEMO_MODE === "live" ? "live" : "mock";
+  return { demoMode, catalog: catalogChoice(env, demoMode), currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, siteOrigin: siteOriginFrom(env.PUBLIC_SITE_ORIGIN), ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
 }
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */
@@ -54,7 +64,7 @@ export const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'uns
  * `source` is one MandateService (tests, single-user use) or a SessionStore (the server: one service per visitor).
  * `limiter` optionally caps searches per visitor and per day to protect free-tier quotas.
  */
-export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter): Hono {
+export function createApp(source: MandateService | SessionStore, config: Config, limiter?: RateLimiter, categoryLimiter?: RateLimiter, catalogStatus?: () => { exhausted: boolean; until?: string }): Hono {
   const app = new Hono();
   // The per-visitor key: never the first X-Forwarded-For entry (the client writes that one), see clientIp.ts.
   const clientIp = (c: Context) => clientIpFrom({
@@ -92,7 +102,8 @@ export function createApp(source: MandateService | SessionStore, config: Config,
   app.get("/api/health", (c) => c.json({ ok: true, agent: config.llm ? "llm" : "rules", model: config.llm?.model ?? null, provider: config.llm?.provider ?? null }));
   app.get("/api/config", (c) => {
     const service = svc(c);
-    return c.json({ ...config, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
+    const restored = source instanceof SessionStore ? source.takeRestored(c) : false;
+    return c.json({ ...config, ...(catalogStatus ? { catalogQuota: catalogStatus() } : {}), restored, gateway: service.isMock ? "mock" : "paypal-sandbox", agent: service.agentMode, offline: service.offline, resettable: service.isMock, mandate: service.mandate, spentCents: service.spentCents(), seen: service.facets(), now: new Date().toISOString() });
   });
 
   // The person's switch between the model and the offline rules agent, for THIS session only. A failure never flips it.
