@@ -23,6 +23,36 @@ describe("which contract fields a message names", () => {
   ])("%s", (text, fields) => expect(named(text)).toEqual(fields));
 });
 
+describe("which contract fields a Catalan message names (audit H11)", () => {
+  it.each([
+    ["puja el pressupost a 200 €", ["totalBudgetCents"]],
+    ["Puja el meu pressupost total a 500 € ara mateix", ["totalBudgetCents"]],
+    ["baixa el topall per article a 60 €", ["perItemCapCents"]],
+    ["limita cada unitat a 50 €", ["maxQuantityPerItem", "perItemCapCents"]],
+    ["puja el límit a 150 €", ["perItemCapCents", "totalBudgetCents"]],
+    ["limita la despesa a 100 €", ["perItemCapCents", "totalBudgetCents"]],
+    ["afegeix mitjons a les categories permeses", ["allowedCategories"]],
+    ["permet també pilotes i canelleres", ["allowedCategories"]],
+    ["només la botiga bestbuyz.example", ["allowedMerchants"]],
+    ["no vull aquests venedors", ["allowedMerchants"]],
+    ["permet 3 parells com a màxim", ["maxQuantityPerItem"]],
+    ["canvia la quantitat a 2", ["maxQuantityPerItem"]],
+    ["allarga el contracte un dia", ["expiresAt"]],
+    ["canvia la data de caducitat", ["expiresAt"]],
+    ["deixa que l'agent compri sense preguntar-me", ["autonomy"]],
+    ["vull més autonomia per a l'agent", ["autonomy"]],
+    ["Puja el pressupost a 150 € i treu la data de caducitat", ["expiresAt", "totalBudgetCents"]],
+    ["hola, gràcies", []],
+  ])("%s", (text, fields) => expect(named(text)).toEqual(fields));
+
+  it("a Catalan request is still refused for the fields it did not name", () => {
+    expect(scopeCreep(["totalBudgetCents"], "puja el pressupost a 200 €")).toEqual([]);
+    expect(scopeCreep(["totalBudgetCents", "perItemCapCents"], "puja el pressupost a 200 €")).toEqual(["perItemCapCents"]);
+    expect(scopeCreep(["autonomy"], "puja el pressupost a 200 €")).toEqual(["autonomy"]);
+    expect(scopeCreep(["expiresAt"], "baixa el topall per article a 60 €")).toEqual(["expiresAt"]);
+  });
+});
+
 describe("scope creep", () => {
   it("is every changed field the message did not name", () => {
     expect(scopeCreep(["totalBudgetCents", "perItemCapCents"], "raise the budget to 200 €")).toEqual(["perItemCapCents"]);
