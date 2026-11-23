@@ -14,5 +14,6 @@ if (existsSync("web/dist")) {
 }
 const port = Number(process.env.PORT ?? 8787);
 serve({ fetch: app.fetch, port });
+if (process.env.CATALOG === "channel3" && config.catalog === "fixtures") console.log("CATALOG=channel3 is set but CHANNEL3_API_KEY is missing: using the fixture catalog.");
 console.log(llmStartupLine()); // what will answer and from which variable, or what is wrong: never the key
-console.log(`Mandate on http://localhost:${port}  (mode: ${config.demoMode}, agent: ${agentMode}, rate limit: ${limiter.enabled ? "on" : "off"})`);
+console.log(`Mandate on http://localhost:${port}  (mode: ${config.demoMode}, catalog: ${config.catalog}, agent: ${agentMode}, rate limit: ${limiter.enabled ? "on" : "off"})`);

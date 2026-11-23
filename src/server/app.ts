@@ -17,6 +17,8 @@ export { MandateInput, MAX_MANDATE_CENTS } from "../mandate/input.js";
 /** `trustedProxies`: how many proxies of our own sit in front of the app (0 = none: X-Forwarded-For is ignored). */
 export type Config = {
   demoMode: "mock" | "live"; currency: string; trustedProxies?: number;
+  /** Where products come from: the fixture catalog or the real Channel3 one. Independent of the payments mode. */
+  catalog: "fixtures" | "channel3";
   /** The one origin (the static landing page) that may read /api/health from a browser. Nothing else is opened to any origin. */
   siteOrigin?: string;
   /** The model that answers when one is configured (no key, ever). Absent when there is none. */
@@ -34,9 +36,17 @@ function siteOriginFrom(raw: string | undefined): string {
   return DEFAULT_SITE_ORIGIN;
 }
 
+/** CATALOG=fixtures|channel3; default channel3 in live mode, fixtures otherwise. Outside live mode, channel3 without a key falls back to fixtures. */
+export function catalogChoice(env: NodeJS.ProcessEnv, demoMode: "mock" | "live"): "fixtures" | "channel3" {
+  const asked = env.CATALOG === "channel3" || env.CATALOG === "fixtures" ? env.CATALOG : demoMode === "live" ? "channel3" : "fixtures";
+  if (asked === "channel3" && demoMode !== "live" && !(env.CHANNEL3_API_KEY ?? "").trim()) return "fixtures";
+  return asked;
+}
+
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const proxies = Number(env.TRUSTED_PROXIES);
-  return { demoMode: env.DEMO_MODE === "live" ? "live" : "mock", currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, siteOrigin: siteOriginFrom(env.PUBLIC_SITE_ORIGIN), ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
+  const demoMode = env.DEMO_MODE === "live" ? "live" : "mock";
+  return { demoMode, catalog: catalogChoice(env, demoMode), currency: env.CURRENCY || "EUR", trustedProxies: Number.isInteger(proxies) && proxies > 0 ? proxies : 0, siteOrigin: siteOriginFrom(env.PUBLIC_SITE_ORIGIN), ...(describeLlm(env) ? { llm: describeLlm(env) } : {}) };
 }
 
 /** The biggest JSON body any route needs is a few hundred characters of text; 32 KB is generous. */

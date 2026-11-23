@@ -18,6 +18,11 @@ export function checkEnv(env: NodeJS.ProcessEnv = process.env): { ok: boolean; l
     }
   }
 
+  if (env.CATALOG === "channel3" && !live) {
+    if (set("CHANNEL3_API_KEY")) lines.push("Catalog: Channel3 (real products; payments stay simulated). CHANNEL3_API_KEY: set");
+    else lines.push("Catalog: fixtures. CATALOG=channel3 is set but CHANNEL3_API_KEY is missing, so the fixture catalog is used.");
+  }
+
   const llm = resolveLlm(env);
   if (llm.status === "ready") lines.push(`Agent: ${llm.provider} / ${llm.model} (key from ${llm.keyVar})${llm.note ? `. ${llm.note}` : ""}`);
   else if (llm.status === "none") lines.push("Agent: offline agent (rules). No model key is set; set one of the variables below to use a model.");

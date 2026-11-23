@@ -174,6 +174,7 @@ export default function App() {
           </div>
           <div className="badges">
             {config && <span className={`badge ${config.demoMode === "mock" ? "" : "live"}`}>{config.demoMode === "mock" ? "Demo payments" : "PayPal sandbox"}</span>}
+            {config?.catalog && <span className={`badge ${config.catalog === "channel3" ? "live" : ""}`} title={config.catalog === "channel3" ? "Products come from the real Channel3 catalog." : "Products come from a built-in fixture catalog."}>{config.catalog === "channel3" ? "Real catalog (Channel3)" : "Fixture catalog"}</span>}
             {config && (
               <span className={`badge agentbadge ${config.agent === "llm" ? "model" : "offline"}`} title={config.agent === "llm" ? "An AI model reads your words. Its failures never hand the turn to the offline agent: only you can switch." : "A built-in rules reader handles your words; no AI model is used."}>
                 {modelBadge(config)}
@@ -214,7 +215,7 @@ export default function App() {
 
         {undo.toast() && <Toast label={undo.toast()!.label} onUndo={() => undo.undo(undo.toast()!.id)} />}
         <footer className="foot">
-          {config && <p className="muted small honest">{config.demoMode === "mock" ? "Demo: a fixture catalog and simulated payments. Nothing is bought and no real money moves." : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
+          {config && <p className="muted small honest">{config.demoMode === "mock" ? `Demo: ${config.catalog === "channel3" ? "real products from Channel3" : "a fixture catalog"} and simulated payments. Nothing is bought and no real money moves.` : "Live catalog and the PayPal sandbox. No real money moves."}</p>}
           {config?.resettable && <button className="linklike" disabled={busy || sending} onClick={resetDemo}>Reset demo</button>}
         </footer>
       </main>

@@ -28,7 +28,7 @@ The question the project studies: what has to be true of the surrounding system 
 
 ## Quickstart
 
-Node 20 or newer. Demo mode needs no keys: a fixture catalog and simulated payments.
+Node 20 or newer. Demo mode needs no keys: a fixture catalog and simulated payments. (The hosted demo searches the real Channel3 catalog with `CATALOG=channel3`; its payments are still simulated.)
 
 ```bash
 git clone https://github.com/isaacboque/mandate.git && cd mandate
@@ -93,7 +93,7 @@ Everything below runs without a key. The figures are the ones in [docs/EVIDENCE.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Unit and integration tests, mocks only | `npm test` | 663 passing |
+| Unit and integration tests, mocks only | `npm test` | 669 passing |
 | 61 scenarios, with a model that is fooled on purpose, judged by an oracle that never calls the guardrail code | `npm run eval` | no payment outside the mandate: 61/61 |
 | Each of the 11 guardrails switched off in turn; the eval must notice | `npm run eval:mutants` | 11 of 11 caught ([MUTATION.md](docs/MUTATION.md)) |
 | 78 obfuscated injection variants (13 families) | `npm run eval:injection-variants` | detector flags 19; money outside the mandate 0/78 |
