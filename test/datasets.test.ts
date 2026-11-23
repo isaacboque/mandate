@@ -14,8 +14,8 @@ describe("golden datasets", () => {
   });
   it("scenarios: every scenario with its group and title", () => {
     const r = rows("scenarios.jsonl");
-    expect(r).toHaveLength(61);
-    expect(new Set(r.map((x) => x.id)).size).toBe(61);
+    expect(r).toHaveLength(62);
+    expect(new Set(r.map((x) => x.id)).size).toBe(62);
     expect(r.every((x) => typeof x.title === "string" && ["spend", "injection", "task", "agent"].includes(x.group as string))).toBe(true);
   });
   it("real-model cases: each has an expected outcome, and edge cases and counterexamples are tagged", () => {

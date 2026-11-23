@@ -682,7 +682,18 @@ export class MandateService {
     return p;
   }
 
-  private async executeOrder(p: Proposal): Promise<Proposal> {
+  /**
+   * Order creation runs one cart at a time: the re-check awaits the catalog, so two approvals running side by side would
+   * each see the budget as untouched. Queued behind the first, the second re-check counts it (audit H4).
+   */
+  private orderQueue: Promise<unknown> = Promise.resolve();
+  private executeOrder(p: Proposal): Promise<Proposal> {
+    const run = this.orderQueue.then(() => this.executeOrderNow(p));
+    this.orderQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async executeOrderNow(p: Proposal): Promise<Proposal> {
     try {
       const re = await this.recheck(p);
       if (!re.ok) return this.fail(p, re.problems.join("; "));

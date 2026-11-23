@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "start": "node dist/index.js",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "smoke:channel3": "tsx scripts/smoke-channel3.ts",
     "smoke:orders": "tsx scripts/smoke-orders.ts",
     "eval": "tsx scripts/eval.ts",
@@ -38,7 +39,8 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "concurrently": "^10.0.7",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
@@ -48,8 +50,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.73.0",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.9"
+    "vite": "^6.4.6",
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.106",
