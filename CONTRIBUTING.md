@@ -16,7 +16,10 @@ Run before every pull request (CI runs the same):
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build
 npm run eval && npm run eval:mutants && npm run eval:injection-variants
+npm run coverage             # report only, no threshold
 ```
+
+CI runs with read-only permissions, actions pinned to commit SHAs, and a report-only `npm audit --omit=dev`.
 
 ## Rules of the project
 
