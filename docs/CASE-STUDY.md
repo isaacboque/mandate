@@ -1,5 +1,7 @@
 # Mandate: case study
 
+> Written at the hackathon submission and kept as a record; figures in it (for example 56 scenarios) are from that date. Current figures: [EVIDENCE.md](EVIDENCE.md).
+
 An agent you talk to, bound by contracts it cannot sign. (Earlier framing: give a shopping agent a signed mandate, not your wallet.) This is the long version of the project: what it does, how it is built, what went wrong and what it still cannot do. Sandbox only: no real money moves.
 
 Links: [GitHub](https://github.com/isaacboque/mandate) · [live demo](https://isaacboque.github.io/mandate/) (fixtures, simulated payments, no keys) · [live mode](https://mandate-live-7q2i.onrender.com) (real Channel3 catalog and PayPal sandbox; paying needs a sandbox buyer account, so the demo mode is the easy way to try it). Free instances can take about 30 s to wake up.
@@ -52,7 +54,7 @@ TypeScript, Node.js, Hono, React, Vite, Vercel AI SDK, Google Gemini, PayPal Ord
 
 ## How AI was used
 
-- **Claude Code** (Claude Sonnet 5.5; the commit trailers also name Claude Fable 5.2 on two commits) wrote most of the code under my direction: the plan, tests, guardrails, catalog, payments, agent, UI and eval. I reviewed the pull requests and CI results.
+- **Claude Code** (mostly Claude Sonnet 5.5) wrote most of the code under my direction: the plan, tests, guardrails, catalog, payments, agent, UI and eval. I made the product and safety decisions, reviewed the pull requests, and did not merge anything CI had not passed.
 - **Google Gemini 2.5 Flash** (via the Vercel AI SDK) is the optional shopping agent at runtime. Without a key, a deterministic rules agent is used.
 - No AI is involved in the guardrails, the approval queue or the payment logic: those are plain code.
 
