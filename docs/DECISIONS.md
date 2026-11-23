@@ -265,6 +265,12 @@ Mandate was built with Claude Code. The same rule the product applies to its sho
 - **Verified by.** `test/app.test.ts` (defaults and overrides), `test/llm-failure.test.ts` (queue cap and its card).
 - **Implemented in.** [#100](https://github.com/isaacboque/mandate/pull/100).
 
+### D25. The public demo searches the real catalog; payments stay simulated
+
+- **Status.** Accepted.
+- **Context.** The maintainer noticed on 2026-11-23 that the hosted demo never searched Channel3: the catalog was tied to `DEMO_MODE=live`, which also switches payments to the PayPal sandbox.
+- **Decision.** The maintainer decided the public demo searches the real catalog while payments stay simulated ("la demo no busca en channel3, puede ser? si es así, arréglalo", 2026-11-23).
+
 ## Open items
 
 - **Rationale not recorded:** D10, D15, and the reasoning behind D16 to D19.

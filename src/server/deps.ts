@@ -12,10 +12,16 @@ import { configFromEnv, type Config } from "./app.js";
 import { RateLimiter } from "./limits.js";
 import { SessionStore } from "./sessions.js";
 
+/** The catalog the visitors search: Channel3 when config says so, fixtures otherwise. */
+export function catalogFromEnv(env: NodeJS.ProcessEnv, config: Config) {
+  return config.catalog === "channel3" ? new Channel3Catalog(env.CHANNEL3_API_KEY ?? "", { currency: config.currency }) : new FixtureCatalog();
+}
+
 const num = (v: string | undefined, fallback: number) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback);
 
 /**
- * DEMO_MODE=mock (default): fixtures + mock payments, no keys. DEMO_MODE=live: Channel3 + PayPal sandbox.
+ * DEMO_MODE=mock (default): mock payments, no keys. DEMO_MODE=live: PayPal sandbox. The catalog is separate: CATALOG=fixtures|channel3
+ * (default Channel3 in live mode, fixtures otherwise; Channel3 needs CHANNEL3_API_KEY).
  * The LLM is used when a key is set. Each visitor gets their own service (mandate, budget, proposals, trace);
  * the catalog, the model and the PayPal token client are shared.
  * Live mode, and any mode with a model configured, limit searches per visitor and per day (RATE_LIMIT_ASKS_PER_HOUR, DAILY_ASK_CAP) to protect free quotas.
@@ -29,7 +35,7 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const retentionMs = num(env.TRACE_RETENTION_HOURS, 24) * 3600 * 1000;
   pruneTraces("traces", retentionMs);
   if (retentionMs > 0) setInterval(() => pruneTraces("traces", retentionMs), 3600 * 1000).unref();
-  const catalog = live ? new Channel3Catalog(env.CHANNEL3_API_KEY ?? "", { currency: config.currency }) : new FixtureCatalog();
+  const catalog = catalogFromEnv(env, config);
   const attackCatalog = new FixtureCatalog();
   const invoker = live ? new RestOrdersInvoker(env.PAYPAL_CLIENT_ID ?? "", env.PAYPAL_CLIENT_SECRET ?? "") : undefined;
   const model = hasLlmKey(env) ? modelFromEnv(env) : undefined;
@@ -54,6 +60,6 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const sessions = new SessionStore(makeService, { ttlMs: num(env.SESSION_TTL_MINUTES, 120) * 60 * 1000, max: num(env.MAX_SESSIONS, 300) });
   // A configured model has a small shared quota, so it is limited per visitor in every mode; mock mode with no model stays unlimited.
   const limiter = new RateLimiter(num(env.RATE_LIMIT_ASKS_PER_HOUR, live ? 12 : model ? 10 : 0), num(env.DAILY_ASK_CAP, live ? 300 : model ? dailyBudget : 0));
-  const categoryLimiter = new RateLimiter(num(env.RATE_LIMIT_CATEGORIES_PER_HOUR, live ? 120 : 0), 0);
+  const categoryLimiter = new RateLimiter(num(env.RATE_LIMIT_CATEGORIES_PER_HOUR, config.catalog === "channel3" ? 120 : 0), 0);
   return { sessions, makeService, limiter, categoryLimiter, config, agentMode: model ? ("llm" as const) : ("rules" as const) };
 }
