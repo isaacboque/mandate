@@ -1,5 +1,6 @@
 import { Channel3Catalog } from "../catalog/Channel3Catalog.js";
 import { FixtureCatalog } from "../catalog/FixtureCatalog.js";
+import { QuotaFallbackCatalog } from "../catalog/QuotaFallbackCatalog.js";
 import { ApprovalQueue } from "../approval/queue.js";
 import { LlmGate } from "../llm/gate.js";
 import { describeLlm, hasLlmKey, modelFromEnv } from "../llm/model.js";
@@ -14,10 +15,12 @@ import { SessionStore } from "./sessions.js";
 
 /** The catalog the visitors search: Channel3 when config says so, fixtures otherwise. */
 export function catalogFromEnv(env: NodeJS.ProcessEnv, config: Config) {
-  return config.catalog === "channel3" ? new Channel3Catalog(env.CHANNEL3_API_KEY ?? "", { currency: config.currency }) : new FixtureCatalog();
+  return config.catalog === "channel3" ? new Channel3Catalog(env.CHANNEL3_API_KEY ?? "", { currency: config.currency, monthlyBudget: num(env.CHANNEL3_MONTHLY_BUDGET, 0) }) : new FixtureCatalog();
 }
 
-const num = (v: string | undefined, fallback: number) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback);
+function num(v: string | undefined, fallback: number) {
+  return v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
+}
 
 /**
  * DEMO_MODE=mock (default): mock payments, no keys. DEMO_MODE=live: PayPal sandbox. The catalog is separate: CATALOG=fixtures|channel3
@@ -35,7 +38,10 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   const retentionMs = num(env.TRACE_RETENTION_HOURS, 24) * 3600 * 1000;
   pruneTraces("traces", retentionMs);
   if (retentionMs > 0) setInterval(() => pruneTraces("traces", retentionMs), 3600 * 1000).unref();
-  const catalog = catalogFromEnv(env, config);
+  const base = catalogFromEnv(env, config);
+  // When the real catalog's monthly quota runs out, searches use the fixtures until the 1st (UTC); checkout re-checks of real products fail closed.
+  const quotaCatalog = base instanceof Channel3Catalog ? new QuotaFallbackCatalog(base, new FixtureCatalog()) : undefined;
+  const catalog = quotaCatalog ?? base;
   const attackCatalog = new FixtureCatalog();
   const invoker = live ? new RestOrdersInvoker(env.PAYPAL_CLIENT_ID ?? "", env.PAYPAL_CLIENT_SECRET ?? "") : undefined;
   const model = hasLlmKey(env) ? modelFromEnv(env) : undefined;
@@ -61,5 +67,5 @@ export function serviceFromEnv(env: NodeJS.ProcessEnv = process.env) {
   // A configured model has a small shared quota, so it is limited per visitor in every mode; mock mode with no model stays unlimited.
   const limiter = new RateLimiter(num(env.RATE_LIMIT_ASKS_PER_HOUR, live ? 12 : model ? 10 : 0), num(env.DAILY_ASK_CAP, live ? 300 : model ? dailyBudget : 0));
   const categoryLimiter = new RateLimiter(num(env.RATE_LIMIT_CATEGORIES_PER_HOUR, config.catalog === "channel3" ? 120 : 0), 0);
-  return { sessions, makeService, limiter, categoryLimiter, config, agentMode: model ? ("llm" as const) : ("rules" as const) };
+  return { sessions, makeService, limiter, categoryLimiter, config, catalogStatus: quotaCatalog ? () => quotaCatalog.status() : undefined, agentMode: model ? ("llm" as const) : ("rules" as const) };
 }

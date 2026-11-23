@@ -6,7 +6,7 @@ How to run Mandate locally in each mode, and how the public demo is hosted. Envi
 
 `DEMO_MODE=mock` simulates payments and, by default, uses a fixture catalog (16 products, 3 of them poisoned, 1 whose price rises at checkout). Start it with `npm run build && npm start`, or `npm run dev` for development (API on :8787, UI on :5173). With no model key the offline rules agent answers; with one, the chosen model does. The header badge says which, and `/api/health` reports `agent` and the model id, never a key.
 
-The hosted public demo (`render.yaml`) sets `CATALOG=channel3`: visitors search real Channel3 products while payments stay simulated. Add `CHANNEL3_API_KEY` (the same key as the live service) to the `mandate` service in the Render dashboard and redeploy; until then it falls back to the fixture catalog. The attack demo always uses its fixtures.
+The hosted public demo (`render.yaml`) sets `CATALOG=channel3`: visitors search real Channel3 products while payments stay simulated. Add `CHANNEL3_API_KEY` (the same key as the live service) to the `mandate` service in the Render dashboard and redeploy; until then it falls back to the fixture catalog. The attack demo always uses its fixtures. The Channel3 free key allows 1,000 requests per month and the same key is set on `mandate-live`, so both services spend one quota. When it runs out, the demo searches the fixture catalog until the 1st (UTC) and says so; set `CHANNEL3_MONTHLY_BUDGET` to stop a little earlier ([research note](research/channel3-quota.md)).
 
 ## Live mode (PayPal sandbox and Channel3)
 
